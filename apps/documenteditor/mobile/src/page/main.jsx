@@ -35,7 +35,7 @@
 
 import React, { createContext, useEffect, useState } from 'react';
 import { CSSTransition } from '../../../../common/mobile/lib/component/CSSTransition'
-import { f7, Icon, Page, View, Navbar, Subnavbar } from 'framework7-react';
+import { f7, Page, View, Navbar, Subnavbar } from 'framework7-react';
 import { observer, inject } from "mobx-react";
 import { useTranslation } from 'react-i18next';
 import AddOptions from '../view/add/Add';
@@ -59,7 +59,7 @@ import IconEditMode from '@icons/icon-edit-mode.svg';
 
 export const MainContext = createContext();
 
-const MainPage = inject('storeDocumentInfo', 'users', 'storeAppOptions', 'storeVersionHistory', 'storeToolbarSettings', 'storeThemes')(observer(props => {
+const MainPage = inject('storeDocumentInfo', 'users', 'storeAppOptions', 'storeVersionHistory', 'storeToolbarSettings')(observer(props => {
     const { t } = useTranslation();
     const [state, setState] = useState({
         editOptionsVisible: false,
@@ -75,8 +75,6 @@ const MainPage = inject('storeDocumentInfo', 'users', 'storeAppOptions', 'storeV
         isOpenModal: false
     });
     const appOptions = props.storeAppOptions;
-    const storeThemes = props.storeThemes;
-    const colorTheme = storeThemes.colorTheme;
     const storeVersionHistory = props.storeVersionHistory;
     const isVersionHistoryMode = storeVersionHistory.isVersionHistoryMode;
     const storeDocumentInfo = props.storeDocumentInfo;
@@ -90,25 +88,10 @@ const MainPage = inject('storeDocumentInfo', 'users', 'storeAppOptions', 'storeV
     const { customization = {} } = config;
     const isShowPlaceholder = !appOptions.isDocReady && (!customization || !(customization.loaderName || customization.loaderLogo));
 
-    let isBranding = true,
-        isHideLogo = true,
-        customLogoImage = '',
-        customLogoUrl = '';
+    let isBranding = true;
 
     if(!appOptions.isDisconnected && appOptions.isDocReady) {
-        const { logo } = customization;
         isBranding = appOptions.canBranding || appOptions.canBrandingExt;
-        
-        if(logo && isBranding) {
-            isHideLogo = logo.visible === false;
-
-            if(logo.image || logo.imageDark || logo.imageLight) {
-                customLogoImage = colorTheme.type === 'dark' ? logo.imageDark ?? logo.image ?? logo.imageLight : logo.imageLight ?? logo.image ?? logo.imageDark;
-                customLogoUrl = logo.url;
-            }
-        } else {
-            isHideLogo = false;
-        }
     }
 
     const touchMoveHandler = (e) => {
@@ -296,19 +279,8 @@ const MainPage = inject('storeDocumentInfo', 'users', 'storeAppOptions', 'storeV
                 isBranding,
                 isViewer: appOptions.isViewer,
             }}>
-                <Page name="home" className={`editor${!isHideLogo ? ' page-with-logo' : ''}`}>
-                    <Navbar id='editor-navbar' className={`main-navbar${!isHideLogo ? ' navbar-with-logo' : ''}`}>
-                        {!isHideLogo &&
-                            <div className="main-logo" onClick={() => {
-                                window.open(`${customLogoImage && customLogoUrl ? customLogoUrl : __PUBLISHER_URL__}`, "_blank");
-                            }}>
-                                {customLogoImage ? 
-                                    <img className='custom-logo-image' src={customLogoImage} />
-                                : 
-                                    <Icon icon="icon-logo"></Icon>
-                                }
-                            </div>
-                        }
+                <Page name="home" className="editor">
+                    <Navbar id='editor-navbar' className="main-navbar">
                         {
                             <Subnavbar>
                                 <ToolbarController 

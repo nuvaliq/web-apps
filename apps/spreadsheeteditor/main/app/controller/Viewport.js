@@ -45,7 +45,9 @@ define([
     'core',
     'common/main/lib/view/Header',
     'common/main/lib/view/SearchBar',
-    'spreadsheeteditor/main/app/view/Viewport'
+    'spreadsheeteditor/main/app/view/Viewport',
+    'spreadsheeteditor/main/app/view/CompactShell',
+    'common/main/lib/view/compact/AboutWindow'
 //    ,'spreadsheeteditor/main/app/view/LeftMenu'
 ], function (Viewport) {
     'use strict';
@@ -122,6 +124,23 @@ define([
 
             Common.NotificationCenter.on('app:face', this.onAppShowed.bind(this));
             Common.NotificationCenter.on('app:ready', this.onAppReady.bind(this));
+
+            // Compact shell (view/CompactShell.js). The ribbon stays
+            // in the DOM and is hidden by styles; commands go through its objects.
+            /* Two entry points, both our own, as in documents. On the
+               Gateway `init`, as soon as the config arrives, a request is made: the decision on
+               ui.shell (parsing is in wanted()), a class on body hides the stock chrome
+               until the shell is built, because the stock removes the loading mask already on
+               app:face, earlier than app:ready. The init handler is under guarded:
+               an exception from it would break the stock Main.loadConfig, which is
+               subscribed later. On app:ready comes the launch itself, with retries and
+               a fail-safe; the loop and the guard logic are in start() and guarded. */
+            Common.Gateway.on('init', SSE.Views.CompactShell.guarded('shell: boot request', function (data) {
+                SSE.Views.CompactShell.announce(data && data.config);
+            }));
+            Common.NotificationCenter.on('app:ready', function () {
+                SSE.Views.CompactShell.start();
+            });
             Common.NotificationCenter.on('tabstyle:changed', this.onTabStyleChange.bind(this));
             Common.NotificationCenter.on('tabbackground:changed', this.onTabBackgroundChange.bind(this));
             Common.NotificationCenter.on('uitheme:changed', this.onThemeChanged.bind(this));

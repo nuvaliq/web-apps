@@ -45,7 +45,8 @@ define([
     'text!documenteditor/main/app/template/FileMenu.template',
     'underscore',
     'common/main/lib/component/BaseView',
-    'common/main/lib/view/RecentFiles'
+    'common/main/lib/view/RecentFiles',
+    'documenteditor/main/app/view/DocumentActions'
 ], function (tpl, _) {
     'use strict';
 
@@ -68,12 +69,10 @@ define([
                     if (item) {
                         var panel = this.panels[item.options.action];
                         if (item.options.action === 'help') {
-                            if ( panel.noHelpContents === true && navigator.onLine ) {
-                                this.fireEvent('item:click', [this, 'external-help', true]);
-                                const helpCenter = Common.Utils.InternalSettings.get('url-help-center');
-                                !!helpCenter && window.open(helpCenter, '_blank');
-                                return;
-                            }
+                            // Help is the product helpdesk by interface language, not the bundled guide.
+                            this.fireEvent('item:click', [this, 'external-help', true]);
+                            window.open(DE.Views.DocumentActions.helpUrl(Common.Locale.getCurrentLanguage()), '_blank');
+                            return;
                         }
 
                         this.fireEvent('item:click', [this, item.options.action, !!panel]);
@@ -496,11 +495,6 @@ define([
 
             if (this.mode.canDownload && (this.mode.canRequestSaveAs || this.mode.saveAsUrl)) {
                 !this.panels['save-copy'] && (this.panels['save-copy'] = ((new DE.Views.FileMenuPanels.ViewSaveCopy({menu: this, fileType: this.document ? this.document.fileType : undefined, mode: this.mode})).render()));
-            }
-
-            if (this.mode.canHelp && !this.panels['help']) {
-                this.panels['help'] = ((new DE.Views.FileMenuPanels.Help({menu: this})).render());
-                this.panels['help'].setLangConfig(this.mode.lang);
             }
 
             if (this.mode.canPreviewPrint) {

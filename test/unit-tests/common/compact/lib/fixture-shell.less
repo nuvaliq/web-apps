@@ -1,0 +1,46 @@
+/* Styles of the test editor: a second consumer of the shared compact layer.
+ * Imported like an editor app.less does it in the build: the stock path to the shared
+ * images, the shared layer, then the editor's own values. Every value differs from the document editor on purpose (rows 44/28/40
+ * against 50/33/46, its own fonts and colours), so a shared rule that relies on the
+ * document editor values fails on this editor. The row heights match
+ * fixture-editor.cjs (vars).
+ */
+/* The stock path to the shared images as an editor build gives it (build/<editor>.json,
+   main.less.vars): from the built stylesheet, which the test editor stands for. */
+@common-image-const-path: "../../../../common/main/resources/img";
+
+@import "../../../../../apps/common/main/resources/less/compact/tokens.less";
+@import "../../../../../apps/common/main/resources/less/compact/menu.less";
+
+@vo-h-header:       44px;
+@vo-h-menu:         28px;
+@vo-h-toolbar:      40px;
+@vo-pad-x:          16px;
+@vo-fs-menu:        12px;
+@vo-row-h:          32px;
+@vo-row-pad-x:      14px;
+@vo-pop-pad-y:      6px;
+@vo-r-pop:          10px;
+@vo-font:           Georgia, serif;
+
+body.vo-compact {
+    --vo-shell-bg:   #fafafa;
+    --vo-surface:    #ffffff;
+    --vo-separator:  #e0e0e0;
+    --vo-text:       #202020;
+    --vo-text-off:   #a0a0a0;
+    --vo-icon:       #707070;
+    --vo-hover:      rgba(0, 0, 0, .05);
+    --vo-active:     rgba(0, 0, 0, .08);
+    --vo-accent:     #2a6df4;
+    --vo-focus:      #2a6df4;
+    --vo-shadow:     0 4px 10px rgba(0, 0, 0, .2);
+    --vo-menu-fg:    #4a4a4a;
+    --vo-menu-mark:  #d03030;
+}
+
+/* The test editor draws an icon from the shared set in its own rule. */
+.fixture-close {
+    -webkit-mask: url("@{vo-air-url}close.svg") center / contain no-repeat;
+            mask: url("@{vo-air-url}close.svg") center / contain no-repeat;
+}

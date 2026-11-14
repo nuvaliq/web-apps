@@ -1,0 +1,1135 @@
+/*
+ * Compact shell of the presentation editor: areas: the left one (comments, search),
+ * the search bar, the slideshow control panel, buttons and hints on the slide, the
+ * status bar.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Imported only from compact-shell.less: the tokens and row geometry come from there,
+ * the window set bricks (.vo-win-*) from compact-windows.less of the same build.
+ * The rules are under body.vo-compact; the markup of stock nodes does not change.
+ */
+
+/* Padding gap between the bottom of the canvas cards (thumbnail strip, notes) and the
+   status bar, as for the prototype notes (12 padding under the card). */
+@vo-status-gap: 12px;
+
+/* --- Canvas above the status bar ---------------------------------------------- */
+/* The bar lies over the bottom of the work area, the engine canvas ends above it
+   (compact-shell.less). The notes and the bar are both white and without a gap would merge
+   into one strip: there is padding between them. The engine computes the heights of
+   nodes inside the canvas itself from the height of #editor_sdk. */
+body.vo-compact:has(#vo-status:not([hidden])) #editor_sdk {
+    height: calc(100% - @vo-h-status - @vo-status-gap);
+}
+
+/* --- Left area ------------------------------------------------------------------ */
+/* The left menu is at its stock layout place, before #editor-container, that is
+   to the left of the thumbnail strip. The icon column is hidden (compact-shell.less), the
+   menu itself is visible under vo-left-open while the stock button of one of its
+   panels is pressed (CompactLeft.sync). A closed one stays closed even against the stock inline show()
+   (tryToShowLeftMenu): otherwise an empty 40 px column would appear. An open one has
+   no !important: a menu hidden by the integrator (inline hide()) is
+   not shown even under vo-left-open. The look is like the spreadsheets compact panel:
+   a white column of the full area height, a separator on the right. */
+body.vo-compact {
+    &:not(.vo-left-open) #left-menu { display: none !important; }
+
+    &.vo-left-open #left-menu {
+        display: block;
+        border-right: 1px solid @vo-border;
+    }
+
+    /* The offset under the icon column and the floating card padding of the stock themes
+       are removed: the panel starts from the area edge. */
+    #left-menu .left-panel {
+        padding: 0;
+        border-right: none;
+        border-left: none;
+    }
+
+    #left-menu .side-panel .content-box {
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    /* The bottom of the area is above the status bar, on the same line as the canvas. Version history is
+       its own stock layout column next to the left menu (#left-panel-history, stock
+       height 100%): its bottom is above the bar too, as in documents, otherwise the last versions of
+       the list go under the status bar. */
+    &:has(#vo-status:not([hidden])) {
+        #left-menu,
+        #left-menu + .layout-resizer,
+        #left-panel-history,
+        #left-panel-history + .layout-resizer {
+            height: auto;
+            bottom: @vo-h-status + @vo-status-gap;
+        }
+    }
+}
+
+/* The panel and its separators are white, as in spreadsheets; only in the light theme:
+   in the dark one the panel is the stock's own. */
+body.vo-compact.theme-type-light {
+    #left-menu .side-panel .content-box { background-color: @vo-surface; }
+
+    #comments-box {
+        #comments-header,
+        .messages-ct { border-bottom-color: @vo-separator; }
+    }
+}
+
+/* Comments panel header, as in spreadsheets: a 40 row above the line, padding
+   0 8 0 16, label 14/600 in the shell font; the "add",
+   "sort", "close" buttons are stock, on the right in order. */
+@vo-cm-hd-h: 40px;
+
+body.vo-compact #comments-box {
+    #comments-header {
+        display: flex;
+        align-items: center;
+        box-sizing: content-box;
+        height: @vo-cm-hd-h;
+        padding: 0 8px 0 16px;
+
+        > label {
+            order: 0;
+            margin: 0;
+            margin-inline-end: auto;
+            font-family: @vo-font;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: normal;
+            letter-spacing: normal;
+        }
+
+        #comments-btn-add   { order: 1; }
+        #comments-btn-sort  { order: 2; }
+        #comments-btn-close { order: 3; }
+    }
+
+    .messages-ct { padding-top: @vo-cm-hd-h + 1px; }
+}
+
+body.vo-compact.theme-type-light #comments-header > label { color: @vo-text; }
+
+/* --- Comments: card, reply field, buttons ---------------------------------------- */
+/* The stock markup (Comments.template in the panel list, CommentsPopover.template in
+   the card on the slide) is one for both places, hence one look: .vo-cm-thread().
+   The comment card has no stock border or shadow, radius 12; avatar 28; name 14/600,
+   date 12 base-3; text 14 base-1; "Add reply" is a link without a dotted underline; the
+   edit, delete and "Resolved" buttons are AIR icons 18 in 24 buttons; replies are indented under
+   a line instead of the stock arrow; the reply and edit field is a multi-line window set
+   field, buttons are from the window set: the main one filled, the second plain. */
+@vo-cm-pad:      12px;     // card padding
+@vo-cm-ava:      28px;     // avatar
+@vo-cm-tool:     24px;     // edit icon button
+@vo-cm-tool-ico: 18px;
+@vo-cm-gap:      8px;      // between card blocks
+@vo-cm-success:  #1bce7b;  // accent-main-success: comment resolved
+
+/* Card icon button: the AIR icon in ::after, the hover backing is on the button itself. */
+.vo-cm-tool(@name) {
+    position: relative;
+    width: @vo-cm-tool;
+    height: @vo-cm-tool;
+    margin: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent none;
+    color: @vo-text-3;
+    filter: none;
+    cursor: pointer;
+
+    &::before { content: none; }
+    &::after {
+        content: '';
+        position: absolute;
+        top: ((@vo-cm-tool - @vo-cm-tool-ico) / 2);
+        left: ((@vo-cm-tool - @vo-cm-tool-ico) / 2);
+        width: @vo-cm-tool-ico;
+        height: @vo-cm-tool-ico;
+        border: none;
+        transform: none;
+        .vo-ar-ico(@name);
+    }
+
+    &:hover { background-color: @vo-hover; color: @vo-text-2; }
+}
+
+/* Multi-line field: the window set field without the row height. */
+.vo-cm-textarea() {
+    .vo-win-field();
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 72px;
+    max-height: 150px;
+    margin: 0 0 @vo-cm-gap;
+    padding: 8px @vo-win-f-pad;
+    font-size: @vo-win-fs;
+    line-height: 1.4;
+    resize: none;
+    word-break: break-word;
+}
+
+/* Buttons under the field: the main one filled, the second plain, a row on the left. */
+.vo-cm-buttons() {
+    .btn.dlg-btn {
+        .vo-win-btn();
+        .vo-win-btn-plain();
+        width: auto !important;                 // the panel's "Add" and "Cancel" have an inline width
+        min-width: 0 !important;
+        margin: 0;
+
+        + .btn.dlg-btn { margin-inline-start: @vo-cm-gap; }
+    }
+
+    .btn.dlg-btn.primary { .vo-win-btn-filled(); }
+
+    .btn.dlg-btn.disabled,
+    .btn.dlg-btn[disabled] { .vo-win-btn-off(); }
+
+    .btn.dlg-btn:not(.primary).disabled,
+    .btn.dlg-btn:not(.primary)[disabled] { background: transparent; }
+}
+
+.vo-cm-thread() {
+    color: @vo-text;
+    font-family: @vo-font;
+    font-size: @vo-win-fs;
+    line-height: 1.4;
+
+    .user-comment-item {
+        padding: @vo-cm-pad;
+        border: none;
+        border-radius: @vo-r-md;
+        box-shadow: none;
+    }
+
+    .user-info {
+        align-items: center;
+        padding-top: 0;
+        padding-right: 3 * @vo-cm-tool + 4px;
+    }
+
+    .color {
+        flex: 0 0 auto;
+        width: @vo-cm-ava;
+        height: @vo-cm-ava;
+        margin-right: @vo-cm-gap;
+        border-radius: 50%;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: @vo-cm-ava;
+    }
+
+    .user-name {
+        color: @vo-text;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 18px;
+    }
+
+    .user-date {
+        color: @vo-text-3;
+        font-size: 12px;
+        line-height: 16px;
+    }
+
+    .user-quote {
+        margin-top: @vo-cm-gap;
+        padding: 0 0 0 10px;
+        border-left: 2px solid @vo-border;
+        color: @vo-text-2;
+        font-style: normal;
+    }
+
+    .user-message {
+        padding: @vo-cm-gap 0 0;
+        color: @vo-text;
+    }
+
+    .user-reply {
+        display: inline-block;
+        height: auto;
+        margin-top: @vo-cm-gap;
+        border: none;
+        color: @vo-link;
+        font-size: 13px;
+        line-height: 18px;
+
+        &:hover { text-decoration: underline; }
+        &.with-reply { margin-left: 0; margin-top: @vo-cm-gap; }
+    }
+
+    /* Edit, delete, "Resolved" are on the right in the name row. */
+    .edit-ct {
+        display: flex;
+        gap: 2px;
+        height: @vo-cm-tool;
+        margin: @vo-cm-pad (@vo-cm-pad - 4px) 0 0;
+
+        > div { float: none; margin: 0; }
+    }
+
+    .btns-reply-ct {
+        display: flex;
+        gap: 2px;
+        height: @vo-cm-tool;
+        margin-top: 2px;
+
+        > div { float: none; margin: 0; }
+    }
+
+    .btn-edit-common { .vo-cm-tool(pencil); }
+    .btn-delete      { .vo-cm-tool(trash); }
+    .btn-resolve     { .vo-cm-tool(check); }
+
+    .btn-resolve.comment-resolved,
+    .icon-resolve.i-comment-resolved {
+        .vo-cm-tool(accept);
+        color: @vo-cm-success;
+
+        &:hover { color: @vo-cm-success; }
+    }
+
+    .icon-resolve.i-comment-resolved { cursor: default; &:hover { background-color: transparent; } }
+
+    /* Replies are under the line on the left instead of the stock arrow. */
+    .reply-arrow { display: none; }
+
+    .reply-item-ct {
+        margin-top: @vo-cm-pad;
+        padding: 0 0 0 10px;
+        border-left: 2px solid @vo-border;      // visible on the selected card backing too
+
+        .user-info { padding-right: 2 * @vo-cm-tool + 4px; }
+    }
+
+    .inner-edit-ct,
+    .reply-ct {
+        padding: @vo-cm-gap 0 0;
+
+        textarea.msg-reply,
+        textarea { .vo-cm-textarea(); }
+
+        .vo-cm-buttons();
+    }
+
+    .lock-area { border-radius: @vo-r-md; }
+}
+
+/* Panel list: cards with padding 8 from the panel edges; hover is the
+   outline-hover backing, the selected one (navigated to from the slide) is selected. */
+body.vo-compact #comments-box {
+    .dataview-ct { .vo-cm-thread(); }
+
+    .messages-ct .item {
+        padding: 8px 8px 0;
+
+        .user-comment-item {
+            border: none;
+            box-shadow: none;
+
+            &.last-item { margin-bottom: 8px; }
+        }
+
+        &:hover .user-comment-item { background-color: @vo-outline-hover; }
+        &.active .user-comment-item {
+            background-color: @vo-selected;
+            border: none;
+            box-shadow: none;
+        }
+    }
+
+    .messages-ct .dataview-ct.inner .empty-text { color: @vo-text-3; }
+
+    /* "Add comment to document" is a link; the new comment field is a
+       window set field with buttons under it. */
+    .add-link-ct label {
+        border: none;
+        color: @vo-link;
+        font-family: @vo-font;
+        font-size: 13px;
+        &:hover { text-decoration: underline; }
+    }
+
+    .new-comment-ct {
+        .inner-ct { padding: @vo-cm-gap 16px 46px; }
+
+        textarea {
+            .vo-cm-textarea();
+            height: 100%;
+            min-height: 0;
+            max-height: none;
+            margin: 0;
+        }
+
+        .btn.add { margin-left: 16px; }
+        .vo-cm-buttons();
+    }
+}
+
+/* Card on the slide (Common.Views.ReviewPopover, #id-popover) is a popup
+   surface of the shell: opaque background, radius 12, shadow; inside is the same card
+   as in the list. The stock code computes width and height from the content. */
+body.vo-compact .asc-window:has(#id-popover) {
+    .vo-material-popup();
+    border-radius: @vo-r-md;
+
+    > .body { background: transparent; border-radius: @vo-r-md; }
+
+    #id-popover .dataview-ct {
+        .vo-cm-thread();
+
+        .user-comment-item { border-radius: 0; }
+    }
+}
+
+/* --- Icons of stock nodes ------------------------------------------------------- */
+/* AIR mask instead of the stock sprite: the address is the --vo-ar-ico-<name> variable on the document
+   root (set by CompactLeft.paintIcons). No address means a transparent mask:
+   without it the node would be filled with the icon color as a solid square. The color is currentColor. */
+.vo-ar-ico(@name) {
+    .vo-win-mask();
+    -webkit-mask-image: ~"var(--vo-ar-ico-@{name}, linear-gradient(transparent, transparent))";
+            mask-image: ~"var(--vo-ar-ico-@{name}, linear-gradient(transparent, transparent))";
+}
+
+/* The Common.UI.CheckBox checkbox is the window set checkbox (compact-windows.less,
+   the window's .checkbox-indeterminate): box 18, radius 4, border base-7, the selected one is
+   accent with a white check mark, the focus ring outside. There the rule lives under the window
+   mark, here is the same look for stock panels. */
+.vo-ar-checkbox() {
+    display: inline-flex;
+    align-items: center;
+    gap: @vo-win-ck-gap;
+    min-height: @vo-win-ck-h;
+    padding-left: 0;
+    padding-right: 0;
+    outline: none;
+    opacity: 1;
+    color: @vo-text;
+    font-family: @vo-font;
+    font-size: @vo-win-fs;
+    line-height: @vo-win-lh;
+    cursor: pointer;
+
+    input[type=checkbox] + label {
+        position: relative;
+        left: auto;
+        right: auto;
+        flex: 0 0 auto;
+        width: @vo-win-ck;
+        height: @vo-win-ck;
+        margin: 0;
+        border-radius: @vo-win-ck-r;
+        background: @vo-win-white;
+
+        &::before {
+            border-radius: @vo-win-ck-r;
+            box-shadow: inset 0 0 0 1px @vo-win-stroke;
+        }
+
+        &::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            visibility: hidden;
+            .vo-ar-ico(check);
+            background: @vo-win-white;
+        }
+
+        svg { display: none; }
+        .chb-check-mark { display: none; }
+
+        + span { outline: none; }
+    }
+
+    &:hover:not(.disabled) input[type=checkbox] + label::before { box-shadow: inset 0 0 0 1px @vo-accent; }
+
+    input[type=checkbox]:checked + label {
+        background: @vo-accent;
+
+        &::before { box-shadow: inset 0 0 0 1px @vo-accent; }
+        &::after { visibility: visible; }
+    }
+
+    &:focus-visible input[type=checkbox] + label { .vo-win-ring(); }
+
+    &.disabled {
+        color: @vo-win-off-fg;
+        cursor: default;
+
+        input[type=checkbox] + label,
+        input[type=checkbox]:checked + label {
+            background: @vo-win-off-bg;
+
+            &::before { box-shadow: inset 0 0 0 1px @vo-win-off-bg; }
+        }
+    }
+}
+
+/* Icon button of a stock panel (btn-toolbar): 32 × 32, radius 8, AIR icon 20
+   in the shell icon color; hover and press as for the panel buttons. */
+@vo-ar-ib:      32px;
+@vo-ar-ib-ico:  20px;
+
+.vo-ar-icon-btn() {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: @vo-ar-ib;
+    min-width: @vo-ar-ib;
+    height: @vo-ar-ib;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: @vo-r-sm;
+    background: transparent;
+    box-shadow: none;
+    color: @vo-icon;
+
+    &:hover:not(.disabled) { background: @vo-hover; }
+    &:active:not(.disabled),
+    &.active:not(.disabled) { background: @vo-active; }
+    &.disabled { opacity: 1; color: @vo-win-off-fg; }
+    &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+    .icon {
+        width: @vo-ar-ib-ico;
+        height: @vo-ar-ib-ico;
+        margin: 0;
+        opacity: 1;
+    }
+}
+
+/* --- "Search and replace" panel -------------------------------------------------- */
+/* The stock Common.Views.SearchPanel panel (#search-box) in the left area: "Edit →
+   Find and replace", Ctrl+H, the search row "⋮". The header is like the comments
+   panel (40 row, label 14/600 in the shell font, stock buttons on the right);
+   fields, buttons and checkboxes are from the window set; navigation is 32 icon buttons with AIR
+   arrows; found items are shell list rows. Markup and behavior are stock. */
+@vo-sp-pad: 16px;
+
+body.vo-compact #search-box {
+    color: @vo-text;
+    font-family: @vo-font;
+
+    #search-header {
+        display: flex;
+        align-items: center;
+        box-sizing: content-box;
+        height: @vo-cm-hd-h;
+        padding: 0 8px 0 16px;
+        overflow: visible;
+
+        > label {
+            order: 0;
+            margin: 0;
+            margin-inline-end: auto;
+            font-family: @vo-font;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: normal;
+            letter-spacing: normal;
+        }
+
+        #search-btn-redact-open { order: 1; float: none; }
+        #search-btn-close       { order: 2; float: none; }
+    }
+
+    #search-container { top: @vo-cm-hd-h + 1px; }
+
+    #search-adv-settings {
+        padding: @vo-sp-pad @vo-sp-pad 0;
+
+        .padding-small { padding-bottom: 12px; }
+        .padding-large { padding-bottom: @vo-sp-pad; }
+
+        .input-field > .form-control { .vo-win-field(); }
+
+        /* The found count and the arrows are one row of the button height. */
+        #search-adv-results-number {
+            width: calc(100% - 2 * @vo-ar-ib - 4px);
+            padding: 0;
+            color: @vo-text-3;
+            font-size: @vo-win-lbl-fs;
+            line-height: @vo-ar-ib;
+            vertical-align: middle;
+
+            .search-again { color: @vo-link; text-decoration: none; }
+            .search-again:hover { text-decoration: underline; }
+        }
+
+        .search-nav-btns {
+            display: inline-flex;
+            gap: 4px;
+
+            #search-adv-back { margin: 0; }
+        }
+
+        #search-adv-back .btn-toolbar,
+        #search-adv-next .btn-toolbar {
+            .vo-ar-icon-btn();
+
+            .icon { .vo-ar-ico(chevron); }
+        }
+
+        #search-adv-back .icon { transform: rotate(180deg); }
+
+        /* "Replace" and "Replace all" are outline md of the set. The hover and press fill
+           is written by the stock .btn-text-default with !important (buttons.less). */
+        .btn-text-default {
+            .vo-win-btn();
+            .vo-win-btn-outline();
+            min-width: 0;
+
+            &:not(.disabled):not([disabled]):hover  { background-color: @vo-outline-hover !important; }
+            &:not(.disabled):not([disabled]):active { background-color: @vo-outline-act !important; }
+
+            &.disabled,
+            &[disabled] { .vo-win-btn-off(); }
+        }
+
+        #search-adv-replace,
+        #search-adv-mark { margin-inline-end: 8px; }
+
+        .checkbox-indeterminate { .vo-ar-checkbox(); }
+    }
+
+    /* Found items are list rows: padding 16, hover and selected as in the
+       shell lists. */
+    #search-results {
+        border-top-color: @vo-separator;
+
+        .item {
+            padding: 8px @vo-sp-pad;
+            color: @vo-text;
+            font-size: @vo-fs-ctrl;
+            line-height: 1.4;
+
+            &:hover { background-color: @vo-hover; }
+            &.selected {
+                background-color: @vo-selected;
+                color: @vo-text;
+            }
+        }
+
+        .many-results { color: @vo-text-3; }
+    }
+}
+
+body.vo-compact.theme-type-light #search-box {
+    #search-header { border-bottom-color: @vo-separator; }
+    #search-header > label { color: @vo-text; }
+}
+
+/* --- Search bar ------------------------------------------------------------------ */
+/* The stock Common.UI.SearchBar window (the panel magnifier, Ctrl+F) is a separate card
+   under the magnifier, as in documents and spreadsheets. The stock places the window inline at the right edge
+   under #toolbar; we put its left edge at the left edge of the magnifier (--vo-search-left) and 8 below
+   the panel card (--vo-search-top): both variables are set by
+   CompactLeft.placeSearchBar on every show, row change and window resize. Without
+   the magnifier it is at the left padding, without the variables under the full header. Background, rounding and
+   shadow are the panel card's; the field is like AIR fields: 32, radius 8, thin border; buttons
+   are 32 × 32, radius 6, AIR icons. Behavior is stock. */
+@vo-search-top: @vo-h-header + @vo-h-menu + @vo-tb-gap-top + @vo-h-toolbar + @vo-tb-gap;
+
+body.vo-compact .asc-window.search-bar {
+    top: var(--vo-search-top, @vo-search-top) !important;
+    left: var(--vo-search-left, @vo-pad-x) !important;
+    right: auto;
+    height: 52px !important;                         /* equal above and below the field: 10 + 32 + 10 */
+    min-height: 0 !important;                        /* the stock window has min-height 50: with it the bottom is 4 larger */
+    border: none;
+    border-radius: @vo-r-md;
+    background: rgba(255, 255, 255, .9);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    box-shadow: @vo-shadow;
+    font-family: @vo-font;
+
+    .body { background: transparent; }
+    .box {
+        align-items: center;
+        gap: 4px;
+        padding: 10px 7px 10px 18px;
+    }
+    .search-input-group {
+        margin-right: 4px;
+        input[type=search] {
+            width: 220px;
+            height: 32px;
+            padding: 0 44px 0 12px !important;
+            border: 1px solid #e2e2e2;               /* divider-accent */
+            border-radius: @vo-r-sm;
+            background: #ffffff;
+            color: @vo-text;                          /* base-1 */
+            font-family: @vo-font;
+            font-size: @vo-fs-ctrl;
+            box-shadow: none;
+            &::placeholder { color: @vo-text-off; }   /* base-4 */
+            &:focus { border-color: @vo-accent; }     /* accent-main-primary */
+        }
+        #search-bar-results {
+            line-height: 32px;
+            padding: 0 12px 0 4px;
+            color: @vo-text-off;                      /* base-4 */
+            font-size: 12px;
+        }
+    }
+    .tools {
+        gap: 2px;
+        > div, > div:first-of-type { margin: 0; }
+        .btn-toolbar {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #656f7b;                           /* like the document search bar icons */
+            &:hover:not(.disabled) { background: @vo-hover; }
+            &:active:not(.disabled) { background: @vo-active; }
+            &.disabled { opacity: .4; }
+            .icon {
+                width: 24px;
+                height: 24px;
+                margin: 0;
+                .vo-ar-ico(chevron);
+            }
+            .icon.btn-arrow-up { transform: rotate(180deg); }
+            .icon.btn-more-vertical {
+                transform: rotate(90deg);
+                .vo-ar-ico(more);
+            }
+            .icon.btn-close { .vo-ar-ico(close); }
+        }
+    }
+}
+
+/* The second "⋮" is for PDF editing, presentations do not need it. */
+body.vo-compact .asc-window.search-bar #search-bar-open-panel-redact { display: none; }
+
+/* --- Slideshow control panel ------------------------------------------------------ */
+/* The stock #preview-controls-panel panel of the PE.Views.DocumentPreview kind (the "Slideshow"
+   button) is an AIR card in the bottom left corner of the show: padding 16 from the edges, height 44,
+   radius 12, shadow and blur of the panel card; 32 icon buttons with hover, AIR icons
+   20; the slide counter in the shell font; separators are thin lines. Behavior is
+   stock: the panel appears on mouse movement and fades while there is no cursor over it.
+   The AIR set has no exit full screen icon: this state uses the
+   stock icon. */
+@vo-show-gap:  16px;
+@vo-show-h:    44px;
+
+body.vo-compact #pe-preview .preview-controls {
+    display: flex;
+    align-items: center;
+    left: @vo-show-gap;
+    bottom: @vo-show-gap;
+    height: @vo-show-h;
+    box-sizing: border-box;
+    padding: 0 6px;
+    border-radius: @vo-r-md;
+    background: rgba(255, 255, 255, .95);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    box-shadow: @vo-shadow;
+    color: @vo-text-2;
+    font-family: @vo-font;
+
+    .preview-group {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .separator {
+        flex: 0 0 auto;
+        width: 1px;
+        height: 16px;
+        margin: 0 6px;
+        border: none;
+        background: @vo-border;
+    }
+
+    #btn-preview-prev,
+    #btn-preview-close { margin: 0; }
+
+    .btn-toolbar {
+        .vo-ar-icon-btn();
+
+        .icon.btn-previtem { .vo-ar-ico(chevronL); }
+        .icon.btn-nextitem { .vo-ar-ico(chevronR); }
+        .icon.btn-play { .vo-ar-ico(play); }
+        .icon.btn-preview-pause { .vo-ar-ico(pause); }
+        .icon.btn-pen-tool { .vo-ar-ico(pencil); }
+        .icon.btn-fullscreen { .vo-ar-ico(focus); }
+        .icon.btn-close { .vo-ar-ico(close); }
+
+        /* No pair in the set: the stock icon as is. */
+        .icon.btn-preview-exit-fullscreen {
+            -webkit-mask: none;
+                    mask: none;
+            background-color: transparent;
+        }
+    }
+
+    /* "Drawing" is a button with a menu: the icon and the dropdown arrow in one button. */
+    #btn-preview-draw .btn-toolbar {
+        width: auto;
+        padding: 0 4px 0 6px;
+        gap: 2px;
+    }
+
+    /* Counter "Slide 1 of 7" opens "Go to slide". */
+    #preview-label-slides {
+        display: block;
+        height: @vo-ar-ib;
+        padding: 0 8px;
+        border-radius: @vo-r-sm;
+        color: @vo-text-2;
+        font-family: @vo-font;
+        font-size: @vo-fs-ctrl;
+        line-height: @vo-ar-ib;
+
+        &:hover { background: @vo-hover; color: @vo-text; }
+    }
+
+    /* "Go to slide" is a popup surface over the panel, a window set field. */
+    #preview-goto-box {
+        .vo-material-popup();
+        bottom: @vo-show-gap + @vo-show-h + 8px;
+        margin: 0;
+        padding: 12px;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-fs-ctrl;
+
+        > label { line-height: 38px; }
+
+        .form-control {
+            .vo-win-field();
+            width: 64px;
+        }
+    }
+}
+
+/* --- Buttons and hints on the slide ----------------------------------------------- */
+/* "Paste options" (DocumentHolder.btnSpecialPaste: after pasting from the clipboard) and
+   the chart elements button (btnChartElement: on a selected chart) are stock
+   Common.UI.Button in their containers on the canvas. The look is a set button on a white
+   plate: height 28, radius 8, thin border and the panel card shadow, AIR icon 20,
+   the dropdown arrow is an AIR chevron 16, the "(Ctrl)" label in the shell font. The menu is
+   like the compact stock context menus (compact-menu.less): card 12 with a shadow,
+   row 38, font size 13, the mark in the icon column. Position and content are stock. */
+@vo-sb-h:       28px;
+@vo-sb-ico:     20px;
+@vo-sb-caret:   16px;
+
+body.vo-compact {
+    #special-paste-container,
+    #chart-element-container {
+        border: 1px solid @vo-win-stroke;
+        border-radius: @vo-r-sm;
+        background: @vo-surface;
+        box-shadow: @vo-shadow-raised;
+
+        .btn-toolbar {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            height: @vo-sb-h;
+            min-width: 0;
+            margin: 0;
+            padding: 0 4px 0 6px;
+            border: none;
+            border-radius: @vo-r-sm - 1px;
+            background: transparent;
+            box-shadow: none;
+            color: @vo-icon;
+            font-family: @vo-font;
+            font-size: 12px;
+            line-height: @vo-sb-h;
+
+            &:hover:not(.disabled),
+            &.active:not(.disabled),
+            .btn-group.open > & { background: @vo-hover; }
+
+            .icon {
+                width: @vo-sb-ico;
+                height: @vo-sb-ico;
+                margin: 0;
+            }
+
+            .icon.btn-paste { .vo-ar-ico(paste); }
+            .icon.btn-chart-elements { .vo-ar-ico(chart); }
+
+            .caption {
+                margin: 0 0 0 2px;
+                color: @vo-text-2;
+                font-size: 12px;
+            }
+
+            .inner-box-caret {
+                display: inline-flex;
+                align-items: center;
+                width: auto;
+                margin: 0;
+                padding: 0;
+            }
+
+            .caret {
+                width: @vo-sb-caret;
+                height: @vo-sb-caret;
+                margin: 0;
+                border: none;
+                transform: none;
+                color: @vo-text-3;
+                .vo-ar-ico(chevron);
+            }
+        }
+
+        /* The button menu is like the compact stock context menus. */
+        .dropdown-menu {
+            min-width: 0;
+            padding: @vo-mn-pad;
+            border: none;
+            border-radius: @vo-mn-r-pop;
+            background: @vo-surface;
+            box-shadow: @vo-shadow;
+            font-family: @vo-font;
+            font-size: @vo-mn-fs-row;
+        }
+
+        .dropdown-submenu > .dropdown-menu { margin-top: -(extract(@vo-mn-pad, 1)); }
+
+        .dropdown-menu li > a {
+            position: relative;
+            padding-block: ((@vo-mn-row-h - 16px) / 2);
+            padding-inline: (@vo-mn-row-l + @vo-mn-ico + @vo-mn-ico-gap) @vo-mn-row-r;
+            color: @vo-text;
+            font-family: @vo-font;
+            font-size: @vo-mn-fs-row;
+            line-height: 16px;
+
+            &:hover, &:focus, &.focus { color: @vo-text; background: @vo-hover; }
+            &:active { background: @vo-active; }
+        }
+
+        .dropdown-menu li.over > a { background: @vo-hover; }
+
+        .dropdown-menu li .checked:not(.no-checkmark)::before {
+            margin-inline-start: ((@vo-mn-ico - 16px) / 2 - @vo-mn-ico - @vo-mn-ico-gap);
+        }
+
+        .dropdown-submenu > a::after {
+            width: 6px;
+            height: 6px;
+            margin-top: 5px;
+            margin-inline-end: -(@vo-mn-row-r - @vo-mn-row-l - 9px + 3px);
+            border-style: solid;
+            border-color: var(--vo-fig-row-icon);
+            border-width: 0 1.5px 1.5px 0;
+            transform: rotate(-45deg);
+        }
+
+        .dropdown-menu .divider {
+            margin: @vo-mn-sep-m;
+            background: @vo-mn-sep-bg;
+        }
+    }
+}
+
+/* Co-author label at the object they occupy and at their cursor (.username-tip, the color is
+   stock: the co-author color) is a badge in the shell font: radius 4, label 12/500 without the
+   stock letter spacing. */
+body.vo-compact .username-tip {
+    padding: 0 8px;
+    border-radius: 4px;
+    font-family: @vo-font;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: normal;
+}
+
+/* Hint at a link on a slide (the stock Common.UI.Tooltip of the DocumentHolder controller:
+   the address and a bold "Ctrl + click" line) is a popup surface of the shell: a white
+   card, radius 8, shadow, shell font 12. It has no class of its own, and the other
+   stock hints stay stock, so it is recognized by the bold line. */
+body.vo-compact .tooltip:has(> .tooltip-inner > b) {
+    .tooltip-arrow { display: none; }
+
+    .tooltip-inner {
+        max-width: 320px;
+        padding: 8px 12px;
+        border: none;
+        border-radius: @vo-r-sm;
+        background: @vo-surface;
+        box-shadow: @vo-shadow;
+        color: @vo-text-2;
+        font-family: @vo-font;
+        font-size: 12px;
+        line-height: 1.4;
+        text-align: left;
+        word-break: break-all;
+
+        > b {
+            color: @vo-text;
+            font-weight: 600;
+        }
+    }
+}
+
+/* --- Status bar ----------------------------------------------------------------- */
+/* As in documents: over the area, white 95 %, labels base-3, 30 between them.
+   On the left the counter and language, "to the limit" goes to the first button after the labels;
+   buttons have padding 7 for focus and an equal negative edge: labels are
+   exactly 30 apart. The edge icons are 107 wide at the right edge, without action. */
+body.vo-compact #vo-status {
+    padding-right: 0;
+
+    .vo-st-item {
+        white-space: nowrap;
+        color: #828b95;                               /* base-3 */
+    }
+
+    .vo-st-item[hidden] { display: none; }
+
+    .vo-st-lang {
+        cursor: pointer;
+        border-radius: 5px;
+        outline: none;
+
+        &:hover { color: #525c69; }                   /* base-2 */
+        &:focus-visible { box-shadow: 0 0 0 2px @vo-focus; }
+        &.vo-locked,
+        &.vo-locked:hover {
+            color: @vo-text-off;
+            cursor: default;
+        }
+    }
+
+    .vo-st-btn {
+        height: 18px;
+        margin: 0 -7px;
+        padding: 0 7px;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        color: #828b95;
+        font-family: @vo-font;
+        font-size: @vo-fs-status;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &.on { color: #828b95; }                      /* the enabled one in the same color */
+        &:hover,
+        &.on:hover { color: #525c69; }
+        &:focus-visible { outline: none; box-shadow: 0 0 0 2px @vo-focus; }
+
+        &.vo-locked,
+        &.vo-locked:hover {
+            color: @vo-text-off;
+            cursor: default;
+        }
+    }
+
+    .vo-st-item + .vo-st-btn { margin-left: auto; }
+
+    .vo-st-tools {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 107px;
+        height: 24px;
+        margin-left: -6px;                            /* 30 → 24 */
+        flex: none;
+    }
+
+    .vo-st-ico {
+        position: relative;
+        display: flex;
+        width: 20px;
+        height: 20px;
+        color: #000;
+        opacity: .3;
+        cursor: pointer;
+
+        svg { display: block; }
+        &:hover { opacity: .6; }
+
+        /* The hover area is wider than the icon: 5 to the sides and the full row height. */
+        &::after {
+            content: '';
+            position: absolute;
+            inset: -5px;
+        }
+    }
+
+    .vo-st-close {
+        width: 24px;
+        height: 24px;
+
+        &::after { inset: -3px -10px -3px -5px; }
+    }
+
+    .vo-st-sep {
+        position: relative;
+        width: 5px;
+        height: 24px;
+        flex: none;
+
+        &::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: 4px;
+            width: 1px;
+            height: 16px;
+            background: rgba(0, 0, 0, .1);
+        }
+    }
+}
+
+/* Language list is above the language label; the material of shell popups. */
+body.vo-compact .vo-st-pop {
+    position: fixed;
+    z-index: @vo-z-drop;
+    min-width: 200px;
+    max-height: 320px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 6px 0;
+    background: @vo-surface;
+    border-radius: @vo-r-md;
+    box-shadow: @vo-shadow;
+    font-family: @vo-font;
+    font-size: @vo-fs-ctrl;
+
+    .vo-st-pop-item {
+        display: block;
+        width: 100%;
+        height: 32px;
+        padding: 0 14px;
+        border: none;
+        background: transparent;
+        color: @vo-text;
+        font: inherit;
+        text-align: start;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover { background: @vo-hover; }
+        &.on { background: @vo-selected; color: @vo-selected-fg; }
+        &:focus-visible { outline: none; box-shadow: inset 0 0 0 2px @vo-focus; }
+        &.vo-locked { color: @vo-text-off; cursor: default; background: transparent; }
+    }
+}

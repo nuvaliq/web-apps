@@ -46,7 +46,8 @@ define([
     'common/main/lib/util/Shortcuts',
     'documenteditor/main/app/view/LeftMenu',
     'documenteditor/main/app/view/FileMenu',
-    'documenteditor/main/app/view/ViewTab'
+    'documenteditor/main/app/view/ViewTab',
+    'documenteditor/main/app/view/DocumentActions'
 ], function () {
     'use strict';
 
@@ -254,7 +255,10 @@ define([
                 if ( isopts ) close_menu = false;
                 else this.clickSaveAsFormat(undefined, undefined, true);
                 break;
-            case 'print': this.api.asc_Print(new Asc.asc_CDownloadOptions(null, Common.Utils.isChrome || Common.Utils.isOpera || Common.Utils.isGecko && Common.Utils.firefoxVersion>86)); break;
+            case 'print':
+                if (this.mode.canPrint) this.getApplication().getController('Main').requestPrint(
+                    new Asc.asc_CDownloadOptions(null, Common.Utils.isChrome || Common.Utils.isOpera || Common.Utils.isGecko && Common.Utils.firefoxVersion>86), this.api);
+                break;
             case 'exit': Common.NotificationCenter.trigger('goback'); break;
             case 'edit':
                 this.getApplication().getController('Statusbar').setStatusCaption(this.requestEditRightsText);
@@ -698,7 +702,9 @@ define([
             if (this.viewmode === viewmode) return;
             this.viewmode = viewmode;
 
-            this.leftMenu.panelSearch && this.leftMenu.panelSearch.setSearchMode(this.viewmode ? 'no-replace' : 'search');
+            // In the compact shell a user without the edit right never gets the replace field back.
+            var noReplace = this.viewmode || $('body').hasClass('vo-compact') && this.mode && !this.mode.isEdit;
+            this.leftMenu.panelSearch && this.leftMenu.panelSearch.setSearchMode(noReplace ? 'no-replace' : 'search');
             this.leftMenu.setDisabledPluginButtons(this.viewmode);
         },
 
@@ -849,6 +855,11 @@ define([
 
                     this.leftMenu.btnAbout.toggle(false);
                     Common.UI.Menu.Manager.hideAll();
+                    // The compact shell finds in the floating search bar; replace opens the find and replace panel.
+                    if (s === 'replace' && $('body').hasClass('vo-compact')) {
+                        this.onCompactFindReplace(true);
+                        return false;
+                    }
                     var selectedText = this.api.asc_GetSelectedText();
                     if (this.isSearchPanelVisible()) {
                         selectedText && this.leftMenu.panelSearch.setFindText(selectedText);
@@ -984,14 +995,89 @@ define([
 
         onShowHideSearch: function (state, findText) {
             if (state) {
+                var request = this.leftMenu._findReplaceRequest;
+                if (request) {
+                    findText = request.findText;
+                    request.shown = true;
+                }
                 Common.UI.Menu.Manager.hideAll();
                 this.tryToShowLeftMenu();
-                this.leftMenu.showMenu('advancedsearch', undefined, true);
-                this.leftMenu.fireEvent('search:aftershow', [findText]);
+                var compact = $('body').hasClass('vo-compact'),
+                    canShowSearch = !this.leftMenu.btnSearchBar.isDisabled() &&
+                        (!compact || ((!this.mode.canBrandingExt || !this.mode.customization || this.mode.customization.leftMenu !== false) &&
+                            Common.UI.LayoutManager.isElementVisible('leftMenu')));
+                if (canShowSearch) {
+                    this.leftMenu.showMenu('advancedsearch', undefined, true);
+                }
+                if (canShowSearch && this.isSearchPanelVisible()) {
+                    this.leftMenu.fireEvent('search:aftershow', [findText]);
+                } else if (compact) {
+                    // SearchBar hides before asking for the panel; restore it if opening was refused.
+                    var viewport = this.getApplication().getController('Viewport');
+                    if (viewport.searchBar) {
+                        viewport.header.btnSearch.toggle(true, true);
+                        viewport.searchBar.show(findText);
+                    }
+                }
             } else {
                 this.leftMenu.btnSearchBar.toggle(false, true);
                 this.leftMenu.onBtnMenuClick(this.leftMenu.btnSearchBar);
             }
+        },
+
+        // Opens the find and replace panel from a compact entry point; the shell reveals its left area first.
+        onCompactFindReplace: function (toReplace) {
+            var shell = DE.Views.CompactShell;
+            this.onFindReplace(shell ? function () { shell.ensureLeftPanel('search'); } : undefined,
+                toReplace ? 'replace' : undefined);
+        },
+
+        onFindReplace: function (revealPanel, field) {
+            if (!this.mode || !this.api || !this.leftMenu || this.leftMenu.menuFile.isVisible())
+                return;
+            // Branding denies the full panel; preserve the ordinary search entry point.
+            if (this.mode.canBrandingExt && this.mode.customization &&
+                (this.mode.customization.leftMenu === false || !Common.UI.LayoutManager.isElementVisible('leftMenu'))) {
+                Common.NotificationCenter.trigger('search:show');
+                return;
+            }
+            var button = this.leftMenu.btnSearchBar;
+            if (!button || button.isDisabled())
+                return;
+
+            var viewport = this.getApplication().getController('Viewport'),
+                findText;
+            if (viewport.isSearchBarVisible()) {
+                findText = viewport.searchBar.inputSearch.val();
+            } else {
+                var selectedText = this.api.asc_GetSelectedText();
+                if (selectedText && selectedText.trim())
+                    findText = selectedText;
+                else if (this.isSearchPanelVisible())
+                    findText = this.leftMenu.panelSearch.inputText.getValue();
+            }
+
+            // Capture the query before the shell reveals the stock panel and hides SearchBar.
+            var request = {findText: findText, shown: false};
+            if (revealPanel) {
+                this.leftMenu._findReplaceRequest = request;
+                try {
+                    revealPanel();
+                } finally {
+                    this.leftMenu._findReplaceRequest = null;
+                }
+            }
+
+            if (!this.isSearchPanelVisible())
+                this.onShowHideSearch(true, findText);
+            else if (!request.shown)
+                this.leftMenu.fireEvent('search:aftershow', [findText]);
+
+            if (!this.isSearchPanelVisible())
+                return;
+            // The replace field is left to the button toggle and updatePreviewMode, so editing:disable
+            // and protect:doclock keep updating a panel that is already open.
+            this.leftMenu.panelSearch.focus(field === 'replace' && this.mode.isEdit && !this.viewmode ? field : undefined);
         },
 
         onMenuSearchBar: function(obj, show) {
@@ -1038,8 +1124,11 @@ define([
                 this.onLeftMenuHide(null, true);
         },
 
-        showHelp: function(src) {
-            this.leftMenu && this.leftMenu.showMenu('file:help', src);
+        // F1 and every 'file:help' open the product helpdesk by interface language;
+        // the bundled guide has no entry points, so a guide article path is not used.
+        showHelp: function() {
+            if (!this.mode || !this.mode.canHelp) return;
+            window.open(DE.Views.DocumentActions.helpUrl(Common.Locale.getCurrentLanguage()), '_blank');
         },
 
         textNoTextFound         : 'Text not found',

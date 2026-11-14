@@ -1,0 +1,661 @@
+/*
+ * "Watermark settings" window in the compact shell.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Its own CompactWatermarkDialog window (view/CompactWatermark.js), a subclass
+ * of the stock WatermarkSettingsDialog with its own markup: on the left the type buttons
+ * "None · Image watermark · Text watermark" and the sections of the two types in
+ * one grid cell, on the right "Preview", a page sample. The box, header,
+ * body, footer, fields, lists and checkbox are drawn by the template (compact-windows.less)
+ * via the vo-win mark; here only what this window has of its own: width 720,
+ * the padding of a window that starts with a choice, columns, type buttons, font style,
+ * color, text selection, the uploader and the page sample. Every selector
+ * starts with body.vo-compact and the window mark; Advanced opens the stock
+ * class, and it has no such marks.
+ *
+ * Color comes from the "Tokens: color" block in compact-shell.less, geometry from
+ * the template constants and the literals below, with the AIR token name on the right. Anything of our own that
+ * the design system lacks is marked "not in the DS".
+ */
+
+/* --- Geometry ------------------------------------------------------------ */
+
+@vo-wm-w:           720px;    // window with a page sample; the DS has no such window width
+@vo-wm-cols-gap:    20px;     // --ui-space-inline-lg: settings | sample
+@vo-wm-lang:        180px;    // "Language" column; not in the DS
+@vo-wm-size:        88px;     // font size; not in the DS
+@vo-wm-color:       72px;     // color; not in the DS
+@vo-wm-swatch:      18px;     // color swatch
+@vo-wm-swatch-line: rgba(0, 0, 0, .08);   // color swatch outline; not in the DS
+@vo-wm-icon-btn:    34px;     // icon button md: --ui-btn-size-md
+@vo-wm-icon:        24px;     // icon in it
+@vo-wm-sm-h:        28px;     // --ui-btn-size-sm
+@vo-wm-sm-pad:      9px;      // sm button padding
+@vo-wm-sm-fs:       13px;     // --ui-font-size-sm
+@vo-wm-sm-ls:       -.15px;   // sm button letter spacing
+@vo-wm-in-3xs:      2px;      // --ui-space-inline-3xs: icon and label in a button
+@vo-wm-in-2xs:      4px;      // --ui-space-inline-2xs: image source row and text selection
+@vo-wm-src-ico:     20px;     // icon on the left at sm
+@vo-wm-src-ico-in:  3px;      // the icon extends into the button padding (margin-left: -3px)
+@vo-wm-chev-sm:     16px;     // text selection arrow
+@vo-wm-chev-out-r:  3px;      // the arrow extends into the button padding on the right and toward the value on the left
+@vo-wm-chev-out-l:  2px;
+@vo-wm-drop-h:      128px;    // upload zone (ui.uploader, LARGE); not in the DS
+@vo-wm-drop-ico:    32px;     // zone icon
+@vo-wm-drop-ico-b:  6px;      // from the icon to the label
+@vo-wm-thumb-h:     84px;     // image preview height in the zone
+@vo-wm-thumb-x:     10%;      // preview 80 % of the zone width
+@vo-wm-pop-min:     160px;    // text selection menu
+@vo-wm-page-w:      148px;    // sheet before measuring; the window sets the size from the column height (A4)
+@vo-wm-page-h:      209px;
+@vo-wm-lines-y:     22px;     // text lines on the sheet; not in the DS
+@vo-wm-lines-r:     14px;
+@vo-wm-lines-l:     24px;
+@vo-wm-line:        3px;      // line 3 with 6 step
+@vo-wm-line-step:   9px;
+@vo-wm-none-fs:     12px;     // --ui-font-size-xs
+
+/* --- Window -------------------------------------------------------------- */
+
+body.vo-compact .asc-window.vo-win.vo-win--watermark {
+    /* AdvancedSettingsWindow writes the window width inline from the content,
+       on render and on every browser window resize: content-panel + 2
+       (AdvancedSettingsWindow.js:114, :130). Centering takes the width from the
+       window config (Window.js:274), the same 720 there. An inline value is overridden
+       only this way. */
+    width: @vo-wm-w !important;
+
+    /* content_panel.width(contentWidth) is inline too (AdvancedSettingsWindow.js:113).
+       The panel follows the template's window body, not the number from JS. */
+    > .body > .box > .content-panel { width: auto !important; }
+
+    /* The window starts with a choice, the type buttons: stack-xl from the
+       header to the footer. The template footer lies inside the body,
+       so "bottom" is the footer padding, not the body's: 24 remains under the footer
+       buttons, as in the template (6 of the footer + 18 of the body). */
+    > .body { padding-top: @vo-win-gap-xl; }                // --ui-space-stack-xl
+    > .body > .footer { margin-top: @vo-win-gap-xl; }       // --ui-space-stack-xl
+
+    /* --- Columns --------------------------------------------------------- */
+    .vo-wm {
+        display: flex;
+        align-items: flex-start;
+        gap: 0 @vo-wm-cols-gap;
+    }
+
+    .vo-wm-set {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: @vo-win-gap;                      // --ui-space-stack-md: between body blocks
+        min-width: 0;
+    }
+
+    .vo-wm-prev {
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+    }
+
+    /* The type sections are in one cell: the column follows the tallest
+       section, the text one, and the window does not change height when the type changes.
+       An invisible section is visibility hidden: it keeps the space, takes no focus,
+       and the window disables its controls. */
+    .vo-wm-subs { display: grid; }
+
+    .vo-wm-sub {
+        display: flex;
+        flex-direction: column;
+        gap: @vo-win-gap;                      // --ui-space-stack-md
+        grid-row: 1;
+        grid-column: 1;
+        min-width: 0;
+    }
+
+    /* visibility is inherited, but a descendant with visible would show through
+       a hidden section: the check mark of the template checkbox (::after), the CheckBox label
+       (inline visibility, CheckBox.js:230), the preview in the zone. So the whole
+       subtree is hidden; the label's inline value is overridden only this way. */
+    .vo-wm-sub--hid,
+    .vo-wm-sub--hid *,
+    .vo-wm-sub--hid *::before,
+    .vo-wm-sub--hid *::after { visibility: hidden !important; }
+
+    /* The text section has its own height, not the cell's: the window sets the bottom of the sheet
+       by its bottom (sizePage), and an expanded link row, which lengthens the
+       image section, changes neither the sheet nor the column widths. The image one
+       stretches over the cell: the zone grows up to it. */
+    .vo-wm-sub--text { align-self: start; }
+
+    .vo-wm-field { min-width: 0; }
+
+    /* The Common.UI.Button label sits in span.caption, and the stock
+       .btn .caption (buttons.less:113, font-size-normal, 11–12 px) would override
+       the template button's font size: md 14, sm 13.
+       The label takes the font size of its button. */
+    .btn .caption { font-size: inherit; }
+
+    .vo-wm .combobox { width: 100%; }
+
+    /* --- Type buttons ----------------------------------------------------- */
+    /* outline md with the inline-xs gap; the selected one is outline-accent-2: blue
+       border and text. */
+    .vo-wm-seg {
+        display: flex;
+        flex-wrap: wrap;
+        gap: @vo-win-f-gap;                    // --ui-space-inline-xs
+
+        .btn {
+            .vo-win-btn();
+            .vo-win-btn-outline();
+
+            &.on {
+                border-color: @vo-win-seg-stroke;    // design-outline-a2-stroke, weight border-width-medium
+                background: @vo-surface;             // design-outline-a2-bg
+                color: @vo-accent;                   // design-outline-a2-content
+
+                &:not(.disabled):not([disabled]):hover { color: @vo-accent; }
+            }
+        }
+    }
+
+    /* --- Text watermark --------------------------------------------------- */
+    .vo-wm-langrow {
+        display: grid;
+        grid-template-columns: @vo-wm-lang minmax(0, 1fr);
+        gap: 0 @vo-win-row-gap;                // --ui-space-inline-sm
+        align-items: end;
+    }
+
+    /* "Font": the font stretches, size 88, color 72, font style as one
+       group without gaps. */
+    .vo-wm-fontrow {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: @vo-win-f-gap;                    // --ui-space-inline-xs
+    }
+
+    .vo-wm-fonts {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    /* The font list is stock images, and the stock counts visible rows by the
+       height 28 (ComboBoxFonts.js:72, :779). The template menu row 36 would shift
+       this count, and some visible rows would stay empty on scrolling:
+       the row height is the stock one, from its inline value. */
+    .vo-wm-fonts .dropdown-menu li > a.font-item { min-height: 0; }
+
+    .vo-wm-size {
+        flex: 0 0 auto;
+        width: @vo-wm-size;
+    }
+
+    .vo-wm-color {
+        flex: 0 0 auto;
+        width: @vo-wm-color;
+    }
+
+    /* "Semitransparent" on the left, "Layout" opposite, on the right. The row goes
+       past the column edge by the sm button padding: the selection text sits at the edge. */
+    .vo-wm-semirow {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: @vo-win-f-gap;                    // --ui-space-inline-xs
+        margin-right: -@vo-wm-sm-pad;
+    }
+
+    /* --- Font style ------------------------------------------------------- */
+    /* plain icon 34; pressed is tinted. The stock Button pressed
+       state is the active class. */
+    .vo-wm-tgl {
+        display: inline-flex;
+        flex: 0 0 auto;
+
+        .btn {
+            .vo-win-btn();
+            .vo-win-btn-plain();
+            width: @vo-wm-icon-btn;
+            padding: 0;
+
+            .caption { display: inline-flex; }
+
+            &.active {
+                background: @vo-tinted-bg;     // design-tinted-bg
+                color: @vo-tinted-fg;          // design-tinted-content
+
+                &:not(.disabled):not([disabled]):hover  { background: @vo-tinted-hover; color: @vo-tinted-fg; }
+                &:not(.disabled):not([disabled]):active { background: @vo-tinted-act; }
+            }
+
+            &.disabled,
+            &[disabled] {
+                background: transparent;
+                color: @vo-win-off-fg;         // design-disabled-content
+                cursor: default;
+            }
+        }
+    }
+
+    /* --- Color: a field with a color swatch and a chevron ----------------- */
+    /* The stock ButtonColored button, the palette is stock. An AIR field
+       has no hover: the border changes only on focus and with the palette open. */
+    .vo-wm-color .btn-group {
+        display: block;
+        width: 100%;
+    }
+
+    .vo-wm-color .btn {
+        .vo-win-field();
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: @vo-win-f-gap;                    // --ui-space-inline-xs
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        cursor: pointer;
+
+        .caption { display: none; }
+
+        .btn-color-value-box {
+            position: static;
+            order: -1;
+            flex: 0 0 auto;
+            width: @vo-wm-swatch;
+            height: @vo-wm-swatch;
+            border: none;
+            border-radius: 50%;
+            box-shadow: inset 0 0 0 1px @vo-wm-swatch-line;
+        }
+
+        .inner-box-caret {
+            position: static;
+            display: inline-flex;
+            padding: 0;
+            color: @vo-win-label;              // chevron base-3, like the list's
+        }
+
+        .caret {
+            display: block;
+            width: @vo-win-chev;
+            height: @vo-win-chev;
+            margin: 0;
+            border: none;
+            transform: none;
+            transition: transform @vo-dur-state;
+            .vo-win-mask();
+            -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                    mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+        }
+
+        &.disabled,
+        &[disabled] {
+            border-color: transparent;
+            background: @vo-win-off-bg;        // .ui-system-input.--disabled
+            cursor: default;
+
+            .btn-color-value-box { opacity: .4; }
+            .inner-box-caret { color: @vo-win-off-fg; }
+        }
+    }
+
+    .vo-wm-color .btn-group.open > .btn {
+        border-color: @vo-accent;              // --border-color-active
+        box-shadow: none;
+
+        .caret { transform: rotate(180deg); }
+    }
+
+    /* --- Image watermark -------------------------------------------------- */
+
+    /* Upload zone (ui.uploader "stack"), click only, no drag-and-drop
+       hint. Stretches to the height of the text
+       section. With an image: the engine's preview texture instead of the icon and
+       label. */
+    .vo-wm-drop {
+        position: relative;
+        display: flex;
+        flex: 1 0 auto;
+        align-items: center;
+        justify-content: center;
+        min-height: @vo-wm-drop-h;
+        overflow: hidden;
+        border: 1px dashed @vo-win-drop-stroke;   // base-5
+        border-radius: @vo-r-sm;               // --ui-border-radius-sm
+        background: @vo-surface;               // bg-content-primary
+        text-align: center;
+        cursor: pointer;
+        outline: none;
+        transition: background-color @vo-win-dur, border-color @vo-win-dur;
+
+        &:not(.disabled):hover {
+            border-color: @vo-accent;          // accent-main-primary
+            background: @vo-selected;          // design-selection-bg
+        }
+
+        &:focus-visible { .vo-win-ring(); }
+
+        /* Disabled (section hidden, editing unavailable): gray fill without a
+           border, pale icon and label, like a disabled AIR field. */
+        &.disabled {
+            border-color: transparent;
+            background: @vo-win-off-bg;        // base-7
+            cursor: default;
+
+            .vo-air,
+            .vo-wm-drop-title { color: @vo-win-off-fg; }   // base-5
+
+            .vo-wm-thumb { opacity: .5; }
+        }
+    }
+
+    /* The zone and "Remove image": the wrapper takes the zone's place in the section
+       (stretches to the text one's height), the cross is over the top right
+       corner of the zone, beside it, not inside: the zone is a button itself. */
+    .vo-wm-dropbox {
+        position: relative;
+        display: flex;
+        flex: 1 0 auto;
+        flex-direction: column;
+
+        > .vo-wm-drop { flex: 1 0 auto; }
+    }
+
+    .vo-wm-clear {
+        position: absolute;
+        top: @vo-wm-in-2xs;                    // --ui-space-inline-2xs
+        right: @vo-wm-in-2xs;
+    }
+
+    /* plain icon sm 28 with a 20 icon in gray base-4, like the "From URL" icon.
+       Visibility is set by the window (setVisible): only with an image in the zone. */
+    .vo-wm-clear .btn {
+        .vo-win-btn();
+        .vo-win-btn-plain();
+        width: @vo-wm-sm-h;                    // --ui-btn-size-sm
+        height: @vo-wm-sm-h;
+        padding: 0;
+        border-radius: @vo-r-sm;               // --ui-border-radius-sm
+
+        .caption { display: inline-flex; }
+        .vo-air { color: @vo-text-off; }       // base-4
+
+        &:not(.disabled):not([disabled]):hover .vo-air { color: @vo-text-2; }   // base-2
+    }
+
+    .vo-wm-drop-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: @vo-wm-in-3xs;
+        pointer-events: none;
+
+        .vo-air {
+            margin-bottom: @vo-wm-drop-ico-b;
+            color: @vo-text-off;               // base-4
+        }
+    }
+
+    .vo-wm-drop-title {
+        color: @vo-accent;                     // accent-main-primary
+        font-size: @vo-win-fs;                 // --ui-font-size-md
+        font-weight: 500;                      // --ui-font-weight-medium
+        line-height: @vo-win-lh;
+    }
+
+    /* The preview node keeps its size even without an image (visibility, not display):
+       the engine creates the canvas once by the node size (drawTexture). */
+    .vo-wm-thumb {
+        position: absolute;
+        top: 50%;
+        right: @vo-wm-thumb-x;
+        left: @vo-wm-thumb-x;
+        height: @vo-wm-thumb-h;
+        margin-top: (@vo-wm-thumb-h / -2);
+        visibility: hidden;
+        pointer-events: none;
+
+        canvas { display: block; }
+    }
+
+    .vo-wm-drop.has-img {
+        .vo-wm-drop-empty { display: none; }
+        .vo-wm-thumb { visibility: visible; }
+    }
+
+    /* The row under the zone: "From URL", on the right "Scale". The text
+       of the buttons is at the zone edges: the row goes past it by the sm button padding, and is
+       closer to the zone by half of stack-md. */
+    .vo-wm-srcrow {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: @vo-wm-in-2xs;                    // --ui-space-inline-2xs
+        margin: (@vo-win-gap / -2) (-@vo-wm-sm-pad) 0;
+    }
+
+    /* "From URL" is plain sm with a 20 icon in gray base-4. */
+    .vo-wm-srcrow .vo-wm-src {
+        .vo-win-btn();
+        .vo-win-btn-plain();
+        height: @vo-wm-sm-h;
+        padding: 0 @vo-wm-sm-pad;
+        border-radius: @vo-r-sm;               // --ui-border-radius-sm
+        font-size: @vo-wm-sm-fs;               // --ui-font-size-sm
+        font-weight: 400;                      // --ui-font-weight-normal
+        letter-spacing: @vo-wm-sm-ls;
+
+        .caption {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .vo-air {
+            margin-left: -@vo-wm-src-ico-in;
+            margin-right: @vo-wm-in-3xs;
+            color: @vo-text-off;               // base-4
+        }
+
+        &.disabled,
+        &[disabled] {
+            background: transparent;
+            color: @vo-win-off-fg;             // design-disabled-content
+            cursor: default;
+
+            .vo-air { color: inherit; }        // the icon takes the label color
+        }
+    }
+
+    /* The "Image link" + "Upload" row: grid 1fr auto, hidden
+       until "From URL" is pressed. */
+    .vo-wm-urlrow {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0 @vo-win-row-gap;                // --ui-space-inline-sm
+        align-items: end;
+
+        &.vo-wm-off { display: none; }
+    }
+
+    /* "Upload" is outline md centered in the field box, not on the bottom edge:
+       field 38, button 34. */
+    .vo-wm-load {
+        margin-bottom: ((@vo-win-f-h - @vo-win-btn-h) / 2);
+
+        > .btn {
+            .vo-win-btn();
+            .vo-win-btn-outline();
+
+            &.disabled,
+            &[disabled] { .vo-win-btn-off(); }
+        }
+    }
+
+    /* --- Text selection --------------------------------------------------- */
+    /* "Scale" and "Layout": plain sm on the right in the row: the label and chevron are
+       base-4, the value in the button color. An open button is not highlighted. */
+    .vo-wm-pick-slot {
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+
+    .vo-wm-pick-slot > .btn-group > .btn {
+        .vo-win-btn();
+        .vo-win-btn-plain();
+        gap: @vo-wm-in-2xs;
+        height: @vo-wm-sm-h;
+        padding: 0 @vo-wm-sm-pad;
+        border-radius: @vo-r-sm;               // --ui-border-radius-sm
+        font-size: @vo-wm-sm-fs;               // --ui-font-size-sm
+        font-weight: 400;                      // --ui-font-weight-normal
+        letter-spacing: @vo-wm-sm-ls;
+
+        .caption {
+            display: inline-flex;
+            align-items: center;
+            gap: @vo-wm-in-2xs;
+        }
+
+        .vo-wm-pick-lbl { color: @vo-text-off; }   // base-4
+
+        .inner-box-caret {
+            display: inline-flex;
+            margin: 0 (-@vo-wm-chev-out-r) 0 (-@vo-wm-chev-out-l);
+            padding: 0;
+            color: @vo-text-off;               // base-4
+        }
+
+        .caret {
+            display: block;
+            width: @vo-wm-chev-sm;
+            height: @vo-wm-chev-sm;
+            margin: 0;
+            border: none;
+            transform: none;
+            transition: transform @vo-dur-state;
+            .vo-win-mask();
+            -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                    mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+        }
+
+        &.disabled,
+        &[disabled] {
+            background: transparent;
+            color: @vo-win-off-fg;             // design-disabled-content
+            cursor: default;
+
+            .vo-wm-pick-lbl,
+            .inner-box-caret { color: inherit; }
+        }
+    }
+
+    .vo-wm-pick-slot > .btn-group.open > .btn {
+        background: @vo-surface;               // without highlight when open
+        box-shadow: none;
+
+        .caret { transform: rotate(180deg); }
+    }
+
+    /* The selection menu is like the template's Air menu (compact-windows.less,
+       .combobox .dropdown-menu): row 36, font size 14, padding 18, the selected one is
+       a check mark in a circle on the right. It expands from the right edge of the button. */
+    .vo-wm-pick-slot .dropdown-menu {
+        .vo-material-popup();
+        min-width: @vo-wm-pop-min;
+        margin: @vo-win-pop-gap 0 0;
+        padding: @vo-win-pop-pad-y 0;
+
+        li { background: transparent; }
+
+        li > a {
+            display: flex;
+            align-items: center;
+            gap: @vo-win-pop-row-gap;
+            min-height: @vo-row-h;             // menu-popup-item height
+            padding: 0 @vo-row-pad-x;          // menu-popup-item-padding
+            background: transparent;
+            color: @vo-text;                   // base-1
+            font-family: @vo-font;
+            font-size: @vo-fs-row;             // menu-popup-item-font-size
+            line-height: @vo-win-lh;
+            white-space: nowrap;
+
+            &::after {
+                content: '';
+                flex: 0 0 auto;
+                width: @vo-win-check;
+                height: @vo-win-check;
+                margin-left: auto;
+                visibility: hidden;
+                .vo-win-mask();
+                background: @vo-accent;        // accent-main-primary
+                -webkit-mask-image: var(--vo-win-ico-accept, @vo-win-no-ico);
+                        mask-image: var(--vo-win-ico-accept, @vo-win-no-ico);
+            }
+
+            &:hover,
+            &:focus,
+            &.focus { background: @vo-hover; color: @vo-text; }   // bg-state-hover-default
+
+            &.checked::after { visibility: visible; }
+        }
+    }
+
+    /* --- Page sample ------------------------------------------------------- */
+    /* An A4 sheet by the parameter column height: the window sets the size; text
+       lines are base-7 stripes; the mark is in the center. */
+    .vo-wm-page {
+        position: relative;
+        width: @vo-wm-page-w;
+        height: @vo-wm-page-h;
+        overflow: hidden;
+        border-radius: @vo-win-r-2xs;          // --ui-border-radius-2xs
+        background: @vo-surface;               // bg-content-primary
+        box-shadow: @vo-win-page-shadow;
+    }
+
+    .vo-wm-lines {
+        position: absolute;
+        top: @vo-wm-lines-y;
+        right: @vo-wm-lines-r;
+        bottom: @vo-wm-lines-y;
+        left: @vo-wm-lines-l;
+        background: repeating-linear-gradient(to bottom, @vo-win-page-line 0 @vo-wm-line, transparent @vo-wm-line @vo-wm-line-step);
+    }
+
+    .vo-wm-mark {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+    }
+
+    .vo-wm-mark-text {
+        line-height: 1;
+        white-space: nowrap;
+        transform-origin: 50% 50%;
+    }
+
+    .vo-wm-mark-img {
+        flex: 0 0 auto;
+
+        canvas { display: block; }
+    }
+
+    /* "No image" is the "Image" sheet without a picture.
+       Show and hide are style.display from CompactWatermark.paintImage, like for
+       the mark's neighbors. */
+    .vo-wm-none {
+        color: @vo-text-off;                   // base-4
+        font-size: @vo-wm-none-fs;
+        white-space: nowrap;
+    }
+}

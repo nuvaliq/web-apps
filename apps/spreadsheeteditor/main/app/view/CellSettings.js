@@ -150,6 +150,80 @@ define([
             this.BorderType = record.value;
         },
 
+        // Shows the borders the selected cell already has, apart from the line and color used to draw new ones.
+        updateCurrentBorders: function(borders) {
+            var rows = this.$el.find('.cell-borders-current');
+            if (!borders) {
+                // The engine did not report the borders of the selection: show nothing rather than a guess.
+                rows.addClass('hidden');
+                return;
+            }
+            rows.removeClass('hidden');
+
+            var styles = Asc.c_oAscBorderStyles,
+                w = 56, h = 32, i = 2,
+                sides = [
+                    {border: borders.asc_getLeft(),     line: [i, i, i, h - i],         name: this.textBordersLeft},
+                    {border: borders.asc_getTop(),      line: [i, i, w - i, i],         name: this.textBordersTop},
+                    {border: borders.asc_getRight(),    line: [w - i, i, w - i, h - i], name: this.textBordersRight},
+                    {border: borders.asc_getBottom(),   line: [i, h - i, w - i, h - i], name: this.textBordersBottom},
+                    {border: borders.asc_getDiagDown(), line: [i, i, w - i, h - i]},
+                    {border: borders.asc_getDiagUp(),   line: [i, h - i, w - i, i]}
+                ],
+                stroke = function(style) {
+                    switch (style) {
+                        case styles.Hair:             return {width: 1, dash: '1 1'};
+                        case styles.Dotted:           return {width: 1, dash: '1 2'};
+                        case styles.Dashed:           return {width: 1, dash: '3 1'};
+                        case styles.DashDot:          return {width: 1, dash: '3 1 1 1'};
+                        case styles.DashDotDot:       return {width: 1, dash: '3 1 1 1 1 1'};
+                        case styles.Medium:           return {width: 2};
+                        case styles.MediumDashed:     return {width: 2, dash: '6 2'};
+                        case styles.MediumDashDot:
+                        case styles.SlantDashDot:     return {width: 2, dash: '6 2 2 2'};
+                        case styles.MediumDashDotDot: return {width: 2, dash: '6 2 2 2 2 2'};
+                        case styles.Thick:            return {width: 3};
+                        case styles.Double:           return {width: 3, double: true};
+                        default:                      return {width: 1};
+                    }
+                },
+                svg = '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' +
+                      '<rect class="grid" x="' + i + '" y="' + i + '" width="' + (w - 2 * i) + '" height="' + (h - 2 * i) + '"></rect>',
+                names = [],
+                sidesCount = 0,
+                diagonal = false;
+
+            sides.forEach(function(side, index) {
+                var border = side.border;
+                if (!border || border.asc_getStyle() === styles.None) return;
+
+                var color = border.asc_getColor(),
+                    hex = color ? Common.Utils.ThemeColor.getHexColor(color.get_r(), color.get_g(), color.get_b()) : '000000',
+                    s = stroke(border.asc_getStyle()),
+                    coords = 'x1="' + side.line[0] + '" y1="' + side.line[1] + '" x2="' + side.line[2] + '" y2="' + side.line[3] + '"';
+                svg += '<line ' + coords + ' stroke="#' + hex + '" stroke-width="' + s.width + '"' +
+                       (s.dash ? ' stroke-dasharray="' + s.dash + '"' : '') + '></line>';
+                if (s.double)
+                    svg += '<line class="gap" ' + coords + ' stroke-width="1"></line>';
+
+                if (index < 4) {
+                    names.push(side.name);
+                    sidesCount++;
+                } else
+                    diagonal = true;
+            });
+            svg += '</svg>';
+
+            if (sidesCount === 4)
+                names = [this.textBordersAll];
+            if (diagonal)
+                names.push(this.textBordersDiagonal);
+
+            this.$el.find('#cell-borders-sample').html(svg);
+            this.$el.find('#cell-borders-current-text').text(Common.Utils.String.format(this.textBordersCurrent,
+                names.length ? names.join(', ') : this.textBordersNone));
+        },
+
         onAngleChange: function(field, newValue, oldValue, eOpts) {
             this.api && (newValue!==oldValue) && this.api.asc_setCellAngle(field.getNumberValue());
         },
@@ -794,6 +868,8 @@ define([
                     this._state.Shrink=value;
                 }
                 this.chShrink.setDisabled((this.chWrap.getValue()=='checked') || this._locked);
+
+                this.updateCurrentBorders(props.asc_getBorders ? props.asc_getBorders() : null);
 
                 this.fill = xfs.asc_getFill();
                 if (this.fill) {
@@ -1559,7 +1635,18 @@ define([
 
         onEyedropperEnd: function () {
             this.fireEvent('eyedropper', false);
-        }
+        },
 
+        // English defaults: languages without these phrases show them instead of an empty caption.
+        textBordersTitle: 'Borders',
+        textDrawBorders: 'Draw',
+        textBordersCurrent: 'Now: {0}',
+        textBordersNone: 'no borders',
+        textBordersAll: 'on all sides',
+        textBordersLeft: 'left',
+        textBordersTop: 'top',
+        textBordersRight: 'right',
+        textBordersBottom: 'bottom',
+        textBordersDiagonal: 'diagonal'
     }, SSE.Views.CellSettings || {}));
 });

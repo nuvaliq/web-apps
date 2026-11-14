@@ -36,25 +36,88 @@
 +function registerServiceWorker() {
     if ('serviceWorker' in navigator && !(window.location.origin.lastIndexOf('file://', 0) === 0)) {
         const serviceWorkerName = 'document_editor_service_worker.js';
-        const serviceWorkerPath = '../../../../' + serviceWorkerName;
-        let reg;
-        navigator.serviceWorker.register(serviceWorkerPath)
-            .then(function (registration) {
-                reg = registration;
-                return navigator.serviceWorker.getRegistrations();
-            })
-            .then(function (registrations) {
-                //delete stale service workers
-                // for (const registration of registrations) {
-                for (let r in registrations) {
-                    const registration = registrations[r];
-                    if (registration !== reg && registration.active && registration.active.scriptURL.endsWith(serviceWorkerName)) {
-                        registration.unregister();
+        const sharedServiceWorkerName = 'document_editor_shared_service_worker.js';
+
+        const registerDefault = function () {
+            const serviceWorkerPath = '../../../../' + serviceWorkerName;
+            let reg;
+            navigator.serviceWorker.register(serviceWorkerPath)
+                .then(function (registration) {
+                    reg = registration;
+                    return navigator.serviceWorker.getRegistrations();
+                })
+                .then(function (registrations) {
+                    //delete stale service workers
+                    // for (const registration of registrations) {
+                    for (let r in registrations) {
+                        const registration = registrations[r];
+                        if (registration !== reg && registration.active && registration.active.scriptURL.endsWith(serviceWorkerName)) {
+                            registration.unregister();
+                        }
                     }
-                }
-            })
-            .catch(function (err) {
-                console.error('Registration failed with ' + err);
+                })
+                .catch(function (err) {
+                    console.error('Registration failed with ' + err);
+                });
+        };
+
+        // Hand over to the shared worker the static files the page requested before the worker took
+        // it over: with no worker at the start they bypassed it, with a worker of another version they
+        // passed through it uncached. The finished ones go at the takeover, the ones in flight at the
+        // takeover go as they finish. A page under the shared worker of its own version from the
+        // start has nothing to hand over.
+        const precacheLoaded = function (version) {
+            const isShared = function (worker) {
+                return !!worker && worker.scriptURL.endsWith(sharedServiceWorkerName);
+            };
+            const initial = navigator.serviceWorker.controller;
+            if (isShared(initial) && initial.scriptURL.indexOf('/' + version + '/') !== -1) return;
+            if (!window.performance || !window.PerformanceObserver) return;
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+                const controller = navigator.serviceWorker.controller;
+                if (!isShared(controller)) return;
+                const send = function (entries) {
+                    const urls = entries.map(function (entry) { return entry.name; });
+                    urls.length && controller.postMessage({type: 'precache', urls: urls});
+                };
+                const takeover = performance.now();
+                send(performance.getEntriesByType('resource'));
+                new PerformanceObserver(function (list) {
+                    send(list.getEntries().filter(function (entry) { return entry.startTime < takeover; }));
+                }).observe({type: 'resource'});
+            }, {once: true});
+        };
+
+        // Behind the document gateway every session has its own path prefix:
+        // <prefix>/s/<session>/<version>/web-apps/... One worker registered for <prefix>/
+        // serves the static files of all sessions of the same version from one cache.
+        const sessionPath = /^(.*?)\/s\/[^\/]+\/(\d+\.\d+\.\d+[.-][^\/]+)\/web-apps\//.exec(window.location.pathname);
+        if (!sessionPath) {
+            registerDefault();
+            return;
+        }
+        const scope = sessionPath[1] + '/';
+        precacheLoaded(sessionPath[2]);
+        navigator.serviceWorker.register('../../common/main/lib/util/' + sharedServiceWorkerName, {scope: scope, updateViaCache: 'none'})
+            .then(function (registration) {
+                return navigator.serviceWorker.getRegistrations()
+                    .then(function (registrations) {
+                        // Workers of other scopes would take the pages of their scope away from this one
+                        for (let r in registrations) {
+                            const other = registrations[r];
+                            const scriptURL = other.active ? other.active.scriptURL : '';
+                            if (other.scope !== registration.scope && (scriptURL.endsWith(serviceWorkerName) || scriptURL.endsWith(sharedServiceWorkerName))) {
+                                other.unregister();
+                            }
+                        }
+                    })
+                    .catch(function (err) {
+                        console.error('Service worker cleanup failed with ' + err);
+                    });
+            }, function (err) {
+                // For example, the server does not allow this scope
+                console.warn('Shared service worker registration failed with ' + err);
+                registerDefault();
             });
     }
 }();

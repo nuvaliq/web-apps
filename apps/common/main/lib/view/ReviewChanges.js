@@ -599,6 +599,7 @@ define([
                             ]})
                         );
                         me.btnTurnOn.updateHint(me.tipReview);
+                        me.applyTurnOffMineLock(me.btnTurnOn);
 
                         if (!me.appConfig.canUseReviewPermissions) {
                             me.btnAccept.setMenu(
@@ -888,6 +889,7 @@ define([
                     });
 
                     this.btnsTurnReview.push(button);
+                    this.applyTurnOffMineLock(button);
                     this.lockedControls.push(button);
                     Common.UI.LayoutManager.addControls(button);
                     return button;
@@ -949,6 +951,22 @@ define([
                     }
                 }, this);
                 Common.NotificationCenter.trigger('doc:mode-apply', state ? 'review' : 'edit', false);
+            },
+
+            // Greys out the personal "off" variant of the track changes buttons with the reason in its hint (a string),
+            // or brings it back (null). Buttons and menus made later get the same state.
+            lockTurnOffMine: function(reason) {
+                this.turnOffMineReason = (typeof reason === 'string') ? reason : null;
+                this.btnsTurnReview && this.btnsTurnReview.forEach(this.applyTurnOffMineLock, this);
+            },
+
+            applyTurnOffMineLock: function(button) {
+                var item = button && button.menu && button.menu.items ? button.menu.items[1] : null;
+                if (!item) return;
+                var reason = (typeof this.turnOffMineReason === 'string') ? this.turnOffMineReason : null;
+                if (item.isDisabled() === (reason !== null) && (item.options.hint || '') === (reason || '')) return;
+                item.setDisabled(reason !== null);
+                item.updateHint(reason || '');
             },
 
             markChanges: function(status) {

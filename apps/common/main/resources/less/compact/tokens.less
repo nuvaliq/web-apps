@@ -1,0 +1,123 @@
+/*
+ * Tokens of the "Compact" shell, shared by the editors.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Defaults of the variables the shared shell rules are built on (menu.less,
+ * about.less and the files that follow). The editor imports this file before its own compact-shell.less
+ * and declares its own values there: in LESS the last definition of a
+ * variable wins, so the shared rules get the editor's values, and the defaults
+ * stay for whoever has no value of its own.
+ *
+ * The names the editors already declare (@vo-h-menu, @vo-fs-menu, @vo-pad-x and
+ * others) are the same here: the editor overrides them without knowing about the layer. The layer's own are
+ * only the @vo-menu-* and --vo-menu-* names, the icon set path @vo-air-url and the side
+ * paddings next to the @vo-row-pad-x, @vo-pop-pad-y pair (their default is the pair).
+ *
+ * Color uses runtime variables, as in the editors: the theme is switched on a live
+ * page, and LESS cannot be rebuilt at that moment. The default color values are
+ * references to the editor palette (--vo-text, --vo-icon, etc.); the editor sets
+ * its own --vo-menu-* with the same selector later: what is declared later wins.
+ */
+
+/* --- Color: the editor palette ---------------------------------------------- */
+/* The palette values themselves are declared by the editor under body.vo-compact. */
+@vo-shell-bg:       var(--vo-shell-bg);
+@vo-surface:        var(--vo-surface);
+@vo-separator:      var(--vo-separator);
+@vo-text:           var(--vo-text);
+@vo-text-2:         var(--vo-text-2);
+@vo-text-3:         var(--vo-text-3);
+@vo-text-off:       var(--vo-text-off);
+@vo-link:           var(--vo-link);
+@vo-link-underline: var(--vo-link-underline);
+@vo-icon:           var(--vo-icon);
+@vo-hover:          var(--vo-hover);
+@vo-active:         var(--vo-active);
+@vo-accent:         var(--vo-accent);
+@vo-focus:          var(--vo-focus);
+@vo-shadow:         var(--vo-shadow);
+
+/* --- Color: the menu bar and its lists ------------------------------------- */
+body.vo-compact {
+    --vo-menu-fg:         var(--vo-text);        /* section label in the bar */
+    --vo-menu-row-fg:     var(--vo-text);        /* list item label */
+    --vo-menu-icon:       var(--vo-icon);        /* item glyph */
+    --vo-menu-icon-hover: var(--vo-text);        /* item glyph under the cursor */
+    --vo-menu-off:        var(--vo-text-off);    /* disabled item, shortcut, ▸ */
+    --vo-menu-mark:       var(--vo-accent);      /* ✓ and ● marks */
+    --vo-menu-scroll:     rgba(0, 0, 0, .22);    /* scrollbar thumb of a long list */
+}
+
+@vo-menu-fg:          var(--vo-menu-fg);
+@vo-menu-row-fg:      var(--vo-menu-row-fg);
+@vo-menu-icon:        var(--vo-menu-icon);
+@vo-menu-icon-hover:  var(--vo-menu-icon-hover);
+@vo-menu-off:         var(--vo-menu-off);
+@vo-menu-mark:        var(--vo-menu-mark);
+@vo-menu-scroll:      var(--vo-menu-scroll);
+
+/* --- Geometry -------------------------------------------------------------- */
+/* Shell rows. The editors keep their own heights paired with JS (H_HEADER, H_MENU);
+   here are the values for when they have none. */
+@vo-h-header:       46px;
+@vo-h-menu:         30px;
+/* Common left line of the header, menu and panel. */
+@vo-pad-x:          20px;
+
+/* Dropdown list row: the AIR menu metric. */
+@vo-row-h:          36px;
+@vo-row-pad-x:      18px;
+@vo-row-gap:        9px;
+@vo-pop-pad-y:      10px;
+/* Row and list side paddings: they can differ in an editor. The default is
+   the pair above, so an editor that sets only the pair gets it on all sides. */
+@vo-row-pad-l:      @vo-row-pad-x;
+@vo-row-pad-r:      @vo-row-pad-x;
+@vo-pop-pad-top:    @vo-pop-pad-y;
+@vo-pop-pad-bottom: @vo-pop-pad-y;
+@vo-sep-gap:        8px;
+@vo-r-xs:           6px;
+@vo-r-pop:          18px;
+@vo-focus-w:        2px;
+/* Dropdown layer: the editor's regular @zindex-dropdown. */
+@vo-z-drop:         1000;
+
+/* The menu bar's own. */
+@vo-menu-gap:         6px;      /* between section buttons */
+@vo-menu-pad-bottom:  10px;     /* breathing room under the section labels */
+@vo-menu-item-h:      20px;     /* section button */
+@vo-menu-item-pad-x:  8px;      /* section button padding; the label line is @vo-pad-x */
+@vo-menu-drop-gap:    5px;      /* from the section button to the list */
+@vo-menu-drop-shift:  4px;      /* the list sits left of the button by this shift */
+@vo-menu-drop-min-w:  214px;
+@vo-menu-drop-margin: 8px;      /* from the list to the bottom edge of the window */
+@vo-menu-glyph:       16px;     /* room for the item glyph */
+@vo-menu-hint-gap:    12px;     /* label → shortcut, mark, ▸ */
+@vo-menu-mark-gap:    6px;      /* shortcut → mark, ▸ */
+@vo-menu-sep-w:       1px;      /* separator thickness */
+@vo-menu-grp-h:       28px;     /* option group heading */
+@vo-menu-dot:         6px;      /* ● dot of the selected option */
+@vo-menu-status-min-w: 160px;   /* a status with text is no narrower than this: otherwise the sections collapse into "…" */
+
+/* --- Typography and motion ------------------------------------------------- */
+@vo-font:           system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif,
+                    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+@vo-fs-menu:        13px;
+@vo-fs-row:         14px;
+@vo-fs-status:      11px;
+@vo-track-ctrl:     normal;     /* --ui-text-letter-spacing-auto: labels without letter spacing */
+@vo-menu-hint-fs:   11px;       /* keyboard shortcut on the right */
+
+@vo-ease:           cubic-bezier(.32, .72, 0, 1);
+@vo-dur-pop:        .22s;
+@vo-dur-state:      .15s;
+
+/* --- AIR icon set ----------------------------------------------------------- */
+/* The shared set lives in apps/common/main/resources/img/air: url("@{vo-air-url}<name>.svg").
+   The path is the regular path to the shared layer's images (@common-image-const-path, variables.less):
+   in the browser (less.js) it is relative to the editor page, in the build to the built stylesheet
+   (build/<editor>.json, main.less.vars). Inside var() a relative url() would be resolved
+   against the consumer's stylesheet, so JS sets the base for icons in the markup
+   (Common.UI.Compact.Icons). */
+@vo-air-url:        "@{common-image-const-path}/air/";

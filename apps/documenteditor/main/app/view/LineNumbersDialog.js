@@ -52,9 +52,13 @@ define([], function () { 'use strict';
         },
 
         initialize : function(options) {
-            _.extend(this.options, {
+            var applyTo = options && options.applyTo;
+            this.options = _.extend({}, this.options, {
                 title: this.textTitle
             }, options || {});
+            this.options.applyTo = applyTo === Asc.c_oAscSectionApplyType.Current ||
+                applyTo === Asc.c_oAscSectionApplyType.ToEnd ||
+                applyTo === Asc.c_oAscSectionApplyType.All ? applyTo : Asc.c_oAscSectionApplyType.All;
 
             this.template = [
                 '<div class="box">',

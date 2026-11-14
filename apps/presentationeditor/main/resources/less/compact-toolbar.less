@@ -1,0 +1,503 @@
+/*
+ * Compact shell of the presentation editor: the selection toolbar and its dropdown panels.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Imported only from compact-shell.less: the tokens and row geometry come from there.
+ * The panel nodes are built by app/view/CompactToolbar.js inside the #vo-toolbar row.
+ */
+
+/* @vo-h-ctrl, @vo-gap-item, @vo-focus-w are tokens of compact-shell.less. */
+@vo-tb-pad:     6px;     // card padding left and right
+@vo-gap-group:  13px;
+@vo-sep-h:      18px;
+@vo-w-zoom:     80px;
+@vo-pal-cell:   18px;    // palette swatch
+@vo-pal-gap:    4px;
+@vo-w-font:     112px;
+@vo-w-size:     64px;
+/* Popup panels use the scale of the bridge lists at buttons ("Image ▾",
+   compact-galleries.less) and of the menu bar (@vo-mn-*, compact-menu.less): padding 18 on
+   all sides; a list has 18 top and bottom, full-width rows of 38, the label
+   starts at 18, a 42 column on the right. */
+@vo-tbp-pad:    18px;       // popup panel padding on all sides
+@vo-tbp-row-l:  18px;       // list row label offset from the edge
+@vo-tbp-sep-m:  7px @vo-tbp-pad; // row separator: 7 above and below it, padding at the sides
+
+/* --- Row and card ------------------------------------------------------------ */
+/* The frame reserves room for the row in the layout: 4 + 44 + 8 above the work area.
+   In documents the card lies over the page, and the engine shifts the page
+   under it; in presentations there is nothing to shift: the thumbnail strip, slide and notes
+   start at the top edge of the area, so the room is reserved, as in the
+   prototype. The row itself is only a place on the gray field, the white card is #vo-tb
+   inside it, as in documents. */
+#vo-toolbar {
+    padding: 0;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+#vo-tb {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: @vo-gap-group;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: @vo-h-toolbar;
+    box-sizing: border-box;
+    padding: 0 @vo-tb-pad;
+    border-radius: @vo-r-md;
+    background: @vo-surface;
+    box-shadow: @vo-shadow-raised;
+    font-family: @vo-font;
+    font-size: @vo-fs-ctrl;
+    color: @vo-text;
+    white-space: nowrap;
+    overflow: visible;
+
+    /* The row does not shrink: what does not fit goes into "⋯" (measured). */
+    > *,
+    .vo-g > * { flex-shrink: 0; }
+
+    [hidden] { display: none !important; }
+
+    .vo-g {
+        display: flex;
+        align-items: center;
+        gap: @vo-gap-item;
+        position: relative;
+
+        /* Separators are thin, without borders around groups. */
+        + .vo-g::before {
+            content: '';
+            position: absolute;
+            left: -7px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1px;
+            height: @vo-sep-h;
+            background: @vo-separator;
+        }
+    }
+}
+
+/* The stock editing ban (version history, lost connection) means the stock
+   .toolbar-mask, as in the documents compact shell: a transparent layer over the card
+   swallows clicks, the content is dimmed with the same opacity as the stock
+   ribbon under the mask (.masked). A layer, not pointer-events on the whole card: this way a
+   click does not fall through to what lies under it. pointer-events on the
+   content is a second lock for what pops up over the layer. */
+#vo-tb .vo-tb-mask {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: @vo-z-drop;
+    border-radius: @vo-r-md;
+    background: transparent;
+    cursor: default;
+}
+
+#vo-tb.vo-masked > *:not(.vo-tb-mask) { opacity: .4; pointer-events: none; }
+
+/* Right edge: the place of "Slideshow ▾" and the focus mode chevron last. */
+#vo-tb-end {
+    display: flex;
+    align-items: center;
+    gap: @vo-gap-item;
+    margin-left: auto;
+}
+
+/* Narrow window: the core and the right edge do not fit with the slideshow label: the measurement
+   sets a class on the card, and "Slideshow ▾" stays an icon with an arrow
+   (the screen reader name is the button title). In the header the label does not collapse. */
+#vo-tb.vo-tb-tight .vo-show-label { display: none; }
+#vo-tb.vo-tb-tight .vo-show-main { padding: 0 6px; }
+
+/* "⋯" comes right after the last visible group; the measurement shows it. */
+#vo-tb-more {
+    position: relative;
+    display: inline-flex;
+}
+
+/* What did not fit into the row: the measurement hides the control (and an emptied group) with a class,
+   "⋯" shows them in itself. */
+#vo-tb .vo-collapsed { display: none !important; }
+
+/* The "⋯" panel has the same groups in rows, the separator is a line between rows. */
+#vo-tb .vo-of-pop {
+    gap: 6px;
+    max-width: calc(100vw - 16px);
+    padding: @vo-tbp-pad;
+
+    .vo-g {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: @vo-gap-item;
+    }
+    .vo-g + .vo-g {
+        padding-top: 6px;
+        border-top: 1px solid @vo-separator;
+    }
+    .vo-g + .vo-g::before { display: none; }
+}
+
+/* --- Buttons ------------------------------------------------------------------- */
+
+#vo-tb .vo-ib {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: @vo-h-ctrl;
+    min-width: @vo-h-ctrl;
+    box-sizing: border-box;
+    padding: 0 4px;
+    border: none;
+    border-radius: @vo-r-sm;
+    background: transparent;
+    color: @vo-icon;
+    font-family: @vo-font;
+    font-size: @vo-fs-ctrl;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color .15s ease-out, color .15s ease-out;
+
+    &:hover:not(:disabled) { background: @vo-hover; color: @vo-text; }
+    &:active:not(:disabled) { background: @vo-active; }
+    &.on { background: @vo-selected; color: @vo-selected-fg; }
+    &:disabled { color: @vo-text-off; cursor: default; }
+    &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+    svg, .vo-air { display: block; }
+}
+
+/* Button with a label: "New slide", "Background", "Layout ▾", "Theme", "Transition": an
+   AIR size S plain style button (ui.air-buttons: ui-btn-sm --style-plain), without a border.
+   Values come from the AIR tokens, as for the documents mode button (.vo-mode):
+   height btn-size-sm 28; radius border-radius-sm 8, the same as the hover
+   backings of documents; padding 9 on the left minus icon compensation 4; icon 20 and
+   gap to the label 4; font font-size-sm 13, font-weight-normal 400,
+   btn-letter-spacing sm −0.15px; content design-plain-content (base-2), plain has no background or
+   border; hover is bg-state-hover-default over transparent. */
+#vo-tb .vo-ib.vo-tx {
+    height: 28px;                    /* btn-size-sm */
+    min-width: 0;
+    padding: 0 9px 0 5px;            /* btn-padding sm 9, on the left minus icon-compensation 4 */
+    gap: 4px;                        /* btn-icon-space sm */
+    border: none;                    /* design-plain-stroke-weight 0 */
+    border-radius: @vo-r-sm;         /* border-radius-sm, 8px */
+    background: transparent;         /* design-plain-bg */
+    color: @vo-text-2;               /* design-plain-content → base-2 */
+    font-size: 13px;                 /* font-size-sm */
+    font-weight: 400;                /* font-weight-normal */
+    letter-spacing: -.15px;          /* btn-letter-spacing sm */
+
+    .vo-air { width: 20px; height: 20px; }   /* btn-icon-size sm */
+    &:hover:not(:disabled) { background: @vo-hover; color: @vo-text-2; }
+    &:disabled { color: @vo-text-off; }
+}
+
+/* Expand button: the glyph and the chevron are separate nodes: the glyph is redrawn by
+   the state (alignment icon), the chevron stays. */
+#vo-tb .vo-ib.vo-drop {
+    gap: 2px;
+    padding: 0 3px 0 5px;
+    .vo-drop-i { display: inline-flex; }
+    .vo-drop-c {
+        display: inline-flex;
+        color: @vo-text-off;
+        .vo-air { width: 13px; height: 13px; }
+    }
+    &:hover:not(:disabled) .vo-drop-c { color: @vo-icon; }
+}
+
+/* AIR S dropdown ("Layout ▾"): padding 9 on the right minus dropdown-icon-compensation 3,
+   chevron dropdown-icon-size 16 at dropdown-icon-inline-space 3 from the label,
+   the chevron color is the content color (btn-color-chevron). */
+#vo-tb .vo-ib.vo-tx.vo-drop {
+    padding: 0 6px 0 5px;
+    gap: 4px;
+    .vo-drop-c {
+        margin-left: -1px;           /* button gap 4 minus 1 = inline-space 3 */
+        color: inherit;
+        .vo-air { width: 16px; height: 16px; }
+    }
+    &:hover:not(:disabled) .vo-drop-c { color: inherit; }
+}
+
+/* Value list: zoom, font, font size. */
+#vo-tb .vo-value {
+    .vo-value-btn {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0 6px 0 8px;
+        color: @vo-text;
+    }
+    .vo-value-label {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+    .vo-value-caret {
+        display: inline-flex;
+        flex: 0 0 auto;
+        color: @vo-text-off;
+        .vo-air { width: 13px; height: 13px; }
+    }
+}
+
+#vo-tb .vo-w-zoom { width: @vo-w-zoom; }
+#vo-tb .vo-w-font { width: @vo-w-font; }
+#vo-tb .vo-w-size { width: @vo-w-size; }
+
+/* The focus mode chevron points up while the header is expanded. */
+#vo-tb .vo-focus-btn .vo-air { transform: rotate(180deg); }
+#vo-tb .vo-focus-btn.on .vo-air { transform: none; }
+
+/* --- Popup panels --------------------------------------------------------------- */
+/* Shown by the hidden attribute on .vo-pop; the panel is positioned from the wrapper of its
+   button and expands under it, at the window edge it is shifted inward
+   (CompactToolbar.keepInWindow). Padding is 18 on all sides. */
+
+#vo-tb .vo-pop-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+#vo-tb .vo-pop {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: @vo-z-drop;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-sizing: border-box;
+    padding: @vo-tbp-pad;
+    border-radius: @vo-r-md;
+    background: @vo-surface;
+    box-shadow: @vo-shadow;
+    white-space: nowrap;
+}
+
+/* A list is like the bridge list at a button ("Image ▾"): padding 18 top and bottom,
+   rows of 38 full width without a gap, the label from 18, a 42 column on the right, font size 13,
+   the menu bar row text color; the width of a menu list ("Text box ▾", case) is from 266, like
+   the bridge lists; a value list (zoom, font, font size) is no narrower than its own field.
+   The selected row is a selection fill, like the selected bridge color scheme and
+   the row of the card tab lists; a disabled one has the disabled color without hover.
+   The ceiling is down to the bottom of the window (zoom with padding 18 and rows of 38 is 393 and fits whole),
+   but no higher than 480; a long one (fonts, font sizes) scrolls. */
+#vo-tb .vo-pop-list {
+    gap: 0;
+    min-width: @vo-mn-min-w;
+    max-height: ~"min(480px, calc(100vh - 140px))";   // min() is CSS, not a less function
+    padding: @vo-tbp-pad 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+
+    .vo-pop-item {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        width: 100%;
+        min-height: @vo-mn-row-h;
+        padding: 0 @vo-mn-row-r 0 @vo-tbp-row-l;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-mn-fs-row;
+        font-weight: 400;
+        letter-spacing: @vo-mn-track;
+        line-height: 16px;
+        text-align: left;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color @vo-mn-dur ease-out;
+
+        &:hover { background: @vo-hover; }
+        &:active { background: @vo-active; }
+        &.on, &.on:hover { color: @vo-text; background: @vo-selected; }
+        &:disabled, &:disabled:hover { color: @vo-text-off; background: transparent; cursor: default; }
+        &:focus-visible { outline: none; box-shadow: inset 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    /* Line sample ("Line type", "Thickness") is a stock 60 × 3 symbol in a 60 × 20 box:
+       an svg without a size gets 300 × 150 from the browser, and the row grew. */
+    .vo-pop-img {
+        display: block;
+        flex: 0 0 auto;
+        width: 60px;
+        height: 20px;
+    }
+}
+
+#vo-tb .vo-value > .vo-pop-list { min-width: 100%; }
+
+/* Panel of icon rows: "Text ▾", "Lists and indents ▾". */
+#vo-tb .vo-pop-rows {
+    .vo-pop-row {
+        display: flex;
+        align-items: center;
+        gap: @vo-gap-item;
+    }
+    .vo-pop-sep {
+        width: 1px;
+        height: @vo-sep-h;
+        margin: 0 2px;
+        background: @vo-separator;
+    }
+}
+
+/* Number in a panel row: line spacing "1.15". */
+#vo-tb .vo-pop-rows .vo-ib.vo-num {
+    min-width: 40px;
+    padding: 0 6px;
+    color: @vo-text;
+    font-variant-numeric: tabular-nums;
+}
+
+/* List row separator: "Fit to slide" above the zoom values, like the separator of
+   the bridge lists: 7 above and below it, padding 18 at the sides. */
+#vo-tb .vo-pop-list .vo-pop-hr {
+    flex: 0 0 auto;
+    height: 1px;
+    margin: @vo-tbp-sep-m;
+    background: @vo-separator;
+}
+
+/* Nested panel (palette, case) expands under its button
+   over the parent. */
+#vo-tb .vo-nested > .vo-pop {
+    z-index: @vo-z-drop + 1;
+}
+
+/* --- Color palette --------------------------------------------------------------- */
+/* The documents compact palette: a reset row, a swatch grid (the number of columns is
+   --vo-pal-cols from JS), the selected one has a check mark in the center, "Custom color" below. Padding 18
+   on all sides; the reset row is a list row (38, label from 18), under the
+   separator 18 to the grid, as from the label to it. */
+
+#vo-tb .vo-pop-palette {
+    padding: @vo-tbp-pad 0;
+    gap: 0;
+
+    .vo-pal-reset {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        min-height: @vo-mn-row-h;
+        padding: 0 @vo-mn-row-r 0 @vo-tbp-row-l;
+        border: none;
+        background: transparent;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-mn-fs-row;
+        letter-spacing: @vo-mn-track;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color @vo-mn-dur ease-out;
+
+        &:hover { background: @vo-hover; }
+        &:active { background: @vo-active; }
+        &:focus-visible { outline: none; box-shadow: inset 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-pal-sep {
+        height: 1px;
+        margin: 7px @vo-tbp-pad @vo-tbp-pad;
+        background: @vo-separator;
+    }
+
+    .vo-pal-grid {
+        display: grid;
+        grid-template-columns: repeat(var(--vo-pal-cols, 14), @vo-pal-cell);
+        gap: @vo-pal-gap;
+        padding: 0 @vo-tbp-pad;
+    }
+
+    .vo-pal-item {
+        position: relative;
+        width: @vo-pal-cell;
+        height: @vo-pal-cell;
+        min-width: 0;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        box-shadow: inset 0 0 0 1px @vo-border;
+        cursor: pointer;
+
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-pal-check {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        display: none;
+        transform: translate(-50%, -50%);
+        filter: drop-shadow(0 0 1px rgba(0, 0, 0, .4));
+        pointer-events: none;
+
+        .vo-air { width: 14px; height: 14px; }
+    }
+
+    .vo-pal-item.on .vo-pal-check { display: inline-flex; }
+
+    .vo-pal-toggle,
+    .vo-pal-custom { margin: 12px @vo-tbp-pad 0; }
+
+    .vo-pal-toggle {
+        align-self: flex-start;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: @vo-selected-fg;
+        font-family: @vo-font;
+        font-size: @vo-fs-ctrl;
+        cursor: pointer;
+
+        &:hover { text-decoration: underline; }
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-pal-custom {
+        display: flex;
+        align-items: center;
+        gap: @vo-pal-gap;
+    }
+
+    .vo-pal-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid @vo-border;
+        border-radius: 4px;
+        background: @vo-surface;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-fs-ctrl;
+        text-transform: uppercase;
+
+        &:focus { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-pal-preview {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        box-shadow: inset 0 0 0 1px @vo-border;
+        pointer-events: none;
+    }
+}

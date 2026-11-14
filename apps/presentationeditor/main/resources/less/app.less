@@ -292,3 +292,11 @@
         }
     }
 }
+
+// Compact shell: styles for body.vo-compact, body.vo-boot and body.vo-advanced.
+// The shared compact layer goes first (defaults and the About window), then the own
+// file with the values of the presentation editor: a LESS variable takes its last
+// definition.
+@import "../../../../common/main/resources/less/compact/tokens.less";
+@import "../../../../common/main/resources/less/compact/about.less";
+@import "compact-shell.less";

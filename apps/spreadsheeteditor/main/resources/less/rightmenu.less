@@ -26,6 +26,27 @@
             }
         }
 
+        .cell-borders-current__row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cell-borders-sample {
+            flex: none;
+            line-height: 0;
+
+            .grid {
+                fill: @canvas-content-background;
+                stroke: @border-divider;
+                stroke-dasharray: 2 2;
+            }
+
+            .gap {
+                stroke: @canvas-content-background;
+            }
+        }
+
         #cell-spin-angle {
             display: inline-block;
         }

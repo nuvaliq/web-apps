@@ -1,0 +1,1025 @@
+/*
+ * Compact shell of the presentation editor: the right panel as an AIR popup panel.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Imported only from compact-shell.less: the tokens and row geometry come from there,
+ * the set bricks (.vo-win-mask, .vo-win-ring) from compact-windows.less.
+ * The rules are under body.vo-compact.
+ *
+ * There is no right column: the body of the stock RightMenu (#view-right-menu) is an AIR card
+ * over the canvas, its place and height ceiling are set by SlideSections.place(). The card
+ * is visible while a section is open (body.vo-right-open); the #right-menu column takes no room in
+ * the layout, open or closed: the canvas has the full width. The stock
+ * tab column is hidden. The stock tabs in the body follow the set (the "Stock
+ * tabs by the set" section).
+ */
+
+/* A card without a header: the section is named by the button or item that called it, the name for the
+   screen reader is the card aria-label. Padding is 18 on all sides, as for all
+   shell popups (lists, panels, galleries). The width is the body of the stock tabs of
+   the previous card (236) and two paddings of 18: the "Shape" and "Table" tabs take
+   all of these 236. */
+@vo-rp-pad:       18px;      // card padding on all sides
+@vo-rp-body-w:    236px;     // tab body between the paddings
+@vo-rp-card-w:    (@vo-rp-body-w + @vo-rp-pad * 2);
+/* Above the canvas, thumbnails and left panels (stock 995), under menus and
+   galleries (1000), the "File" screen (1003), hints and windows. */
+@vo-rp-z:         (@vo-z-drop - 2);
+@vo-rp-sec-y:     12px;      // padding of a section of its own at the line between sections
+@vo-rp-menu-x:    12px;      // padding of a tab control menu row
+@vo-rp-ctrl-h:    32px;      // field, list and button of its own sections: the scale of the stock tabs (@vo-rp-f-h)
+/* Theme tiles and effect rows use the prototype gallery scale. */
+@vo-rp-tile-gap:  10px;      // gap between theme tiles
+@vo-rp-pic-r:     6px;       // radius of the theme image and the effect row
+@vo-rp-cap-fs:    12px;      // theme tile caption
+@vo-rp-row-h:     30px;      // effect row
+@vo-rp-row-gap:   2px;       // gap between effect rows
+
+/* --- Show -------------------------------------------------------------------------- */
+/* The #right-menu column has no width in the layout: HBoxLayout measures it with
+   css('width'), and the canvas gets the full width; a closed one is hidden entirely.
+   !important is against the stock inline width and show(). In the "Stock interface"
+   there is no vo-compact class, and the panel is the stock column. */
+body.vo-compact {
+    #right-menu { display: none !important; }
+    &.vo-right-open #right-menu {
+        display: block !important;
+        width: 0 !important;
+        min-width: 0;
+        overflow: visible;
+    }
+    /* The gallery of a closed panel tab ("Crop to shape" of the
+       "Image" tab) is shown through it: then the panel is the outer path node
+       of the gallery (vo-gallery-root, compact-menu.less: out of flow, without size).
+       The rule above would override it with its id: the same id is here. */
+    &.vo-gallery #right-menu.vo-gallery-root { display: block !important; }
+
+    /* The stock tab column is not needed: a section is chosen by buttons and items. */
+    #right-menu .tool-menu-btns { display: none !important; }
+
+    #right-menu .side-panel .content-box {
+        border-radius: 0;
+        box-shadow: none;
+    }
+}
+
+/* Early start: the stock column does not flicker before the shell is built. */
+body.vo-boot #right-menu { display: none !important; }
+
+/* --- Card ------------------------------------------------------------------------- */
+/* Like the shell popup panels (#vo-tb .vo-pop, bridge galleries): rounding
+   12, AIR shadow, white. The place is --vo-rp-top and --vo-rp-left, the height ceiling is
+   --vo-rp-max-h (SlideSections.place: down to the status bar); the height follows
+   the content, a long tab scrolls with the stock scrollbar of the body
+   (.content-box). There is no header: the 18 padding and the section content start right at the top. */
+body.vo-compact.vo-right-open #view-right-menu {
+    position: fixed;
+    top: var(--vo-rp-top, 132px);
+    left: var(--vo-rp-left, auto);
+    z-index: @vo-rp-z;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: @vo-rp-card-w;
+    height: auto;
+    max-height: var(--vo-rp-max-h, 480px);
+    border-radius: @vo-r-pop;
+    background-color: var(--background-normal, #ffffff);
+    box-shadow: @vo-shadow;
+    overflow: hidden;
+    /* Text smoothing as in the shell (#vo-shell): the card is the body of a stock panel outside
+       it, and without this the labels on macOS are bolder than in the shell lists and panels. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    &:focus { outline: none; }
+
+    > .right-panel {
+        display: flex !important;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
+        width: 100%;
+        height: auto;
+        padding: 0;
+        border: none;
+    }
+
+    > .right-panel > .content-box {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
+    }
+
+    /* The tab bottom has padding 18, as on top and at the sides: the last row is not at
+       the card edge. Sections of its own have their own paddings; under the
+       "Slide" tab are the layout and slide size (#vo-rp-slide), its bottom is stock. */
+    .content-box > .settings-panel:not(.vo-rp-pane):not(#id-slide-settings) { padding-bottom: @vo-rp-pad; }
+
+    /* The trailing empty table row of the tab (.finish-cell, 15) is the stock padding
+       under the last row: the card has its own, 18. Under the "Slide" tab it is
+       12 to the layout section line, as for sections of its own. */
+    .settings-panel .finish-cell { height: 0; }
+    #id-slide-settings { padding-bottom: @vo-rp-sec-y; }
+}
+
+/* The card and body are white, as in spreadsheets; only in the light theme: in the dark one
+   the panel body is the stock's own. */
+body.vo-compact.theme-type-light #right-menu {
+    .content-box { background-color: @vo-surface; }
+    .content-box .separator.horizontal { border-top-color: @vo-separator; }
+}
+
+body.vo-compact.theme-type-light.vo-right-open #view-right-menu {
+    background-color: @vo-surface;
+}
+
+/* The padding of the stock tabs is a stock variable (colors-table.less: on top and at
+   the sides, the bottom by the rule above), in any theme and in right-to-left too: the card
+   padding does not depend on the theme. */
+body.vo-compact #right-menu {
+    --layout-padding-right-panel-content: @vo-rp-pad @vo-rp-pad 0;
+    --layout-padding-right-panel-content-rtl: @vo-rp-pad @vo-rp-pad 0;
+}
+
+/* --- Sections of its own ---------------------------------------------------------- */
+/* "Theme", "Transition", "Animation" and the layout with size under the "Slide" tab are
+   prototype sections (.ss-right-sec): a label above the field, a line between
+   sections. The card padding is 18 at the sides, above the first section of a part and under the
+   last; at the line between sections it is 12. Colors are those of the stock theme of the panel body:
+   the parts sit next to the stock tabs in the dark theme too. */
+body.vo-compact #right-menu .vo-rp-pane {
+    padding: 0;
+    color: var(--text-normal, #333333);
+    font-size: 12px;
+
+    &[hidden] { display: none; }
+
+    .vo-rp-sec {
+        padding: @vo-rp-sec-y @vo-rp-pad;
+        border-bottom: 1px solid var(--border-divider, rgba(0, 0, 0, .1));
+
+        &:last-child {
+            padding-bottom: @vo-rp-pad;
+            border-bottom: none;
+        }
+    }
+
+    &:not(.vo-rp-more) > .vo-rp-sec:first-child { padding-top: @vo-rp-pad; }
+
+    .vo-rp-label {
+        margin-bottom: 6px;
+        color: var(--text-secondary, #525c69);
+        font-weight: 600;
+    }
+
+    .vo-rp-group {
+        margin: 10px 0 6px;
+        color: var(--text-secondary, #525c69);
+
+        &:first-child { margin-top: 0; }
+    }
+
+    .vo-rp-note {
+        color: var(--text-secondary, #828b95);
+        line-height: 1.4;
+    }
+
+    .vo-rp-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    /* Gallery tiles are like the prototype galleries. Themes are tiles two to a row:
+       an image with radius 6 and a thin border, a caption under it 12;
+       hover and selection are a 2 image border. Transition and animation effects are
+       a borderless row list one to a row (row 30, radius 6, padding
+       0 8, the selected one is a selection fill): the stock effect names are long
+       ("Zoom with rotation", "Smooth zoom"), in a half-column tile
+       they were cut off. */
+    .vo-rp-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: @vo-rp-tile-gap;
+    }
+    .vo-rp-effects .vo-rp-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: @vo-rp-row-gap;
+    }
+
+    .vo-rp-tile {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: center;
+        gap: 4px;
+        min-width: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: start;
+        cursor: pointer;
+
+        &:disabled { opacity: .5; cursor: default; }
+    }
+
+    .vo-rp-tile-t {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    /* The theme thumbnail is a frame of the stock theme sprite (.item-theme): 88×40 at
+       natural size, the frame offset is the entry's offsety; centered in
+       the column, the caption is full width under it. The border is a shadow: a border
+       would shift the sprite frame. */
+    .vo-rp-themes .vo-rp-tile {
+        align-items: center;
+        font-size: @vo-rp-cap-fs;
+        line-height: 15px;
+        text-align: center;
+    }
+    .vo-rp-themes .vo-rp-tile-t { align-self: stretch; }
+    .vo-rp-pic {
+        display: block;
+        flex: none;
+        width: 88px;
+        height: 40px;
+        border-radius: @vo-rp-pic-r;
+        background-repeat: no-repeat;
+        background-size: 88px auto;
+        box-shadow: 0 0 0 1px var(--border-regular-control, #c0c0c0);
+    }
+    .vo-rp-themes .vo-rp-tile:hover:not(:disabled) .vo-rp-pic { box-shadow: 0 0 0 2px var(--border-preview-hover, #cbcbcb); }
+    .vo-rp-themes .vo-rp-tile.vo-on .vo-rp-pic { box-shadow: 0 0 0 2px @vo-accent; }
+
+    .vo-rp-effects .vo-rp-tile {
+        height: @vo-rp-row-h;
+        padding: 0 8px;
+        border-radius: @vo-rp-pic-r;
+
+        &:hover:not(:disabled) { background-color: var(--highlight-button-hover, #e0e0e0); }
+        &.vo-on { background-color: var(--highlight-button-pressed, #cbcbcb); }
+    }
+
+    /* Fields use the scale of the stock tabs nearby: height 32, value 12, padding 8,
+       radius 8. Colors are panel theme variables (below, "Stock tabs by the
+       set"). */
+    .vo-rp-select,
+    .vo-rp-num {
+        box-sizing: border-box;
+        height: @vo-rp-ctrl-h;
+        border: 1px solid var(--border-regular-control, #c0c0c0);
+        border-radius: @vo-r-sm;
+        background: var(--background-normal, #ffffff);
+        color: inherit;
+        font: inherit;
+        font-size: @vo-rp-fs;
+
+        &:disabled { opacity: .5; }
+        &:focus { outline: none; border-color: @vo-accent; }
+    }
+
+    /* The list has no browser arrow: the AIR chevron lies over the field on the right. */
+    .vo-rp-field {
+        position: relative;
+        display: block;
+
+        > .vo-rp-chevron {
+            position: absolute;
+            top: 50%;
+            right: @vo-rp-chev-in;
+            color: @vo-win-label;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+    }
+
+    .vo-rp-select {
+        width: 100%;
+        padding: 0 (@vo-rp-chev + @vo-rp-chev-in) 0 @vo-rp-f-pad;
+        -webkit-appearance: none;
+                appearance: none;
+        text-overflow: ellipsis;
+    }
+
+    .vo-rp-num-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .vo-rp-num {
+        width: 72px;
+        padding: 0 4px 0 @vo-rp-f-pad;
+        box-shadow: none;
+    }
+
+    /* The checkbox is a 16 box with radius 4, the checked one is accent with an AIR
+       check mark, like the checkboxes of the stock tabs. The input field is invisible but stays focusable
+       and readable by the screen reader. */
+    .vo-rp-check {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-size: @vo-rp-lbl-fs;
+        font-weight: normal;
+        cursor: pointer;
+
+        input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: 0;
+            opacity: 0;
+        }
+
+        .vo-rp-box {
+            position: relative;
+            flex: 0 0 auto;
+            box-sizing: border-box;
+            width: @vo-rp-ck;
+            height: @vo-rp-ck;
+            border: 1px solid var(--chb-border-normal, #c0c0c0);
+            border-radius: @vo-win-ck-r;
+            background: var(--chb-background-normal, #ffffff);
+
+            &::after {
+                content: '';
+                position: absolute;
+                top: -1px;
+                right: -1px;
+                bottom: -1px;
+                left: -1px;
+                visibility: hidden;
+                .vo-win-mask();
+                background: @vo-win-white;
+                -webkit-mask-image: var(--vo-win-ico-check, @vo-win-no-ico);
+                        mask-image: var(--vo-win-ico-check, @vo-win-no-ico);
+            }
+        }
+
+        &:hover input:not(:disabled) + .vo-rp-box { border-color: @vo-accent; }
+
+        input:checked + .vo-rp-box {
+            border-color: @vo-accent;
+            background: @vo-accent;
+
+            &::after { visibility: visible; }
+        }
+
+        input:focus-visible + .vo-rp-box { .vo-win-ring(); }
+
+        input:disabled + .vo-rp-box { opacity: .5; }
+        &:has(input:disabled) { cursor: default; }
+    }
+
+    /* Buttons are the shell tinted, like the prototype .sl-rp-btn. A label longer than
+       the body wraps, the button grows with it. */
+    .vo-rp-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: @vo-rp-ctrl-h;
+        padding: 0 10px;
+        line-height: 16px;
+        text-align: start;
+        border: none;
+        border-radius: @vo-r-sm;
+        background: @vo-tinted-bg;
+        color: @vo-tinted-fg;
+        font: inherit;
+        font-size: @vo-rp-fs;
+        cursor: pointer;
+
+        &:hover:not(:disabled) { background: @vo-tinted-hover; }
+        &:active:not(:disabled), &.vo-on { background: @vo-tinted-act; }
+        &:disabled { opacity: .5; cursor: default; }
+        &:focus-visible { outline: @vo-focus-w solid @vo-focus; outline-offset: 1px; }
+    }
+
+    .vo-rp-chevron { display: inline-flex; }
+}
+
+/* The section label, field borders, hover are like the stock tabs nearby
+   (the "Stock tabs by the set" section); theme tiles and effect rows use
+   the shell gallery colors (compact-galleries.less): the image border is the
+   shell border, hover is light accent, like the tab tiles, selection is
+   accent; an effect row is a hover fill, the selected one is the fill and
+   text of selection. In the dark theme they have the stock look, and the sections stay
+   on theme variables. */
+body.vo-compact.theme-type-light #right-menu .vo-rp-pane {
+    .vo-rp-label {
+        color: @vo-text;
+        font-size: @vo-rp-hd-fs;
+    }
+
+    .vo-rp-select,
+    .vo-rp-num { border-color: @vo-win-stroke; }
+
+    .vo-rp-select:focus,
+    .vo-rp-num:focus { border-color: @vo-accent; }
+
+    .vo-rp-themes .vo-rp-tile-t { color: @vo-text; }
+    .vo-rp-pic { box-shadow: 0 0 0 1px @vo-border; }
+    .vo-rp-themes .vo-rp-tile:hover:not(:disabled) .vo-rp-pic { box-shadow: 0 0 0 2px @vo-win-seg-stroke; }
+    .vo-rp-themes .vo-rp-tile.vo-on .vo-rp-pic { box-shadow: 0 0 0 2px @vo-accent; }
+
+    .vo-rp-effects .vo-rp-tile {
+        color: @vo-text;
+
+        &:hover:not(:disabled) { background-color: @vo-hover; }
+        &.vo-on { background-color: @vo-selected; color: @vo-selected-fg; }
+    }
+}
+
+/* A long card gallery has its own scroll window (SlideSections.keepScroll
+   keeps the scroll and shows the selected tile): the color scheme under
+   themes, parameters, duration and transition buttons under effects, the animation
+   area under object effects are visible without scrolling the whole card. The surrounding padding 3 is the room for the hover and selection border of a
+   theme tile (2), the window does not clip it. */
+@vo-rp-list-h:    236px;     // three rows of themes with the edge of a fourth: it shows the list is longer
+
+body.vo-compact.vo-right-open #view-right-menu .vo-rp-pane .vo-rp-themes,
+body.vo-compact.vo-right-open #view-right-menu #vo-rp-transition .vo-rp-effects,
+body.vo-compact.vo-right-open #view-right-menu #vo-rp-animation .vo-rp-effects {
+    position: relative;
+    max-height: @vo-rp-list-h;
+    margin: -3px;
+    padding: 3px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+/* Theme tiles come first in a section: the window edge at which
+   scrolled tiles are clipped is at the card padding 18, not 3 higher. */
+body.vo-compact.vo-right-open #view-right-menu .vo-rp-pane .vo-rp-sec > .vo-rp-themes:first-child { margin-top: 0; }
+
+/* The layout and size under the "Slide" tab come right after its fields. */
+body.vo-compact #right-menu #vo-rp-slide {
+    border-top: 1px solid var(--border-divider, rgba(0, 0, 0, .1));
+}
+
+/* === Stock tabs by the set ====================================================== */
+/* The "Slide", "Shape", "Image", "Paragraph", "Table", "Text Art" tabs and
+   the cut-down chart "Shape" are stock PE.Views.*Settings. Their controls
+   (ComboBox, MetricSpinner, ColorButton, CheckBox, Slider, ComboDataView,
+   buttons) are drawn by the stock from variables (colors-table.less: sizes, radii,
+   font size, component colors). Here the component variables of #right-menu
+   get the window set values (compact-windows.less), while the theme colors that the
+   shell does not override, and what variables cannot set (borders,
+   hover, the list chevron, counter arrows, heading weight), are handled by
+   the rules below. The rules do not touch the stock markup and JS.
+
+   The panel scale is one for all tabs and sections of its own. The panel is narrow (body 195
+   between paddings), so it is denser than windows: field, counter, color button and buttons are
+   32 (windows have 38 and 34); the panel text (field value, caption of a button, checkbox and
+   above a field) is 12 (windows have 15, 14 and 13): the longest stock value
+   "Image or texture" fits the full width of the body in a field only with it;
+   the group heading is 13 semibold; a list menu row is 32, font size 13, like the
+   shell menu (windows have 38); the checkbox and switch are 16 (windows have 18), the chevron
+   is 16 (windows have 18), the radius of fields and buttons is 8. Colors are the set's: field border
+   base-7, focus and selected are accent-main-primary, the label above a field is
+   base-3. Stock labels longer than the body ("Apply to all slides" in the macOS
+   system font) wrap, rather than get cut or stretch the tab.
+
+   Only in the light theme, like the white panel body: in the dark one the body and controls are
+   stock. The "Stock interface" removes vo-compact, and the panel is stock again.
+   Windows lie outside #right-menu, so the theme does not affect them; the menus and palettes of the panel
+   controls lie inside it and take the same theme. */
+
+@vo-rp-f-h:        32px;      // field, counter, color button, buttons
+@vo-rp-f-pad:      8px;       // field left padding
+@vo-rp-fs:         12px;      // field value, panel text
+@vo-rp-lbl-fs:     12px;      // label above a field
+@vo-rp-lbl-gap:    4px;       // label → field
+@vo-rp-hd-fs:      13px;      // group heading
+@vo-rp-chev:       16px;      // list and color button chevron
+@vo-rp-ck:         16px;      // checkbox and switch
+@vo-rp-arrow-w:    16px;      // counter arrow column
+@vo-rp-arrow-h:    12px;
+@vo-rp-arrow-ico:  12px;
+@vo-rp-swatch-r:   4px;       // color swatch
+
+body.vo-compact.theme-type-light #right-menu {
+    /* Stock theme for the panel controls. The font size and font, which are inherited,
+       are set on the panel itself: a variable substituted at body is not
+       recomputed below. */
+    font-family: @vo-font;
+    font-size: @vo-rp-fs;
+    color: @vo-text;
+
+    --font-family-base-custom: @vo-font;
+    --font-size-base-app-custom: @vo-rp-fs;
+    --form-control-size: @vo-rp-f-h;
+    --input-height-base: @vo-rp-f-h;
+    --border-radius-form-control: @vo-r-sm;
+    --border-radius-button-normal: @vo-r-sm;
+    --border-radius-button-toolbar: @vo-r-sm;
+    --border-radius-checkbox: @vo-win-ck-r;
+    --border-radius-dataview-item: @vo-rp-swatch-r;
+
+    /* The theme colors (Themes.js themeColorTokens: background, borders, text, icons,
+       hover) are not overridden by the shell anywhere: they are read by the engine and
+       stock panels outside compact (canvas-skin.cjs). Here only the component
+       variables: field, checkbox, switch, slider; borders, hover and
+       tile selection are handled by the rules below. */
+    --background-fill-input: @vo-surface;
+    --background-fill-input-disabled: @vo-win-off-bg;
+    --border-fill-input: @vo-win-stroke;
+    --border-fill-input-disabled: @vo-win-off-bg;
+    --border-fill-input-focused: @vo-accent;
+    --shadow-fill-input: none;
+
+    --chb-size: @vo-rp-ck;
+    --chb-border-radius: @vo-win-ck-r;
+    --chb-check-mark-background: @vo-win-white;
+    --chb-background-normal: @vo-win-white;
+    --chb-background-normal-hover: @vo-win-white;
+    --chb-background-checked: @vo-accent;
+    --chb-background-checked-hover: @vo-accent;
+    --chb-border-normal: @vo-win-stroke;
+    --chb-border-normal-hover: @vo-accent;
+    --chb-border-normal-focus: @vo-accent;
+    --chb-border-checked: @vo-accent;
+    --chb-border-checked-hover: @vo-accent;
+    --chb-border-checked-focus: @vo-accent;
+
+    --rb-background-normal: @vo-win-white;
+    --rb-border-normal: @vo-win-stroke;
+    --rb-background-normal-hover: @vo-win-white;
+    --rb-border-normal-hover: @vo-accent;
+    --rb-border-normal-focus: @vo-accent;
+    --rb-background-checked: @vo-accent;
+    --rb-border-checked: @vo-accent;
+    --rb-background-checked-hover: @vo-accent;
+    --rb-border-checked-hover: @vo-accent;
+    --rb-border-checked-focus: @vo-accent;
+    --rb-check-mark-background: @vo-win-white;
+
+    --slider-track-background-normal: @vo-win-stroke;
+    --slider-track-background-filled: @vo-accent;
+    --slider-thumb-size: @vo-rp-ck;
+    --slider-thumb-background-normal: @vo-accent;
+    --slider-thumb-background-hover: @vo-win-filled-hover;
+    --slider-thumb-background-active: @vo-win-filled-act;
+    --slider-thumb-border-normal: @vo-win-white;
+
+    .settings-panel {
+        /* --- Labels ----------------------------------------------------------- */
+        label {
+            font-family: @vo-font;
+            letter-spacing: normal;
+        }
+
+        label.header {
+            color: @vo-text;
+            font-size: @vo-rp-hd-fs;
+            font-weight: 600;
+        }
+
+        /* A field label is above it ("Thickness", "Color") or to the left of it
+           ("Angle", "Height" of the cell size), the slider edges "0" and "100". */
+        label:not(.header):not(.link):not(.checkbox-indeterminate):not(.radiobox):not(.checkbox__shape) {
+            color: @vo-win-label;                  // base-3
+            font-size: @vo-rp-lbl-fs;
+        }
+
+        label.input-label { margin-bottom: @vo-rp-lbl-gap; }
+
+        /* The checkbox and switch label has the value color, not the field label's. */
+        .checkbox-indeterminate,
+        .radiobox {
+            color: @vo-text;
+            font-size: @vo-rp-fs;
+        }
+
+        .separator.horizontal {
+            border-top-color: @vo-win-divider;
+        }
+
+        /* "Advanced settings" is a shell link. */
+        label.link {
+            border-bottom: 1px solid @vo-link-underline;
+            color: @vo-link;
+            font-size: @vo-rp-fs;
+            text-decoration: none;
+
+            &:hover { border-bottom-color: @vo-link; }
+        }
+
+        /* --- Field ------------------------------------------------------------ */
+        .form-control {
+            color: @vo-text;
+            font-size: @vo-rp-fs;
+            transition: border-color @vo-win-dur;
+        }
+
+        .form-control[disabled],
+        .disabled > .form-control {
+            border-color: transparent;
+            color: @vo-win-off-fg;
+        }
+
+        /* --- Dropdown list: ComboBox ------------------------------------------ */
+        /* The stock button stays a clickable zone on the right, only the arrow is visible:
+           an AIR chevron instead of the stock corner, 4 from the border. The value reaches
+           the chevron box: the glyph in it is narrower than the box, there is air between them, and
+           "Image or texture" fits the full width of the body in the field. */
+        .combobox {
+            > .form-control {
+                padding-left: @vo-rp-f-pad;
+                padding-right: (@vo-rp-chev + @vo-rp-chev-in);
+                text-overflow: ellipsis;
+            }
+
+            > .btn {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                width: (@vo-rp-chev + @vo-rp-f-pad);
+                padding: 0 @vo-rp-chev-in 0 0;
+                border-color: transparent;
+                background: transparent;
+                color: @vo-win-label;
+
+                .caret {
+                    width: @vo-rp-chev;
+                    height: @vo-rp-chev;
+                    margin: 0;
+                    border: none;
+                    transform: none;
+                    transition: transform @vo-dur-state;
+                    .vo-win-mask();
+                    -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                            mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                }
+            }
+
+            &.open > .btn .caret { transform: rotate(180deg); }
+            &.open > .form-control { border-color: @vo-accent; }
+        }
+
+        /* --- Number field: MetricSpinner --------------------------------------- */
+        .spinner {
+            /* On the right is a column of arrows 16 with offset 3 from the border and 1 to the value. */
+            > .form-control {
+                padding-left: @vo-rp-f-pad;
+                padding-right: (@vo-rp-arrow-w + 4px);
+            }
+
+            > .spinner-buttons {
+                top: ((@vo-rp-f-h - @vo-rp-arrow-h * 2) / 2);
+                right: 3px;
+                border: none;
+
+                button {
+                    width: @vo-rp-arrow-w;
+                    height: @vo-rp-arrow-h;
+                    border-radius: @vo-win-r-2xs;
+                    color: @vo-win-label;
+
+                    &:not(.disabled):not(:disabled):hover { background: @vo-hover; color: @vo-text; }
+
+                    i {
+                        display: block;
+                        width: @vo-rp-arrow-ico;
+                        height: @vo-rp-arrow-ico;
+                        margin: 0 auto;
+                        border: none;
+                        transform: none;
+                        .vo-win-mask();
+                        -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                                mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                    }
+                }
+
+                .spinner-up i { transform: rotate(180deg); }
+            }
+        }
+
+        /* --- Color button: ColorButton ---------------------------------------- */
+        /* The stock width (50): the table "Border style" row fits the
+           body exactly with it. The color swatch is the full height of the field with offset 2, the chevron is
+           on the right in its own column, not over the swatch, like the stock corner. */
+        .btn-color {
+            padding: 2px (@vo-rp-chev + 4px) 2px 2px;
+            border-color: @vo-win-stroke;
+
+            > span:first-child {
+                border-color: rgba(0, 0, 0, .08);
+                border-radius: @vo-rp-swatch-r;
+            }
+
+            .inner-box-caret {
+                top: 50%;
+                right: 3px;
+                display: flex;
+                padding: 0;
+                transform: translateY(-50%);
+            }
+
+            .caret {
+                width: @vo-rp-chev;
+                height: @vo-rp-chev;
+                margin: 0;
+                border: none;
+                transform: none;
+                color: @vo-win-label;
+                .vo-win-mask();
+                -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                        mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+            }
+
+            &:not(.disabled):hover { border-color: @vo-win-drop-stroke; }
+        }
+
+        /* --- Buttons ---------------------------------------------------------- */
+        /* Buttons with a label inside a tab ("Actual size", "Align
+           row heights", "Crop", "Replace image") are the set's
+           outline. The stock writes the hover fill with !important
+           (buttons.less, .btn-text-default:hover): overridden only this way. */
+        .btn-text-default,
+        .btn-text-menu-default,
+        .btn-text-split-default {
+            padding-inline: @vo-rp-btn-pad;
+            border: @vo-outline-w solid @vo-outline-stroke;
+            background: @vo-surface;
+            color: @vo-text-2;
+            font-size: @vo-rp-fs;
+            font-weight: 500;
+
+            &:not(.disabled):not([disabled]):hover { background-color: @vo-outline-hover !important; }
+            &:not(.disabled):not([disabled]):active,
+            &:not(.disabled).active { background-color: @vo-outline-act !important; color: @vo-text-2; }
+            &:focus:not(.disabled) { border-color: @vo-accent; box-shadow: none; }
+
+            &.disabled,
+            &[disabled] {
+                border-color: @vo-win-off-bg;
+                background: @vo-win-off-bg;
+                color: @vo-win-off-fg;
+                opacity: 1;
+            }
+        }
+
+        /* A full-width button with a label longer than the body (another language, another
+           system font) wraps the label and grows, rather than stretching the tab. */
+        .btn-text-default {
+            height: auto;
+            min-height: @vo-rp-f-h;
+            white-space: normal;
+            line-height: 16px;
+        }
+
+        /* Toolbar buttons (rotations, "Reset background", "Change
+           shape", "Shadow", table borders) are the set's plain. */
+        .btn-toolbar {
+            color: @vo-text-2;
+            font-size: @vo-rp-fs;
+
+            .caption { font-size: inherit; }
+
+            &:hover:not(.disabled),
+            .over:not(.disabled) { background-color: @vo-hover; }
+
+            &:active:not(.disabled),
+            &.active:not(.disabled) { background-color: @vo-active; color: @vo-text-2; }
+        }
+
+        /* A full-width button with an icon and a label ("Apply to all
+           slides"): the label in the macOS system font is wider than the panel body: it
+           wraps, the button grows with it, rather than stretching the tab. */
+        .btn-toolbar.align-left:not(.dropdown-toggle) {
+            display: flex;
+            align-items: center;
+            height: auto;
+            min-height: @vo-rp-f-h;
+            white-space: normal;
+
+            .icon { flex: 0 0 auto; }
+
+            .caption {
+                min-width: 0;
+                line-height: 16px;
+                text-align: start;
+            }
+        }
+
+        /* A button with a menu ("Replace image ▾"): the label and chevron are separated by
+           a gap, not flush. The menu half of "Crop" has no paddings:
+           only the chevron is in it. */
+        .btn-text-menu-default {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+
+            .inner-box-caret {
+                position: static;
+                display: flex;
+                padding: 0;
+            }
+        }
+
+        /* The label in span.caption is set by the stock with its own font size: it takes the button font size. */
+        .btn-text-menu-default .caption,
+        .btn-text-split-default .caption { font-size: inherit; }
+
+        .btn-text-split-default.dropdown-toggle { padding-inline: 0; }
+
+        .btn-toolbar .caret,
+        .btn-text-menu-default .caret,
+        .btn-text-split-default .caret,
+        .combo-dataview .button .caret,
+        .btn-large-dataview .caret {
+            width: @vo-rp-chev;
+            height: @vo-rp-chev;
+            border: none;
+            transform: none;
+            color: @vo-win-label;
+            .vo-win-mask();
+            -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                    mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+        }
+
+        /* --- Control menus: list, palette, galleries -------------------------- */
+        /* The card is like the shell menu (rounding 12, AIR shadow); list
+           rows use the panel scale: 32, font size 13, padding 12, the selected one is a selection
+           fill, hover is a hover fill. Row paddings are narrower than the stock
+           (20): a list menu at the full field width ("Image or texture")
+           otherwise went past the card edge. The color palette and gallery menus
+           (gradient direction, templates) are stock grids with their own offsets,
+           their rows are left alone. The menu that the bridge shows at a toolbar
+           button (vo-gallery-target: "Replace image ▾", "Rows and
+           columns ▾") is a shell menu row (compact-galleries.less). */
+        .dropdown-menu {
+            border: none;
+            border-radius: @vo-r-pop;
+            box-shadow: @vo-shadow;
+            font-family: @vo-font;
+            font-size: @vo-fs-row;
+        }
+
+        .dropdown-menu:not(.color-menu):not(.vo-gallery-target):has(> li > a) {
+            padding: 6px 0;
+
+            li > a {
+                padding: 6px @vo-rp-menu-x;
+                color: @vo-text;
+                font-size: @vo-fs-row;
+                line-height: 20px;
+
+                &:hover, &:focus { background: @vo-hover; color: @vo-text; }
+            }
+
+            li.over > a { background: @vo-hover; }
+            li.selected > a,
+            li > a.checked { background: @vo-selected; color: @vo-text; }
+        }
+
+        /* --- Tiles: ComboDataView, galleries ---------------------------------- */
+        /* The border is base-7, as for a field; the radius is from the theme. For a tile strip the stock
+           rounds all corners, and a menu button is attached to its right:
+           rounding only outside. A tile under hover has a 2 border
+           in light accent, the selected one in accent, like the shell tile selection. */
+        .combo-dataview .view,
+        .combo-dataview .button button,
+        .btn-large-dataview { border-color: @vo-win-stroke; }
+
+        .combo-dataview .view { border-radius: @vo-r-sm 0 0 @vo-r-sm; }
+
+        .combo-dataview:not(.shapes) .item { border-color: @vo-win-stroke; }
+
+        /* The border outside the tile: the inner one (the stock at the ComboDataView strip)
+           is covered by the tile image: for the Text Art "Transform" the selected one
+           was not visible. */
+        .dataview > .item {
+            box-shadow: 0 0 0 1px @vo-win-stroke;
+
+            &:hover:not(.disabled) { box-shadow: 0 0 0 2px @vo-win-seg-stroke; }
+            &.selected:not(.disabled) { box-shadow: 0 0 0 2px @vo-accent; }
+        }
+
+        /* --- Rows by the scale ------------------------------------------------ */
+        /* The stock writes field widths inline for its font and 3 px paddings: a value
+           in the shell font with the set paddings does not fit into them ("No outline",
+           "Radial", "Multiplier", "100 %"). The width is by the longest
+           list value, the row stays within the panel body. The inline value is overridden
+           only this way. */
+        [id$="-spin-transparency"],
+        [id$="-spin-gradient-angle"],
+        [id$="-gradient-position"] {
+            width: @vo-rp-w-pct !important;
+        }
+
+        [id$="-combo-grad-type"] { width: @vo-rp-w-list !important; }
+
+        .combobox.combo-border-size,
+        .combobox.combo-border-size > .form-control { width: @vo-rp-w-list !important; }
+        div:has(> .combobox.combo-border-size) { width: auto !important; }
+        td > div:has(> [id$="-combo-border-size"]),
+        td > div:has(> [id$="-combo-border-type"]) {
+            width: auto !important;
+            margin-inline-end: 12px;
+        }
+
+        /* "Height" and "Width" of the cell size are to the left of the counter, at its middle. */
+        td:has(> #table-spin-cell-height) > label,
+        td:has(> #table-spin-cell-width) > label { line-height: @vo-rp-f-h; }
+
+        /* "Multiplier" and the interval counter are in one row with a gap of 6. */
+        #paragraph-combo-line-rule,
+        #paragraph-combo-line-rule > .combobox {
+            width: @vo-rp-w-rule !important;
+        }
+        #paragraph-combo-line-rule { margin-inline-end: 6px; }
+
+        /* "Actual size" and "Fit to slide": the stock aligns them by
+           the width measured by its font size. */
+        #image-button-original-size,
+        #image-button-fit-slide {
+            width: auto !important;
+        }
+
+        /* "Width: 6.77 cm · Height: 3.81 cm": the labels in full: on one line
+           if they fit, otherwise the second under the first. */
+        tr:has(> td > #image-label-width) {
+            display: flex;
+            flex-wrap: wrap;
+            column-gap: 8px;
+
+            > td {
+                width: auto;
+                white-space: nowrap;
+            }
+        }
+
+        /* Opacity: a slider with edges on the left, a counter on the right. The stock
+           sets the counter float: wider than the stock one (68 vs 62) it went to the line
+           below; in a flex row they share the line by width. */
+        [id$="-panel-transparent-fill"],
+        [id$="-line-panel-transparent"] {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+
+            > .header { flex: 0 0 100%; }
+            > div { margin-top: 0 !important; }
+            > .spinner { float: none; }
+
+            /* The slider is 2 from the "0" and "100" edges, not 4: a row with
+               the counter 68 fits in the body. */
+            [id$="-slider-transparency"] { margin: 0 2px !important; }
+        }
+
+        /* Gradient style and angle are in a column: air between the fields. */
+        [id$="-panel-gradient-fill"] > table tr + tr > td { padding-top: 8px; }
+
+        /* The gradient "Color · Position · stops" row has height 40 inline, while
+           the label and field of 32 are taller: the row overlapped "Opacity". The stop
+           buttons are at the bottom, level with the fields. */
+        [id$="-panel-gradient-fill"] > div:last-child {
+            align-items: flex-end;
+            height: auto !important;
+
+            > div:last-child {
+                align-items: center;
+                height: @vo-rp-f-h;
+                padding-top: 0 !important;
+            }
+        }
+
+        /* Pattern: "Foreground" and "Background" with a color button on the right: rows
+           of height 25 inline. */
+        [id$="-panel-pattern-fill"] > div[style*="height: 25px"] {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: auto !important;
+
+            > .input-label { margin: 0; }
+        }
+    }
+}
+
+// Widths follow the longest value in the macOS system font (it is wider than Segoe UI).
+@vo-rp-w-pct:      68px;      // the "100 %" counter: 35 + paddings 8 and 20 + border
+@vo-rp-w-list:     104px;     // "No outline", "Radial": 72 + paddings 8 and 20 + border; line sample 74
+@vo-rp-w-rule:     100px;     // "Multiplier": 67 + paddings 8 and 20 + border; with a gap of 6 and counter 85 it is 191
+@vo-rp-btn-pad:    8px;       // padding of a button with a label (windows have 13): "Align column widths" 175 + 16 + border = 193
+@vo-rp-chev-in:    4px;       // list chevron from the right border
+
+body.vo-compact.theme-type-light.rtl #right-menu .settings-panel .combo-dataview .view {
+    border-radius: 0 @vo-r-sm @vo-r-sm 0;
+}

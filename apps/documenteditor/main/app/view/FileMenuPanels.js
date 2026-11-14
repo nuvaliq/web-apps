@@ -41,7 +41,7 @@
  *
  */
 
-define([], function () {
+define(['common/main/lib/component/BaseView'], function () {
     'use strict';
 
     !DE.Views.FileMenuPanels && (DE.Views.FileMenuPanels = {});

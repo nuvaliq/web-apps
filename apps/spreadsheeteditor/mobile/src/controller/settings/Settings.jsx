@@ -36,6 +36,7 @@
 import React, { createContext } from 'react';
 import { observer, inject } from "mobx-react";
 import { Device } from '../../../../../common/mobile/utils/device';
+import About from '../../../../../common/mobile/lib/view/About';
 import SettingsView from "../../view/settings/Settings";
 import { f7 } from 'framework7-react';
 import { useTranslation } from 'react-i18next';
@@ -67,21 +68,9 @@ const SettingsController = inject('storeAppOptions', 'storeSpreadsheetInfo')(obs
         }, 400);
     };
 
+    // Product helpdesk of the interface language, the same for every device
     const showHelp = () => {
-        // let url = '{{HELP_URL}}';
-        // let url = 'https://helpcenter.onlyoffice.com';
-        let url = __HELP_URL__;
-
-        if (url.charAt(url.length-1) !== '/') {
-            url += '/';
-        }
-
-        if (Device.sailfish || Device.android) {
-            url+='mobile-applications/documents/mobile-web-editors/android/index.aspx';
-        } 
-        else {
-            url+='mobile-applications/documents/mobile-web-editors/ios/index.aspx';
-        }
+        const url = About.helpUrl(Common.Locale.currentLang);
 
         closeModal();
         window.open(url, "_blank");

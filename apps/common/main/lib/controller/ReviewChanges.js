@@ -52,6 +52,12 @@ define([
 ], function () {
     'use strict';
 
+    // The compact shell of the editor picked now, as registered in the shared layer, or null.
+    function compactShell() {
+        var shells = Common.UI && Common.UI.Compact && Common.UI.Compact.Shells;
+        return (shells && typeof shells.current === 'function' && shells.current()) || null;
+    }
+
     Common.Controllers.ReviewChanges = Backbone.Controller.extend(_.extend({
         models : [],
         collections : [
@@ -648,8 +654,27 @@ define([
                     this.api.asc_SetLocalTrackRevisions(null);
                     this.api.asc_SetGlobalTrackRevisions(!!state);
                 } else
-                    this.api.asc_SetLocalTrackRevisions(!!state);
+                    this.api.asc_SetLocalTrackRevisions(state ? true : this.trackRevisionsOff());
             }
+        },
+
+        // The personal track changes mode turned off. In a compact shell whose personal mode follows the shared flag it
+        // is null, not false: a null local flag follows the document-wide one, so a user who turns the personal mode off
+        // or picks editing stays under track changes for everyone. The shell is the one registered in the shared layer
+        // (Common.UI.Compact.Shells) and picked in the editor config, not the class it puts on the body later than this
+        // controller starts; the stock interface, a rolled back shell start and editors without such a shell keep false.
+        trackRevisionsOff: function() {
+            var shell = compactShell();
+            return (shell && shell.personalReviewFollowsShared === true) ? null : false;
+        },
+
+        // Why the personal "off" variant of the track changes buttons is locked, or null. In such a compact shell it gives
+        // null, which follows the document-wide flag, so while track changes for everyone is on it would do nothing:
+        // the variant is greyed out with the reason the shell gives, the one its menu shows for its own personal item.
+        turnOffMineLock: function(globalFlag) {
+            if (globalFlag !== true || this.trackRevisionsOff() !== null) return null;
+            var shell = compactShell();
+            return (shell && typeof shell.forAllText === 'function' && shell.forAllText()) || '';
         },
 
         onApiTrackRevisionsChange: function(localFlag, globalFlag, userId) {
@@ -661,6 +686,7 @@ define([
                     state = global ? globalFlag : localFlag;
                 Common.Utils.InternalSettings.set(this.appPrefix + "track-changes", (state ? 0 : 1) + (global ? 2 : 0));
                 this.view.turnChanges(state, global);
+                this.view.lockTurnOffMine(this.turnOffMineLock(globalFlag));
                 if (userId && this.userCollection) {
                     var rec = this.userCollection.findOriginalUser(userId);
                     rec && Common.NotificationCenter.trigger('showmessage', {msg: Common.Utils.String.format(globalFlag ? this.textOnGlobal : this.textOffGlobal, AscCommon.UserInfoParser.getParsedName(rec.get('username')))},
@@ -959,7 +985,7 @@ define([
                     (trackChanges===undefined) && (trackChanges = me.appConfig.customization ? me.appConfig.customization.trackChanges : undefined);
 
                     if (config.isReviewOnly || trackChanges!==undefined)
-                        me.api.asc_SetLocalTrackRevisions(config.isReviewOnly || trackChanges===true);
+                        me.api.asc_SetLocalTrackRevisions((config.isReviewOnly || trackChanges===true) ? true : me.trackRevisionsOff());
                     else
                         me.onApiTrackRevisionsChange(me.api.asc_GetLocalTrackRevisions(), me.api.asc_GetGlobalTrackRevisions());
                     me.api.asc_HaveRevisionsChanges() && me.view.markChanges(true);
@@ -1171,7 +1197,7 @@ define([
                         this.api.asc_SetLocalTrackRevisions(true);
                         this.onApiShowChange();
                     } else if (this._state.prevReviewProtected) {
-                        this.api.asc_SetLocalTrackRevisions(false);
+                        this.api.asc_SetLocalTrackRevisions(this.trackRevisionsOff());
                         this.onApiShowChange();
                     }
                     this._state.prevReviewProtected = props.isReviewOnly;

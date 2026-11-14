@@ -115,7 +115,11 @@
                     "inlineText": true,
                     "findNestedDependencies": false,
                     "optimizeAllPluginResources": false,
+                    "exclude": ["jquery", "underscore", "backbone"],
                     "paths": {
+                        "jquery": "../vendor/jquery/jquery",
+                        "underscore": "../vendor/underscore/underscore",
+                        "backbone": "../vendor/backbone/backbone",
                         "text": "../vendor/requirejs-text/text"
                     }
                 }

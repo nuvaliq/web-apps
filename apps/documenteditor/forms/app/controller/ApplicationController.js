@@ -200,10 +200,10 @@ define([
 
             window.onbeforeunload = _.bind(this.onBeforeUnload, this);
 
-            this.warnNoResources  = this.warnNoResources.replace(/%1/g, '{{COMPANY_NAME}}');
-            this.warnNoLicenseUsers = this.warnNoLicenseUsers.replace(/%1/g, '{{COMPANY_NAME}}');
-            this.textNoLicenseTitle = this.textNoLicenseTitle.replace(/%1/g, '{{COMPANY_NAME}}');
-            this.textNoResourcesTitle = this.textNoResourcesTitle.replace(/%1/g, '{{COMPANY_NAME}}');
+            this.warnNoResources  = this.warnNoResources.replace(/%1/g, this.textProductName);
+            this.warnNoLicenseUsers = this.warnNoLicenseUsers.replace(/%1/g, this.textProductName);
+            this.textNoLicenseTitle = this.textNoLicenseTitle.replace(/%1/g, this.textProductName);
+            this.textNoResourcesTitle = this.textNoResourcesTitle.replace(/%1/g, this.textProductName);
         },
 
         onLayoutChanged: function(area) {
@@ -875,7 +875,9 @@ define([
         },
 
         applyLicense: function() {
+            var licenseEditingAvailable = true;
             if (!this.appOptions.isAnonymousSupport && !!this.appOptions.user.anonymous) {
+                licenseEditingAvailable = false;
                 this.api.asc_coAuthoringDisconnect();
                 Common.NotificationCenter.trigger('api:disconnect');
                 Common.UI.warning({
@@ -884,6 +886,7 @@ define([
                     buttons: ['ok']
                 });
             } else if (this._state.licenseType) {
+                licenseEditingAvailable = this._state.licenseType===Asc.c_oLicenseResult.SuccessLimit;
                 var license = this._state.licenseType,
                     title = this.textNoLicenseTitle,
                     buttons = ['ok'],
@@ -899,14 +902,18 @@ define([
                     if (license===Asc.c_oLicenseResult.ConnectionsOS)
                         title = this.textNoResourcesTitle;
                     license = (license===Asc.c_oLicenseResult.ConnectionsOS) ? this.warnNoResources : this.warnNoLicenseUsers;
-                    buttons = [{value: 'buynow', caption: this.textBuyNow}, {value: 'contact', caption: this.textContactUs}];
-                    primary = 'buynow';
                     modal = true;
                 }
 
                 if (this._state.licenseType!==Asc.c_oLicenseResult.SuccessLimit && this.appOptions.canFillForms) {
                     this.api.asc_coAuthoringDisconnect();
                     Common.NotificationCenter.trigger('api:disconnect');
+                }
+
+                // b24: the host shows the capacity warning
+                if (this._state.licenseType===Asc.c_oLicenseResult.ConnectionsOS || this._state.licenseType===Asc.c_oLicenseResult.UsersCountOS) {
+                    Common.Gateway.reportWarning('b24_no_capacity', 'editing disabled by document server capacity guard');
+                    return;
                 }
 
                 !modal ? Common.UI.TooltipManager.showTip({ step: 'licenseError', text: license, header: title, target: '#toolbar', maxwidth: 430,
@@ -916,14 +923,13 @@ define([
                     title: title,
                     msg  : license,
                     buttons: buttons,
-                    primary: primary,
-                    callback: function(btn) {
-                        if (btn == 'buynow')
-                            window.open('{{PUBLISHER_URL}}', "_blank");
-                        else if (btn == 'contact')
-                            window.open('mailto:{{SALES_EMAIL}}', "_blank");
-                    }
+                    primary: primary
                 });
+            }
+
+            if (licenseEditingAvailable && this.appOptions.canFillForms &&
+                !this._state.isFormDisconnected && !this._state.isDisconnected) {
+                Common.Gateway.sendInfo({mode:'view', b24EditingAvailable:true});
             }
         },
 
@@ -2435,10 +2441,9 @@ define([
         warnLicenseLimitedNoAccess: 'License expired.<br>You have no access to document editing functionality.<br>Please contact your administrator.',
         warnNoResources: "The %1 server does not have enough resources to open this document for editing. This document will be opened for viewing only.",
         warnNoLicenseUsers: "You've reached the user limit for %1 editors. Contact %1 sales team for personal upgrade terms.",
-        textBuyNow: 'Visit website',
+        textProductName: 'VibeOffice',
         textNoLicenseTitle: 'License limit reached',
         textNoResourcesTitle: 'Not enough resources',
-        textContactUs: 'Contact sales',
         errorLoadingFont: 'Fonts are not loaded.<br>Please contact your Document Server administrator.',
         errorConnectToServer: 'The document could not be saved. Please check connection settings or contact your administrator.<br>When you click the \'OK\' button, you will be prompted to download the document.',
         errorTokenExpire: 'The document security token has expired.<br>Please contact your Document Server administrator.',

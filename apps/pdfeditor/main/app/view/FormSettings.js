@@ -40,7 +40,8 @@
  */
 
 define([
-    'text!pdfeditor/main/app/template/FormSettings.template'
+    'text!pdfeditor/main/app/template/FormSettings.template',
+    'common/main/lib/component/BaseView'
 ], function (menuTemplate) {
     'use strict';
 

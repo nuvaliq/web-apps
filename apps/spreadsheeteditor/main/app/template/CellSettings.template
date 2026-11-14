@@ -67,7 +67,25 @@
     </tr>
     <tr>
         <td colspan=2 class="padding-small">
-            <label class="header"><%= scope.textBorders %></label>
+            <label class="header"><%= scope.textBordersTitle %></label>
+        </td>
+    </tr>
+    <tr class="cell-borders-current hidden">
+        <td class="padding-small" colspan=2>
+            <div class="cell-borders-current__row">
+                <div id="cell-borders-sample" class="cell-borders-sample"></div>
+                <label id="cell-borders-current-text" class="input-label"></label>
+            </div>
+        </td>
+    </tr>
+    <tr class="cell-borders-current hidden">
+        <td class="padding-small" colspan=2>
+            <div class="separator horizontal"></div>
+        </td>
+    </tr>
+    <tr>
+        <td class="padding-small" colspan=2>
+            <label class="input-label"><%= scope.textDrawBorders %></label>
         </td>
     </tr>
     <tr>

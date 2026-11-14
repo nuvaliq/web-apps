@@ -421,7 +421,12 @@
             compact = params["compact"] == 'true',
             view = params["mode"] == 'view',
             tabBackground = params["tabBackground"],
-            visible = true;
+            visible = true,
+            // Compact shell: neutral skeleton for spreadsheets. The editor config (and with it
+            // ui.shell) is not known yet, so the stock title, ribbon and formula bar
+            // silhouettes would flash before the compact shell. Only the loader
+            // (background and grid placeholder) is drawn, as in documenteditor.
+            neutral = true;
 
         if (internal) {
             let child = document.querySelector('.brendpanel');
@@ -469,9 +474,9 @@
                 document.querySelector('.fat').style.left = '944px';
         }
 
-        visible && (document.querySelector('.brendpanel').style.display = 'block');
-        !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
-        document.querySelector('.skformula').style.display = 'block';
+        visible && !neutral && (document.querySelector('.brendpanel').style.display = 'block');
+        !neutral && !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
+        !neutral && (document.querySelector('.skformula').style.display = 'block');
         document.querySelector('.placeholder').style.display = 'block';
 
         if (stopLoading) {

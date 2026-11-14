@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ONLYOFFICE Document Editor</title>
+    <title>VibeOffice</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=IE8"/>
     <meta name="description" content="" />
     <meta name="keywords" content="" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-    <link rel="icon" href="resources/img/favicon.ico" type="image/x-icon" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20d%3D%22M14.4998%2011.2695H9.4998C9.1098%2011.2695%208.7998%2011.5795%208.7998%2011.9695C8.7998%2012.3595%209.1098%2012.6695%209.4998%2012.6695H14.4998C14.8898%2012.6695%2015.1998%2012.3595%2015.1998%2011.9695C15.1998%2011.5795%2014.8898%2011.2695%2014.4998%2011.2695Z%22%20fill%3D%22%23333333%22%2F%3E%0A%3Cpath%20d%3D%22M9.4998%2014.2695H13.2198C13.6098%2014.2695%2013.9198%2014.5795%2013.9198%2014.9695C13.9198%2015.3595%2013.6098%2015.6695%2013.2198%2015.6695H9.4998C9.1098%2015.6695%208.7998%2015.3595%208.7998%2014.9695C8.7998%2014.5795%209.1098%2014.2695%209.4998%2014.2695Z%22%20fill%3D%22%23333333%22%2F%3E%0A%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M18.2998%208.01C18.1698%207.68%2017.9698%207.39%2017.7298%207.14L15.4098%204.78C15.1598%204.53%2014.8798%204.34%2014.5498%204.2C14.2298%204.07%2013.9198%204.02%2013.5398%204H8.13977C7.43977%204%206.77977%204.28%206.27977%204.78C5.77977%205.28%205.50977%205.95%205.50977%206.67V17.34C5.50977%2018.05%205.77977%2018.72%206.27977%2019.23C6.76977%2019.73%207.44977%2020.01%208.13977%2020.01H15.8798C16.5798%2020.01%2017.2398%2019.73%2017.7398%2019.23C18.2398%2018.73%2018.5098%2018.06%2018.5098%2017.34V9.04C18.5098%208.69%2018.4398%208.34%2018.3098%208.02L18.2998%208.01ZM16.7298%208.12C16.8003%208.19056%2016.8475%208.27668%2016.892%208.35777L16.9098%208.39H14.7798C14.5998%208.39%2014.4198%208.32%2014.2898%208.19C14.1598%208.06%2014.0898%207.89%2014.0898%207.71V5.55C14.1998%205.61%2014.3098%205.67%2014.3998%205.76L16.7298%208.12ZM16.7298%2018.24C16.4998%2018.48%2016.1898%2018.6%2015.8598%2018.6H8.11977C7.79977%2018.6%207.47977%2018.47%207.25977%2018.24C7.01977%2018%206.88977%2017.68%206.88977%2017.34V6.67C6.88977%206.33%207.01977%206%207.25977%205.77C7.48977%205.54%207.79977%205.41%208.11977%205.41H12.6798V7.72C12.6798%208.28%2012.8998%208.8%2013.2898%209.2C13.6798%209.59%2014.2198%209.81%2014.7698%209.81H17.0798V17.35C17.0798%2017.69%2016.9498%2018.01%2016.7098%2018.25L16.7298%2018.24Z%22%20fill%3D%22%23333333%22%2F%3E%0A%3C%2Fsvg%3E%0A" />
 
     <!-- splash -->
 
@@ -337,7 +337,12 @@
             view = params["mode"] == 'view',
             tabBackground = params["tabBackground"],
             fillforms = params["mode"] == 'fillforms',
-            visible = true;
+            visible = true,
+            // Compact shell: neutral skeleton for documents. The editor config (and with it
+            // ui.shell) is not known yet, so the stock ribbon and title silhouettes would
+            // flash before the compact shell. Only the loader (background and page
+            // placeholder) is drawn. PDF forms keep the stock skeleton.
+            neutral = !(isForm || fillforms);
 
         isForm && document.body.classList.add('pdf-form');
         if (compact || view || notoolbar) {
@@ -379,10 +384,10 @@
                 document.querySelector('.fat').style.left = '592px';
         }
 
-        visible && (document.querySelector('.brendpanel').style.display = 'block');
+        visible && !neutral && (document.querySelector('.brendpanel').style.display = 'block');
         if (fillforms)
             document.getElementById('sktoolbar-pdf').style.display = 'block';
-        else if (!(view && (params["toolbar"] !== 'true') || notoolbar))
+        else if (!neutral && !(view && (params["toolbar"] !== 'true') || notoolbar))
             document.querySelector('.sktoolbar').style.display = 'block';
         view && (document.querySelector('.placeholder').style.marginTop = '19px');
         document.querySelector('.placeholder').style.display = 'block'; 

@@ -136,6 +136,7 @@ define([
 
             this.handler    = options.handler;
             this.props      = options.props;
+            this.defaultAutoFitType = options.defaultAutoFitType;
             this.spinners = [];
 
             Common.Views.AdvancedSettingsWindow.prototype.initialize.call(this, this.options);
@@ -277,9 +278,9 @@ define([
                 this.spnColumns.setValue(val[1], true);
                 this.spnRows.setValue(val[0], true);
 
-                val = props.get_AutoFitType();
+                val = this.defaultAutoFitType !== undefined ? this.defaultAutoFitType : props.get_AutoFitType();
                 (val===1) ? this.rbFixed.setValue(true, true) : (val===2 ? this.rbContents.setValue(true, true) : this.rbWindow.setValue(true, true));
-                (val===1) && this.spnWidth.setValue(props.get_Fit()>-1 ? Common.Utils.Metric.fnRecalcFromMM(props.get_Fit()) : -1, true);
+                this.spnWidth.setValue(props.get_Fit()>-1 ? Common.Utils.Metric.fnRecalcFromMM(props.get_Fit()) : -1, true);
                 this.spnWidth.setDisabled(val!==1);
 
                 val = props.get_SeparatorType();

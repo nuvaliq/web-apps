@@ -1,78 +1,72 @@
-// @text-normal: #000;
-// @common-image-path - defined in webpack config
-
+// "About" of the mobile editors (About.jsx): the legal notice as centered text, as on the phone page of the accepted
+// prototype (about.css, scenes.css). Gaps and font sizes follow the AIR scale, colors are the editor theme's.
 .about {
-    .page-content {
-        text-align: center /*rtl:ignore*/;
+    &__content {
         display: flex;
         flex-direction: column;
-    }
-
-    &_ios {
-        padding-top: 120px;
-        padding-bottom: 30px;
-    }
-
-    &_android {
-        padding-top: 60px;
-        padding-bottom: 16px;
-    }
-
-    &_tablet {
-        padding-top: 12px;
-        padding-bottom: 12px;
-    } 
-
-    &__text {
-        font-style: normal;
-        font-weight: 400;
-        font-size: 12px;
-        line-height: 16px;
+        align-items: center;
+        gap: 16px;
+        padding: 24px 16px 32px;
         text-align: center;
+        font-size: 14px;
+        line-height: 1.4;
         color: @text-normal;
-        margin: 0;
-    }
+        overflow-wrap: anywhere;
 
-    a {
-        color: @brandColor;
-    }
+        // only the links of the notice: the back link of the navbar is on the same page
+        a {
+            color: @text-link;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            border-radius: 2px;
 
-    .logo-block {
-        &__elem {
-            display: flex;
-            justify-content: center;
-            img {
-                max-width: 100%;
-                height: auto;
+            &:focus-visible {
+                outline: 2px solid @text-link;
+                outline-offset: 2px;
             }
         }
     }
 
-    &__logo {
-        width: 100%;
-        height: 80px;
-        background: ~"url(@{common-image-path}/about/logo-new.svg) no-repeat center";
+    // product name and version as one group, the version right under the name
+    &__head {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
     }
 
-    &__editor {
-        flex-grow: 1;
-        margin-top: 20px;
+    &__name {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.35;
+        font-weight: 600;
+        color: @text-normal;
     }
 
-    &__contacts {
-        text-align: center;
-        padding-left: 72px;
-        padding-right: 72px;
+    &__version {
+        font-size: 13px;
+        color: @text-tertiary;
     }
 
-    &__licensor, &__customer {
-        text-align: center;
-        margin-top: 12px;
+    // every line of the notice is a block of its own
+    &__lines {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
     }
-}
 
-.theme-type-dark {
-    .about__logo {
-        background: ~"url(@{common-image-path}/about/logo-new-white.svg) no-repeat center";
+    &__line {
+        margin: 0;
+        text-wrap: balance;
+    }
+
+    // non-code content paragraph: smaller and quieter than the lines
+    &__cc {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.4;
+        font-weight: 400;
+        color: @text-secondary;
+        text-wrap: pretty;
     }
 }

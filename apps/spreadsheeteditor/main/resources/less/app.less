@@ -246,3 +246,11 @@
         --doc-placeholder-grid-fill: var(--background-pane);
     }
 }
+
+// Compact shell (only under body.vo-compact / body.vo-advanced): the shared layer first
+// (defaults and rules), then the spreadsheet-specific file with its values: for a LESS variable the
+// last definition wins.
+@import "../../../../common/main/resources/less/compact/tokens.less";
+@import "../../../../common/main/resources/less/compact/menu.less";
+@import "../../../../common/main/resources/less/compact/about.less";
+@import "compact-shell.less";

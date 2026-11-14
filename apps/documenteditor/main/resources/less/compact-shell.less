@@ -1,0 +1,3725 @@
+/*
+ * Compact shell of the Document Editor: the visual system.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * The structure geometry is set here: list widths, group composition,
+ * control order.
+ * Structure geometry follows @fileverse/ui
+ *
+ * Density comes from the macOS system metrics: depth is conveyed by blur and
+ * half-tone rather than a border; states are semi-transparent, so they work on any
+ * backing; roundings are larger, motion is longer and softer.
+ *
+ * Color and material are the AIR design system tokens, carried over by value.
+ * The shell has no brand accent of its own: since the palette comes from the
+ * design system, the accent comes from it too.
+ *
+ * The row heights are duplicated in CompactShell.js (H_HEADER, H_MENU,
+ * H_TOOLBAR): the shell reserves the room in the engine layout itself.
+ * They must be changed in both places at once.
+ */
+
+/* --- Tokens: color ------------------------------------------------------- */
+/* Color is declared as runtime variables, not LESS constants: the theme is switched
+   on a live page (the engine puts the theme-type-dark class on body,
+   Themes.js:295), and LESS cannot be rebuilt at that moment.
+
+   The LESS variables below refer to the same custom properties, so the whole
+   palette changes with one block of values, without touching a single rule.
+
+   The source of the values is the AIR tokens, the `:root, .--ui-context-content-light` block.
+   There is no design-tokens package in the editor, so the values are written
+   as literals, the same mechanism as for the font and icons. In the comments
+   on the right is the AIR token name without the `--ui-color-` prefix; the value is
+   checked against the source by it.
+
+   The early-start class vo-boot gets the same tokens: the frame before
+   the shell is built is painted with its colors. */
+
+body.vo-compact,
+body.vo-boot {
+    --vo-shell-bg:     #ffffff;                    /* bg-content-primary */
+    --vo-surface:      #ffffff;                    /* bg-content-primary */
+    --vo-canvas-bg:    #eef2f4;                    /* bg-content-tertiary */
+
+    --vo-border:       rgba(0, 0, 0, .08);         /* divider-vibrant-accent */
+    --vo-separator:    rgba(0, 0, 0, .05);         /* divider-vibrant-default */
+
+    --vo-text:         #333333;                    /* base-1 */
+    --vo-text-2:       #525c69;                    /* base-2 */
+    --vo-text-3:       #828b95;                    /* base-3 */
+    --vo-text-off:     #a8adb4;                    /* base-4 */
+    --vo-icon:         #828b95;                    /* base-3 */
+
+    --vo-link:         #0154c8;                    /* accent-main-link */
+    --vo-link-underline: rgba(1, 84, 200, .3);     /* accent-main-link-underline, #0154c84d */
+
+    --vo-hover:        rgba(0, 0, 0, .03);         /* bg-state-hover-default */
+    --vo-active:       rgba(0, 0, 0, .06);         /* bg-state-click-default */
+
+    --vo-selected:     #edf7ff;                    /* design-selection-bg */
+    --vo-selected-fg:  #0075ff;                    /* design-selection-content */
+
+    /* AIR tinted button style. The values are from the AIR tokens, not picked
+       by eye: design-tinted-bg → accent-soft-blue-2, design-tinted-content →
+       accent-main-link. There is no border: design-tinted-stroke-weight is 0.
+       AIR computes the states with color-mix of the background with bg-state-hover/click-default
+       (the same rgba(0,0,0,.03) and .06 as ours): here they are precomputed,
+       because LESS is compiled in the browser, and an extra CSS function in a value
+       is better not run through its parser. */
+    --vo-tinted-bg:    #e6f4ff;                    /* design-tinted-bg */
+    --vo-tinted-fg:    #0154c8;                    /* design-tinted-content */
+    --vo-tinted-hover: #dfedf7;                    /* bg + bg-state-hover-default */
+    --vo-tinted-act:   #d8e5f0;                    /* bg + bg-state-click-default */
+
+    /* AIR outline button style. Its background and label are already above:
+       design-outline-bg is bg-content-primary (--vo-surface), and
+       design-outline-content is base-2 (--vo-text-2). Only the border is its own. */
+    --vo-outline-stroke: #edeef0;                  /* design-outline-stroke → base-7 */
+    --vo-outline-hover:  #f7f7f7;                  /* bg + bg-state-hover-default */
+    --vo-outline-act:    #f0f0f0;                  /* bg + bg-state-click-default */
+    /* AIR badge (ui.system.label): the tintedNoAccent style. */
+    --vo-badge-na-bg:    #edeef0;                  /* design-tinted-na-bg → base-7 */
+    --vo-badge-na-fg:    #828b95;                  /* design-tinted-na-content → base-3 */
+    --vo-accent: #0075ff;                          /* accent-main-primary */
+    --vo-accent-hover: #0072f8;                    /* see below: the hover overlay */
+    --vo-focus:        #4a9dff;                    /* focus-outline (blue-57) */
+    --vo-danger:       #ff5752;                    /* accent-main-alert */
+
+    --vo-shadow:       0 8px 17px rgba(0, 0, 0, .21);   /* box-shadow-popup-default */
+    --vo-shadow-raised: 0 1px 2px rgba(0, 0, 0, .13);   /* area-box-shadow-secondary */
+
+    /* Compact windows (compact-windows.less and the window files). Here only
+       what is not above; the surface, text base-1/2/4, accent-main-primary
+       (field border on input, check mark, focus ring), accent-main-alert,
+       hover, press, design-selection-bg, outline and tinted of a window are taken
+       from the ready --vo-*. Hover and press of a filled button are precomputed
+       in advance, as for tinted; --vo-accent-hover is not taken for this: it
+       differs from the computation by one (#0072f8 against #0071f7).
+       By groups: border and label of a field, checkbox and list; AIR disabled is
+       a gray fill without a border and pale text; buttons; the row separator of
+       the menu and list; the "Delete cells" pictures; the uploader and the page
+       sample of "Watermark". */
+    --vo-win-stroke:       #edeef0;                /* base-7 */
+    --vo-win-label:        #828b95;                /* base-3 */
+    --vo-win-off-bg:       #edeef0;                /* design-disabled-bg → base-7 */
+    --vo-win-off-fg:       #c9ccd0;                /* design-disabled-content → base-5 */
+    --vo-win-white:        #ffffff;                /* base-white-fixed */
+    --vo-win-filled-hover: #0071f7;                /* design-filled-bg + bg-state-hover-default */
+    --vo-win-filled-act:   #006ef0;                /* design-filled-bg + bg-state-click-default */
+    --vo-win-seg-stroke:   #58b1ff;                /* design-outline-a2-stroke → accent-main-primary-alt-2 */
+    --vo-win-divider:      #f0f0f0;                /* divider-default */
+    --vo-win-cell:         #c4e6ff;                /* accent-soft-blue-1 */
+    --vo-win-cell-del:     #ffcdcc;                /* accent-soft-red-1 */
+    --vo-win-drop-stroke:  #c9ccd0;                /* base-5 */
+    --vo-win-thumb-bg:     #f6fafb;                /* bg-content-secondary */
+    --vo-win-page-line:    #edeef0;                /* base-7 */
+    --vo-win-page-shadow:  0 0 0 1px #edeef0, 0 1px 2px rgba(0, 0, 0, .06);   /* base-7 and the sheet shadow, not in the DS */
+}
+
+/* There is no dark palette on purpose. It was made and removed: the dark shell
+   looked bad, and half-way support is worse than its absence.
+
+   So the light values are declared for the host dark theme too. Otherwise
+   with the host dark theme we would get what we started with: a dark stock
+   interface and a white shell next to it. Now the shell simply stays
+   light: this is a conscious "not supported", not a breakage.
+
+   The variables are kept: when a designer builds a dark palette, it will be returned
+   with one block of values, without touching a single rule below. */
+body.vo-compact.theme-type-dark,
+body.vo-boot.theme-type-dark {
+    --vo-shell-bg:     #ffffff;                    /* bg-content-primary */
+    --vo-surface:      #ffffff;                    /* bg-content-primary */
+    --vo-canvas-bg:    #eef2f4;                    /* bg-content-tertiary */
+
+    --vo-border:       rgba(0, 0, 0, .08);         /* divider-vibrant-accent */
+    --vo-separator:    rgba(0, 0, 0, .05);         /* divider-vibrant-default */
+
+    --vo-text:         #333333;                    /* base-1 */
+    --vo-text-2:       #525c69;                    /* base-2 */
+    --vo-text-3:       #828b95;                    /* base-3 */
+    --vo-text-off:     #a8adb4;                    /* base-4 */
+    --vo-icon:         #828b95;                    /* base-3 */
+
+    --vo-link:         #0154c8;                    /* accent-main-link */
+    --vo-link-underline: rgba(1, 84, 200, .3);     /* accent-main-link-underline, #0154c84d */
+
+    --vo-hover:        rgba(0, 0, 0, .03);         /* bg-state-hover-default */
+    --vo-active:       rgba(0, 0, 0, .06);         /* bg-state-click-default */
+
+    --vo-selected:     #edf7ff;                    /* design-selection-bg */
+    --vo-selected-fg:  #0075ff;                    /* design-selection-content */
+
+    /* AIR tinted button style. The values are from the AIR tokens, not picked
+       by eye: design-tinted-bg → accent-soft-blue-2, design-tinted-content →
+       accent-main-link. There is no border: design-tinted-stroke-weight is 0.
+       AIR computes the states with color-mix of the background with bg-state-hover/click-default
+       (the same rgba(0,0,0,.03) and .06 as ours): here they are precomputed,
+       because LESS is compiled in the browser, and an extra CSS function in a value
+       is better not run through its parser. */
+    --vo-tinted-bg:    #e6f4ff;                    /* design-tinted-bg */
+    --vo-tinted-fg:    #0154c8;                    /* design-tinted-content */
+    --vo-tinted-hover: #dfedf7;                    /* bg + bg-state-hover-default */
+    --vo-tinted-act:   #d8e5f0;                    /* bg + bg-state-click-default */
+
+    /* AIR outline button style. Its background and label are already above:
+       design-outline-bg is bg-content-primary (--vo-surface), and
+       design-outline-content is base-2 (--vo-text-2). Only the border is its own. */
+    --vo-outline-stroke: #edeef0;                  /* design-outline-stroke → base-7 */
+    --vo-outline-hover:  #f7f7f7;                  /* bg + bg-state-hover-default */
+    --vo-outline-act:    #f0f0f0;                  /* bg + bg-state-click-default */
+    /* AIR badge (ui.system.label): the tintedNoAccent style. */
+    --vo-badge-na-bg:    #edeef0;                  /* design-tinted-na-bg → base-7 */
+    --vo-badge-na-fg:    #828b95;                  /* design-tinted-na-content → base-3 */
+    --vo-accent: #0075ff;                          /* accent-main-primary */
+    --vo-accent-hover: #0072f8;                    /* see below: the hover overlay */
+    --vo-focus:        #4a9dff;                    /* focus-outline (blue-57) */
+    --vo-danger:       #ff5752;                    /* accent-main-alert */
+
+    --vo-shadow:       0 8px 17px rgba(0, 0, 0, .21);   /* box-shadow-popup-default */
+    --vo-shadow-raised: 0 1px 2px rgba(0, 0, 0, .13);   /* area-box-shadow-secondary */
+
+    /* Compact windows (compact-windows.less and the window files). Here only
+       what is not above; the surface, text base-1/2/4, accent-main-primary
+       (field border on input, check mark, focus ring), accent-main-alert,
+       hover, press, design-selection-bg, outline and tinted of a window are taken
+       from the ready --vo-*. Hover and press of a filled button are precomputed
+       in advance, as for tinted; --vo-accent-hover is not taken for this: it
+       differs from the computation by one (#0072f8 against #0071f7).
+       By groups: border and label of a field, checkbox and list; AIR disabled is
+       a gray fill without a border and pale text; buttons; the row separator of
+       the menu and list; the "Delete cells" pictures; the uploader and the page
+       sample of "Watermark". */
+    --vo-win-stroke:       #edeef0;                /* base-7 */
+    --vo-win-label:        #828b95;                /* base-3 */
+    --vo-win-off-bg:       #edeef0;                /* design-disabled-bg → base-7 */
+    --vo-win-off-fg:       #c9ccd0;                /* design-disabled-content → base-5 */
+    --vo-win-white:        #ffffff;                /* base-white-fixed */
+    --vo-win-filled-hover: #0071f7;                /* design-filled-bg + bg-state-hover-default */
+    --vo-win-filled-act:   #006ef0;                /* design-filled-bg + bg-state-click-default */
+    --vo-win-seg-stroke:   #58b1ff;                /* design-outline-a2-stroke → accent-main-primary-alt-2 */
+    --vo-win-divider:      #f0f0f0;                /* divider-default */
+    --vo-win-cell:         #c4e6ff;                /* accent-soft-blue-1 */
+    --vo-win-cell-del:     #ffcdcc;                /* accent-soft-red-1 */
+    --vo-win-drop-stroke:  #c9ccd0;                /* base-5 */
+    --vo-win-thumb-bg:     #f6fafb;                /* bg-content-secondary */
+    --vo-win-page-line:    #edeef0;                /* base-7 */
+    --vo-win-page-shadow:  0 0 0 1px #edeef0, 0 1px 2px rgba(0, 0, 0, .06);   /* base-7 and the sheet shadow, not in the DS */
+}
+
+@vo-shell-bg:       var(--vo-shell-bg);
+@vo-surface:        var(--vo-surface);
+@vo-canvas-bg:      var(--vo-canvas-bg);
+@vo-border:         var(--vo-border);
+@vo-separator:      var(--vo-separator);
+@vo-text:           var(--vo-text);
+@vo-text-2:         var(--vo-text-2);
+@vo-text-3:         var(--vo-text-3);
+@vo-text-off:       var(--vo-text-off);
+@vo-icon:           var(--vo-icon);
+@vo-link:           var(--vo-link);
+@vo-link-underline: var(--vo-link-underline);
+@vo-hover:          var(--vo-hover);
+@vo-active:         var(--vo-active);
+@vo-selected:       var(--vo-selected);
+@vo-selected-fg:    var(--vo-selected-fg);
+@vo-tinted-bg:      var(--vo-tinted-bg);
+@vo-tinted-fg:      var(--vo-tinted-fg);
+@vo-tinted-hover:   var(--vo-tinted-hover);
+@vo-tinted-act:     var(--vo-tinted-act);
+@vo-outline-stroke: var(--vo-outline-stroke);
+@vo-outline-hover:  var(--vo-outline-hover);
+@vo-outline-act:    var(--vo-outline-act);
+@vo-badge-na-bg:    var(--vo-badge-na-bg);
+@vo-badge-na-fg:    var(--vo-badge-na-fg);
+@vo-outline-w:      1.5px;                       /* border-width-medium */
+/* Hover on an element filled with the accent. There is no ready token for it in AIR:
+   it does not paint hover with a separate color, but mixes an overlay over
+   the base (`.--ui-hoverable` is a color-mix of the base with
+   `bg-state-hover-default`, that is with black 3%). Recomputed from
+   accent-main-primary: #0075ff + black 3% = #0072f8. We did not compute it in CSS:
+   less.js in the browser is not obliged to understand color-mix(in srgb, ...). */
+@vo-accent:         var(--vo-accent);
+@vo-accent-hover:   var(--vo-accent-hover);
+
+/* The AIR focus ring is solid and 2px (`--ui-focus-outline-width`), not
+   semi-transparent at 3px, as it was. The width is moved to a token: if a solid
+   ring turns out heavy, the rollback is one line, not three places in the file.
+   We still draw it with a shadow, not outline: outline-offset is clipped
+   by a clipping ancestor, and the ring disappears entirely. */
+@vo-focus:          var(--vo-focus);
+@vo-focus-w:        2px;
+
+@vo-danger:         var(--vo-danger);
+
+/* Compact windows use the same custom properties, see the values block above. */
+@vo-win-stroke:       var(--vo-win-stroke);
+@vo-win-label:        var(--vo-win-label);
+@vo-win-off-bg:       var(--vo-win-off-bg);
+@vo-win-off-fg:       var(--vo-win-off-fg);
+@vo-win-white:        var(--vo-win-white);
+@vo-win-filled-hover: var(--vo-win-filled-hover);
+@vo-win-filled-act:   var(--vo-win-filled-act);
+@vo-win-seg-stroke:   var(--vo-win-seg-stroke);
+@vo-win-divider:      var(--vo-win-divider);
+@vo-win-cell:         var(--vo-win-cell);
+@vo-win-cell-del:     var(--vo-win-cell-del);
+@vo-win-drop-stroke:  var(--vo-win-drop-stroke);
+@vo-win-thumb-bg:     var(--vo-win-thumb-bg);
+@vo-win-page-line:    var(--vo-win-page-line);
+@vo-win-page-shadow:  var(--vo-win-page-shadow);
+
+/* --- Tokens: geometry ---------------------------------------------------- */
+
+/* It was 40. It became 46 together with the name font size growing to 18: the name field box
+   grew to 29.71, and in the header exactly 30px of content remained for it
+   (40 minus the top padding 10): flush, without air below.
+
+   Along the way the crooked top padding was fixed.
+   Measured on the previous code: from the header top to the name box 12.29px, from
+   the name box to the first menu item 2.29px, from the menu item to the menu row
+   bottom 10px. That is, all the air was outside the block, and the name and menu were
+   squeezed against each other; the comment at .vo-hd meanwhile claimed that the block is framed
+   symmetrically: it spoke about the literal equality of the paddings (10 on top of
+   the header = 10 below the menu) and did not notice that the name inside its row slips
+   down.
+
+   Now: 10 above the name, 6 between the name and the menu, 10 under the menu. The outer air
+   is equal on both sides, the inner gap became visible.
+   The sum of the chrome above the panel: it was 40 + 30 = 70, now 46 + 30 = 76.
+   DUPLICATED in CompactShell.js as H_HEADER: change as a pair. */
+@vo-h-header:       46px;
+@vo-h-menu:         30px;
+@vo-h-toolbar:      44px;
+/* The gap under the panel card; above it is @vo-tb-gap-top (the "Panel" block).
+   Duplicated in CompactShell.js as H_TB_GAP: change as a pair. */
+@vo-tb-gap:         8px;
+/* The inner padding of the card. Not duplicated in JS: it does not affect the height.
+   But it affects the available row width: when increasing it, RE-MEASURE the thresholds
+   at which "…" appears and the lower row threshold. */
+@vo-tb-pad:         6px;
+/* Not a literal: the sum must follow the terms. Earlier here was
+   104 against the actual 114, and the discrepancy was masked by the inline style
+   written by applyLayout. */
+@vo-h-shell:        @vo-h-header + @vo-h-menu + @vo-tb-gap-top + @vo-h-toolbar + @vo-tb-gap;
+@vo-h-status:       24px;
+
+@vo-h-ctrl:         32px;
+/* The popup list row is the AIR menu metric, taken from the .popup-window block
+   in the AIR tokens and from .ui-popup-menu-item:
+   36 height, 14 font size, 18 side padding, the container padding only
+   vertical. The row goes the full width, because the AIR menu zeroes the window paddings
+   (noAllPaddings): the hover fill
+   stretches edge to edge, rather than sitting as an inset plate. */
+@vo-row-h:          36px;      // menu-popup-item height
+@vo-row-pad-x:      18px;      // menu-popup-item-padding
+@vo-row-gap:        9px;       // icon → label; AIR has the same gap
+@vo-pop-pad-y:      10px;      // menu-popup-padding
+@vo-fs-row:         14px;      // menu-popup-item-font-size
+@vo-sep-gap:        8px;       // air around the separator; pmenu-divider-padding-TB
+@vo-r-xs:           6px;       // palette swatch; --ui-border-radius-xs
+@vo-r-sm:           8px;       // controls
+@vo-r-md:           12px;      // permanent surfaces: the panel card, the table of contents
+@vo-r-pop:          18px;      // popup surfaces; AIR popup-window-border-radius
+/* 20, not 10: the header, menu, panel and status bar have a common left
+   alignment to the start of the panel. One token holds the line at
+   four things at once: the document name and the right cluster (.vo-hd), the first menu item
+   (.vo-mn, there @vo-pad-x - 8px, because the item has its own padding 8), the left
+   edge of the panel card (#vo-tb, its margin) and the status bar.
+
+   Separating the header from the rest with a separate token (@vo-hd-pad-x) is not allowed:
+   the name moved to 20, while the menu and card stayed at 10, and the line broke.
+
+   The PRICE this token takes from the panel: the card narrows by 20px
+   in total, and the "…" appearance threshold and the lower row threshold depend on the row width.
+   When changing the token, re-measure them. */
+@vo-pad-x:          20px;
+@vo-gap-item:       6px;
+@vo-gap-group:      13px;
+@vo-sep-h:          18px;
+
+@vo-w-zoom:         80px;
+@vo-w-style:        124px;
+@vo-w-font:         112px;
+@vo-w-size:         72px;
+/* Label paddings and the value list chevron (zoom, font, style, font size) use the same
+   names and numbers as spreadsheets. */
+@vo-value-pad-l:    8px;
+@vo-value-pad-r:    6px;
+@vo-value-caret:    13px;
+/* --- Tokens: typography, material, motion -------------------------------- */
+
+/* The fonts are the design system token values, carried over one to one.
+   There is no design-tokens package in the editor, so the stacks are written as literals.
+
+   @vo-font is the AIR `--ui-font-family-primary`, and it is declared
+   as `var(--ui-font-family-system)`. That is **the stock AIR font is the system one**,
+   and this is exactly the family in which the shell was set before: the differences
+   are only in the stack start (`system-ui`) and in the tail (Ubuntu, emoji fallbacks).
+   The second variant is the classic set, the token
+   `--ui-font-family-helvetica`, it is commented out below: if the
+   classic set is needed rather than AIR, switching is one line.
+
+   The AIR variant (system) stays. Helvetica Neue sets the shell
+   noticeably narrower, but takes it away from the icon set, which has already been moved
+   to AIR. */
+@vo-font:           system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif,
+                    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+// @vo-font:        "Helvetica Neue", Helvetica, Arial, sans-serif;  // classic set
+@vo-font-mono:      ui-monospace, SFMono-Regular, "SF Mono", Consolas,
+                    "Liberation Mono", Menlo, monospace;
+/* The document name. 18px is --ui-font-size-2xl from the design system scale,
+   not an arbitrary number: it was
+   15 (--ui-font-size-lg), between them is xl = 16. The second step was taken, not
+   the first: at 16 the difference from 15 is not readable, and the name must be noticeably
+   larger.
+   One token for three places: .vo-hd, .vo-hd-title and the hidden twin
+   .vo-hd-sizer, so the name width measurement stays convergent by itself.
+   Font size 18 gives a line-box of 25.71 and a field box of 29.71 (plus padding 2+2),
+   which no longer fit into the former 30px of header content: hence the growth of
+   @vo-h-header, see the comment there. */
+@vo-fs-header:      18px;
+@vo-fs-menu:        13px;
+@vo-fs-ctrl:        13px;
+@vo-fs-status:      11px;
+
+/* Letter spacing uses only the AIR scale (--ui-text-letter-spacing-*:
+   −0.03, −0.02, −0.01, 0.025em or auto). Large text is set tighter
+   than small text, otherwise a heading looks loose next to control labels;
+   control labels go without spacing (auto). The name @vo-track-ctrl stays
+   only for the shared menu bar rules (compact/menu.less) and means auto. */
+@vo-track-tight:    -.01em;     // --ui-text-letter-spacing-neg-3
+@vo-track-ctrl:     normal;     // --ui-text-letter-spacing-auto
+
+/* The popup surface shadow is AIR `box-shadow-popup-default`: one layer
+   instead of the former three. The hairline outline and contact shadow were an Apple
+   technique; AIR separates a popover from the background with one shadow, and adding an outline to it
+   would mean mixing two systems again. The same for all surfaces. */
+@vo-shadow:         var(--vo-shadow);
+@vo-shadow-raised:  var(--vo-shadow-raised);
+
+@vo-ease:           cubic-bezier(.32, .72, 0, 1);   // fast start, soft stop
+@vo-dur-pop:        .22s;
+@vo-dur-state:      .15s;
+
+/* The layers of the shell popup surfaces. The values are NOT its own: this is the stock
+   editor scale (common/main/resources/less/variables.less:267-273):
+   `@zindex-dropdown` 1000 and `@zindex-popover` 1002. Above them lie
+   the hint (1030), the modal window dimming (1040), the window itself (1050) and
+   the loading mask (@zindex-modal + 100 = 1150, loadmask.less:1).
+
+   The former 1200 and 1400 were above this whole scale, while #vo-bubble, #vo-slash and
+   #vo-link are mounted straight into body, that is they compete with windows in the root
+   stacking context. The consequence: the bubble stayed over the dimming and
+   clickable with a dialog open, and likewise overlapped the loading mask,
+   which exists exactly to block input while the engine
+   is busy. Common.UI.Window has no runtime z-index raise, so only we could
+   diverge. The internal order (float over drop) is kept. */
+@vo-z-drop:         1000;
+@vo-z-float:        1002;
+// Root stacking context shared by the shell menus and formatting toolbar.
+@vo-z-toolbar:      30;
+
+/* Two surface recipes, not one. AIR separates them with two shadows:
+   `box-shadow-popup-*` for what is called and fades, `area-box-shadow-*` for
+   what is always visible. The panel card `#vo-tb` is already on the second recipe:
+   here it is just named.
+
+   The model is the `.popup-window` block in the AIR tokens: this is the AIR popup in the
+   form in which the user sees it.
+
+   There is no blur on purpose. The former recipe took `bg-vibrant-default` plus
+   `blur(20px)`: an Apple technique left from the former design
+   system. In AIR blur is enabled only in edge contexts
+   (`--ui-bg-blur-content: var(--ui-bg-blur-accent)`); in content, where the
+   editor lives, `--ui-bg-blur-content: none` is set, and the popup background is opaque
+   (`--ui-color-bg-popup-content-primary: #FFFFFF`).
+
+   Incidentally this cures a pre-redesign defect: a popover opened inside "…",
+   showed through, because a nested `backdrop-filter` does not recompute
+   the backing of the outer one. An opaque background removes the cause, no special rule is needed. */
+.vo-material-popup() {
+    background: @vo-surface;
+    border: none;
+    border-radius: @vo-r-pop;
+    box-shadow: @vo-shadow;
+}
+
+.vo-material-area() {
+    background: @vo-surface;
+    border: none;
+    border-radius: @vo-r-md;
+    box-shadow: @vo-shadow-raised;
+}
+
+/* The popup list row. There is no radius on purpose: in AIR the whole row is
+   selected, not a plate inset into it. So the container must
+   clip, otherwise the fill of the first row sticks out past the rounding 18. */
+.vo-row() {
+    display: flex;
+    align-items: center;
+    gap: @vo-row-gap;
+    width: 100%;
+    min-height: @vo-row-h;
+    padding: 0 @vo-row-pad-x;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: @vo-text;
+    font-family: @vo-font;
+    font-size: @vo-fs-row;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover  { background: @vo-hover; }
+    &:active { background: @vo-active; }
+}
+
+/* List container: air only vertically, rows go the full width. */
+.vo-row-box() {
+    padding: @vo-pop-pad-y 0;
+    overflow: hidden;
+}
+
+/* Section separator. In AIR it is inset by the same 18 as the text, but here one
+   of the two lines lies on a scrollable container (.vo-pop-rest), where it cannot be inset
+   without insetting the scroll area as well. We keep both full width:
+   the pair matters more than matching AIR on a popover 208 wide. */
+.vo-row-sep() {
+    height: 1px;
+    margin: @vo-sep-gap 0;
+    background: @vo-separator;
+}
+
+/* --- Engine canvas -------------------------------------------------------- */
+/* The engine gets these variables through asc_setSkin(): CompactShell.
+   applyCanvasSkin reads them from the canvas node and passes them to it. So the background around
+   the page and the page border can be set from here, without forking sdkjs. The page
+   is white, there is no border: the edge reads by a shadow. */
+
+/* The rule hangs on the children of body, not on body itself. Body is the theme's place: its
+   rules (`:root .theme-…` in colors-table-*.less and in JSON themes) put
+   variables on body via its class, and Themes.js takes the theme colors from body too:
+   for the engine and for the ui-theme cache, from which themeinit.js restores
+   the theme on the next open.
+
+   Two earlier variants each broke one of these places. body.vo-compact
+   (0,1,1) lost to the theme by weight: without our theme (this is how the host opens)
+   the canvas got the theme gray (#f3f3f3 for theme-white), while the strip under the panel and
+   the table of contents stayed @vo-canvas-bg. :root body.vo-compact (0,2,1) overrode
+   the theme but got into its cache: a JSON theme chosen in compact, after
+   a reload lost its canvas and ruler colors in Advanced too.
+
+   Children of body do not meet the theme by weight: its rule does not select them, they
+   only inherit the variable, and their own value is stronger than the inherited one.
+   Body stays with the theme colors, the whole interface inside it with ours. */
+body.vo-compact > * {
+    --canvas-background: @vo-canvas-bg;
+    --canvas-content-background: #ffffff;
+    --canvas-page-border: @vo-canvas-bg;
+
+    /* Rulers. In the stock they are the darkest spot of the screen: ticks and digits #555,
+       margins #d9d9d9, the plate is darker than the canvas itself. Moved to the palette:
+       the text column is highlighted, not the margins, the margins go white,
+       the markup sits down to the label, the indent markers take the accent. */
+    --canvas-ruler-background: @vo-selected;             /* text column */
+    --canvas-ruler-margins-background: @vo-shell-bg;     /* margins */
+    --canvas-ruler-border: #e2e2e2;                      /* divider-accent AIR */
+    --canvas-ruler-mark: @vo-text-off;                   /* ticks and digits */
+    --canvas-ruler-handle-border: @vo-selected-fg;       /* indent markers */
+    --canvas-ruler-handle-border-disabled: @vo-text-off;
+}
+
+/* Layout backing. Where the layout nodes are transparent, #viewport itself is visible, and
+   it is filled not with the canvas but with the theme --background-pane (layout.less). Such a gap
+   exists under the toolbar: 8 px between the shell strip and the canvas. With
+   our theme the difference is unnoticeable, while for theme-white, which the host gets,
+   --background-pane is #f3f3f3, and under the toolbar a gray
+   strip read against the @vo-canvas-bg background. */
+body.vo-compact #viewport {
+    background-color: @vo-canvas-bg;
+}
+
+/* ========================================================================= */
+/*  Modes: compact and advanced are mutually exclusive                       */
+/* ========================================================================= */
+
+.vo-compact {
+    /* The stock ribbon and status bar stay in the DOM but are not shown and do not
+       take room. */
+    #toolbar > *:not(#vo-shell),
+    #statusbar > *:not(#vo-status) {
+        display: none !important;
+    }
+
+    /* The stock title row. The stock shows it above the ribbon when
+       the integration did not send compactHeader (Viewport.onAppShowed, the
+       twoLevelHeader branch), and the platform sends this flag only from a call. The shell
+       does not depend on the stock flags: it draws its own header itself, and the row
+       is always hidden. The vertical layout skips a hidden area
+       (VBoxLayout.doLayout counts only :visible), so no room is
+       left for it. !important is against the stock inline show(). In Advanced
+       there is no class, and the row comes back stock. */
+    #app-title { display: none !important; }
+
+    /* Top of the file menu. The stock puts it inline under the ribbon and, without
+       compactHeader, adds the title row height (Viewport.onAppShowed
+       and onThemeChanged): the very one that is hidden above. Without the correction the menu
+       opened at 56 px and cut the shell menu bar in half, and from a call
+       at 32 px. We hold 32 px (toolbar-height-tabs, common utils.js) under
+       any flags: the menu top is one for any way of opening.
+       In Advanced there is no class, and the stock computes the top again. */
+    .toolbar-fullview-panel { top: 32px !important; }
+
+    /* Version history is the same stock panel as comments and the outline:
+       it cannot be replaced with our own, it has its own controller and its own return button
+       inside (Common.Views.History, #history-btn-back). There is one difference: it lives
+       not inside the left menu but as a separate layout column
+       (Viewport.template: #left-panel-history next to #left-menu), so
+       it does not need the vo-left-open class.
+
+       Earlier it was in the list of forcibly hidden ones above, and the stock panelHistory.show()
+       (view/LeftMenu.js:433) could not override this with
+       !important: history was NEVER shown, even when the integration enabled it.
+       The stock itself keeps it hidden (common.less:162): our job is not to interfere.
+
+       We remove only the padding for the left menu icon column: the stock holds
+       left: 40px for it, and in compact there is no column (its role is played by the buttons
+       of our header), and the panel would move off the edge with an empty strip: exactly the same
+       correction that is made next to it for .left-panel. */
+    #left-panel-history {
+        left: 0;
+        padding-left: 0;
+        padding-right: 0;
+        border-left: none;
+    }
+
+    /* The left menu, on the contrary, stays alive: inside it the comments and
+       document outline panels are stock components with their own callbacks,
+       they cannot be replaced with our own. We hide only the icon column (its role is played
+       by the buttons in our header) and remove the padding of 40px reserved for it,
+       otherwise the panel moves off the edge with an empty strip. */
+    #left-menu {
+        display: none;
+
+        .tool-menu-btns { display: none; }
+
+        .left-panel {
+            padding-left: 0;
+            padding-right: 0;
+            border-right: none;
+            border-left: none;
+        }
+    }
+
+    &.vo-left-open #left-menu {
+        display: block;
+        border-right: 1px solid @vo-border;
+    }
+
+    /* height here is only the default value, before the first applyLayout:
+       then the area height is written inline by shellHeight(), and it differs across
+       the four modes (130 / 60 / 70 / 70).
+       min-height must be zero. Earlier here was min-height:
+       @vo-h-shell, and it overrode the inline style: in focus mode
+       shellHeight() returned 44, while the area stayed 104: the rows were hidden,
+       but the room for them was not. Measured counterfactually: with min-height
+       104px focus gave 104, with zero it gives its own 60.
+       #toolbar has no min-height of its own in the stock editor (not one)
+       (checked by walking the CSSOM), so there is nothing to override here:
+       zero is left explicit so that the intent reads. */
+    #toolbar, .toolbar {
+        height: @vo-h-shell;
+        min-height: 0;
+        /* The canvas color, as for the shell on top: this background is visible only until the
+           first applyLayout, but a white flash at start is also a look. */
+        background: @vo-canvas-bg;
+        box-shadow: none;
+    }
+
+    #statusbar {
+        height: @vo-h-status;
+        min-height: @vo-h-status;
+        background: @vo-shell-bg;
+        border-top: 1px solid @vo-border;
+    }
+
+    /* The right panel is shown only on request. */
+    #right-menu { display: none !important; }
+    &.vo-right-open #right-menu { display: block !important; }
+
+    #editor_sdk { background: @vo-canvas-bg; }
+
+    #vo-back { display: none; }
+
+    /* A hidden top (focus mode or going away on scroll) and a collapsed
+       panel: only the shell height changes (CompactShell.shellHeight).
+       The toolbar row, the bottom row, the rail and the side panels stay.
+       The header and menu bar go away by shifting up by their height (vo-top-away)
+       and at the end of the shift become invisible; then the layout removes them
+       entirely (vo-top-hidden) and gives the room to the document. The return is the reverse:
+       the room, then the slide-in and visibility at once. The order is driven by
+       CompactShell.moveTop, it reads the duration from here. */
+    #vo-shell > .vo-hd,
+    #vo-shell > .vo-mn {
+        transition: transform @vo-dur-state @vo-ease, visibility 0s linear 0s;
+    }
+    &.vo-top-away {
+        #vo-shell > .vo-hd,
+        #vo-shell > .vo-mn {
+            transform: translateY(-(@vo-h-header + @vo-h-menu));
+            visibility: hidden;
+            transition: transform @vo-dur-state @vo-ease, visibility 0s linear @vo-dur-state;
+        }
+    }
+    &.vo-top-hidden {
+        .vo-hd, .vo-mn { display: none; }
+    }
+    &.vo-tb-hidden #vo-tb { display: none; }
+
+    /* View mode: there is nothing to format, so there is no toolbar
+       row. The menu bar stays: the reader needs search, outline,
+       download and print from it. */
+    &.vo-view #vo-tb { display: none; }
+}
+
+/* Early start: the early-start class is set from the moment the config arrives (Gateway init) until
+   the shell is built on app:ready (CompactShell.announce/start). By that
+   time the stock has already removed the loading mask and would show its own title, ribbon,
+   status bar and side menus: they are hidden, and in place of the panel a frame is drawn:
+   heights are set on the areas by bootLayout, here is the color. A white header and menu bar
+   above a strip of the canvas color, as in the shell. The class is removed by endBoot: after
+   the build, after a create() failure or when the attempts run out; then
+   the stock interface comes back whole. */
+body.vo-boot {
+    #app-title,
+    #left-menu,
+    #right-menu,
+    #toolbar > *,
+    #statusbar > * {
+        display: none !important;
+    }
+
+    #toolbar {
+        min-height: 0;
+        background-color: @vo-canvas-bg;
+        background-image: linear-gradient(@vo-shell-bg, @vo-shell-bg);
+        background-repeat: no-repeat;
+        background-position: 0 0;
+        background-size: 100% (@vo-h-header + @vo-h-menu);
+        box-shadow: none;
+    }
+
+    #statusbar {
+        background: @vo-shell-bg;
+        border-top: 1px solid @vo-border;
+    }
+
+    #editor_sdk { background: @vo-canvas-bg; }
+}
+
+/* Smoothness of the shell and document area height change. */
+#vo-shell,
+.vo-compact #toolbar,
+.vo-compact .toolbar {
+    transition: height .3s @vo-ease;
+}
+
+.vo-advanced {
+    /* The structure rail is ours too: in Advanced its place is taken by the stock navigation
+       panel, and two outlines at once are a duplicate that we already removed
+       from the header.
+
+       The code relies on this rule: `toggleRightPanel` (CompactShell.js)
+       writes `rightOpen` unconditionally, and it is safe only because both its
+       manual entry points are hidden here: the "View → Object properties" menu item
+       lies in `#vo-shell`, the bubble button in `#vo-bubble`. If you remove either
+       of the two selectors, go into `toggleRightPanel`: it spells out what
+       will break and why not at once.
+
+       The popup "/" menus and the link popup lie in body, not in #vo-shell,
+       so we hide them with a separate line. CSS alone is not enough: the keyboard
+       would be intercepted by a live handler under the hidden node: the other end
+       of the rule is in SlashMenu.bind()/show() by CompactShell.advanced. */
+    #vo-shell, #vo-status, #vo-outline, #vo-bubble,
+    #vo-slash, #vo-link, #vo-hf-hint { display: none !important; }
+}
+
+/* ========================================================================= */
+/*  Shell                                                                    */
+/* ========================================================================= */
+
+/* The shell background is the canvas color: the panel card lies on it. White
+   is returned selectively to the header and menu bar, each with its own background.
+   border-bottom is removed: under it is now gray on gray, and a hairline
+   would hang between two identical planes. */
+#vo-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: @vo-canvas-bg;
+    font-family: @vo-font;
+    color: @vo-text;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Header --------------------------------------------------------------- */
+
+/* The hidden title twin: the name field width is measured from it. The metrics
+   must match .vo-hd-title, otherwise the measurement drifts. */
+.vo-hd-sizer {
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+    visibility: hidden;
+    white-space: pre;
+    font-family: @vo-font;
+    font-size: @vo-fs-header;
+    font-weight: 600;
+    letter-spacing: @vo-track-tight;
+}
+
+.vo-hd {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* Paddings: 10 on top, 6 below, @vo-pad-x at the sides.
+
+       The earlier edition of this comment claimed that the top padding equals the
+       bottom one at the menu bar and so the block is framed symmetrically. Literally this
+       was true (10 = 10), but visually not: the measurement showed 12.29px above the
+       name box and 2.29px under it, because the name field was centered in the
+       content-box, which was exactly 4.58px taller than the field itself. The name pressed
+       against the menu bar, and the top padding looked crooked.
+
+       The lower 6px are the missing gap to the menu bar; together with the
+       grown @vo-h-header they give 10 / 6 / 10 from top to bottom. Horizontally it is the
+       common @vo-pad-x: the name sits on one line with the first menu item, the left
+       edge of the panel card and the status bar. */
+    box-sizing: border-box;
+    height: @vo-h-header;
+    min-height: @vo-h-header;
+    /* The shell under us is gray (the canvas color), white is here and in .vo-mn. */
+    background: @vo-shell-bg;
+    padding: 10px @vo-pad-x 6px;
+    font-size: @vo-fs-header;
+
+    /* The document name is edited in place, so it behaves like a field: a backing
+       on hover and a ring on focus. The negative margin compensates the
+       padding: without it the name would slip off the grid relative to the menu bar.
+       We catch focus by :focus, not :focus-visible: a text field shows
+       focus always, including on a mouse entry. */
+    .vo-hd-title {
+        /* The field width is set by fitTitle from the text measurement, so it must
+           be the width of the TEXT, not of the box: with the stock border-box the inner
+           paddings ate the last letters of the name. */
+        box-sizing: content-box;
+        max-width: 40%;
+        min-width: 0;
+        margin-left: -6px;
+        padding: 2px 6px;
+        border: none;
+        border-radius: @vo-r-sm;
+        background: transparent;
+        overflow: hidden;
+        white-space: nowrap;
+        font-family: @vo-font;
+        font-size: @vo-fs-header;
+        font-weight: 600;
+        color: @vo-text;
+        letter-spacing: @vo-track-tight;
+        cursor: text;
+
+        &:hover { background: @vo-hover; }
+        &:focus {
+            outline: none;
+            background: @vo-shell-bg;
+            box-shadow: 0 0 0 @vo-focus-w @vo-focus;
+        }
+    }
+
+    /* Save state. "Not saved" and
+       "Saving…" are an AIR badge, ui.system.label of size md, style
+       tintedNoAccent: pill 18px, paddings 8px, text font-size-sm and
+       font-weight-medium. Unsaved is the normal state of the process, not an error,
+       we do not paint it in an alarming color. "Saved" is an icon without a pill,
+       a check mark of the accent-main-primary color. */
+    .vo-hd-state {
+        /* The name field carries its own 6px on the right; we turn them off so that from the name text
+           to the badge it is exactly the header gap. */
+        margin-left: -6px;
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        height: 18px;                    /* --ui-system-label-size, md */
+        padding: 0 8px;                  /* --ui-system-label-padding-x, md */
+        border-radius: 18px;             /* pill: the radius equals the height */
+        background: @vo-badge-na-bg;
+        color: @vo-badge-na-fg;
+        font-family: @vo-font;
+        font-size: @vo-fs-ctrl;          /* font-size-sm, 13px */
+        font-weight: 500;                /* font-weight-medium */
+        line-height: 18px;
+        white-space: nowrap;
+
+        /* The icon is drawn by a mask (.vo-air, 18px: the same height as
+           the pill), the color is taken from color. */
+        &.saved {
+            padding: 0;
+            background: transparent;
+            color: @vo-accent;           /* accent-main-primary */
+        }
+    }
+
+    .vo-hd-right {
+        display: flex;
+        align-items: center;
+        gap: @vo-gap-item;
+        margin-left: auto;
+        flex: 0 0 auto;
+    }
+
+    .vo-hd-user {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        margin-left: 2px;
+        border-radius: 50%;
+        background: @vo-selected;
+        /* A ring instead of a border: the avatar does not detach from the panel. The color is
+           `design-selection-stroke` (accent-soft-blue-1), paired with the fill
+           `design-selection-bg` above. The thickness is 1px, not the former .5px:
+           AIR has nothing thinner than 1px even in "alt" (`border-width-thin`). */
+        box-shadow: inset 0 0 0 1px #c4e6ff;
+        color: @vo-selected-fg;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
+}
+
+/* --- Menu bar ------------------------------------------------------------
+   The menu bar and its list rules are shared, apps/common/main/resources/less/
+   compact/menu.less (imported in app.less before this file). Here only the values of the
+   documents variables and their look over the shared rules (the "Shell look" block). */
+
+/* --- Toolbar row --------------------------------------------------------- */
+
+/* The panel is a card lying on a strip of the canvas color, not a chrome strip.
+   The horizontal padding equals @vo-pad-x on purpose: the left edge of the card sits
+   on the same line as the document name and the first menu item. This token
+   is 20, and the row thresholds were re-measured from the resulting card width.
+   The inner @vo-tb-pad close the frame around the row: a control of 32px in a row of
+   44px gives exactly the same room above and below.
+   border-top is removed: the card is separated by its own shape, not a line.
+   overflow stays visible: popovers go outside the card; the rounding does not
+   cut them, because border-radius without overflow:hidden does not clip. */
+/* position:relative appeared for the editing lock mask (.vo-tb-mask below):
+   it needs a positioned ancestor. The popup panels did not shift because of it:
+   each is positioned from its own wrapper, and those are positioned themselves
+   (.vo-pop-wrap, .vo-of, #vo-tb .vo-more-wrap). */
+#vo-tb {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: @vo-gap-group;
+    height: @vo-h-toolbar;
+    min-height: @vo-h-toolbar;
+    margin: @vo-tb-gap @vo-pad-x;
+    padding: 0 @vo-tb-pad;
+    border-radius: @vo-r-md;
+    background: @vo-surface;
+    /* area-box-shadow-secondary, not box-shadow-popup-default: the panel is always
+       visible, it is not a popup surface. */
+    box-shadow: var(--vo-shadow-raised);
+    white-space: nowrap;
+    overflow: visible;
+
+    .vo-g {
+        display: flex;
+        align-items: center;
+        gap: @vo-gap-item;
+        position: relative;
+
+        /* Separators are thin, without borders around groups. */
+        + .vo-g::before {
+            content: '';
+            position: absolute;
+            left: -7px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1px;
+            height: @vo-sep-h;
+            background: @vo-separator;
+        }
+    }
+
+    .vo-tb-end { margin-left: auto; }
+}
+
+/* The editing lock mask. The meaning of the stock .toolbar-mask is a separate layer over
+   the row that eats clicks, plus muting the content with the masked class
+   (controller/Toolbar.js, DisableToolbar; the look is common/main/resources/less/
+   toolbar.less). We do not repeat the markup: in the stock the mask starts with an offset
+   (top 32, left 48), because it leaves the tab strip and the "File"
+   button alive, while our card has neither: it must be dimmed entirely.
+   A transparent layer, not pointer-events on the whole panel: this way a click does not
+   fall through to what lies under the card. */
+#vo-tb .vo-tb-mask {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: @vo-z-drop;
+    border-radius: @vo-r-md;
+    background: transparent;
+    cursor: default;
+}
+
+/* Muting is the same four as in the stock .masked. The mask itself is excluded from
+   it: it is transparent, and opacity is pointless for it.
+
+   pointer-events is a second lock to the mask, not a replacement for it: the mask covers
+   the row entirely with one layer, but the "…" popover pops up OVER it, and its
+   content would stay clickable. The keyboard path is closed by
+   setLocked with the tab order: opacity alone is not enough for that. */
+#vo-tb.vo-masked > *:not(.vo-tb-mask) { opacity: .4; pointer-events: none; }
+
+/* --- AIR set glyph -------------------------------------------------------- */
+/* A design system icon comes as a separate file and is drawn with a mask: the
+   image itself is filled and has #333 baked in, it can be colored only this way. The fill is
+   currentColor, the text color of the control itself, so hover, the active
+   state and the muted color keep working without edits.
+
+   The size is set by JS via --vo-air-size (by default the same 17px), but a rule
+   with explicit width/height in CSS overrides it: it was so with the stock svg. */
+.vo-air {
+    display: inline-block;
+    width: var(--vo-air-size, 17px);
+    height: var(--vo-air-size, 17px);
+    flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask-image: var(--vo-air-src);
+            mask-image: var(--vo-air-src);
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
+    -webkit-mask-size: contain;
+            mask-size: contain;
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+
+.vo-ib {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: @vo-h-ctrl;
+    min-width: @vo-h-ctrl;
+    padding: 0 4px;
+    border: none;
+    border-radius: @vo-r-sm;
+    background: transparent;
+    color: @vo-icon;
+    font-family: @vo-font;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color @vo-dur-state ease-out,
+                color @vo-dur-state ease-out;
+
+    &:hover:not(:disabled) { background: @vo-hover; color: @vo-text; }
+    &:active:not(:disabled) { background: @vo-active; }
+    &.on { background: @vo-selected; color: @vo-selected-fg; }
+    &:disabled { color: @vo-text-off; cursor: default; }
+
+    /* A soft ring instead of a hard outline: it does not cut the button rounding. */
+    &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+    svg, .vo-air { display: block; }
+}
+
+/* The header accent actions, "share" and "comments", in the AIR
+   tinted style: there is a fill, no border. They are singled out not for beauty but because
+   they are the only two header commands addressed not to the document but to the people
+   around it; the others there are flat.
+
+   A modifier to .vo-ib, not a separate button: size, radius, focus ring
+   and glyph layout must stay shared, otherwise the buttons drop out of the row. */
+.vo-ib.vo-tinted {
+    background: @vo-tinted-bg;
+    color: @vo-tinted-fg;
+
+    &:hover:not(:disabled) { background: @vo-tinted-hover; color: @vo-tinted-fg; }
+    &:active:not(:disabled) { background: @vo-tinted-act; }
+}
+
+/* An icon button in the AIR outline style: a white background and a border instead of a fill.
+   The recipe is the same as for .vo-mode below, and the tokens are the same: design-outline-stroke
+   (base-7, #edeef0) with the thickness border-width-medium 1.5px, the states
+   are precomputed in the palette. A modifier to .vo-ib, not a separate button:
+   size, radius, focus ring and glyph layout stay shared.
+
+   box-sizing is explicit: the border must eat the padding, not grow the height,
+   otherwise the button will diverge in height from its neighbors in the right cluster.
+
+   The name is .vo-outlined, not .vo-outline: the latter is taken by the outline rail
+   (#vo-outline, .vo-outline-list and others), and an identical root would confuse
+   two unrelated things when grepping. */
+.vo-ib.vo-outlined {
+    box-sizing: border-box;
+    border: @vo-outline-w solid @vo-outline-stroke;
+    background: @vo-surface;
+    color: @vo-text-2;
+
+    &:hover:not(:disabled) { background: @vo-outline-hover; color: @vo-text; }
+    &:active:not(:disabled) { background: @vo-outline-act; }
+}
+
+/* The focus mode chevron: the direction shows the state. The chevron.svg glyph
+   points down; while the top is visible (the action is "collapse") we flip it,
+   while it is hidden (the action is "expand") it is the original direction. The sign is the
+   .on class of the button itself, set by CompactShell.setChrome; a body class does not fit:
+   a selector by it would affect all row icons, not only this one. */
+.vo-focus-btn .vo-air { transform: rotate(180deg); }
+.vo-focus-btn.on .vo-air { transform: none; }
+
+.vo-b  { font-weight: 700; }
+.vo-i  { font-style: italic; }
+.vo-u  { text-decoration: underline; }
+.vo-s  { text-decoration: line-through; }
+
+/* The mode button is a secondary action: a fill instead of a border and 4px
+   smaller in height than the main controls, so as not to compete with them for attention. */
+.vo-mode {
+    /* AIR outline style: a white background and a border instead of a fill. The thickness 1.5px
+       is border-width-medium, not rounding; box-sizing is explicit so that
+       the border eats the padding rather than grows the height and diverges from the neighbors
+       in the right cluster. */
+    box-sizing: border-box;
+    height: 28px;                    /* btn-size-sm */
+    /* 6px on the right, not 9: in AIR the chevron side gets
+       dropdown-icon-compensation of 3px, otherwise the glyph visually sinks
+       to the edge and the button stops reading as symmetric. */
+    padding: 0 6px 0 9px;            /* btn-padding-left sm minus the compensation */
+    border: @vo-outline-w solid @vo-outline-stroke;
+    border-radius: @vo-r-sm;         /* border-radius-sm, 8px */
+    background: @vo-surface;
+    color: @vo-text-2;
+    font-family: @vo-font;
+    font-size: @vo-fs-ctrl;          /* font-size-sm, 13px */
+    font-weight: 400;                /* font-weight-normal; at sm it is not medium */
+    letter-spacing: -.01em;          /* btn-letter-spacing sm −0.15px → the AIR scale */
+    cursor: pointer;
+
+    &:hover { background: @vo-outline-hover; color: @vo-text; }
+    &:active { background: @vo-outline-act; }
+    &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+    /* AIR filled primary. The mode switch wears it in all
+       modes (applyDocModeLook), not only in view. The return button
+       (#vo-back) with the same .vo-mode stays outline: the fill
+       is needed only by the mode. */
+    &.accent {
+        background: @vo-selected-fg;
+        border-color: @vo-selected-fg;
+        color: #fff;
+        font-weight: 500;
+
+        &:hover { background: @vo-accent-hover; border-color: @vo-accent-hover; color: #fff; }
+        /* Not a forgotten hardcode: white and white-70% are exactly
+           AIR `design-filled-content` and `design-filled-content-secondary`
+           (#FFFFFF and #FFFFFFB3). There is nothing to rewrite into tokens. */
+        .vo-heading-caret { color: rgba(255, 255, 255, .7); }
+    }
+}
+
+/* The mode button under the stock lock. A class, not the disabled attribute:
+   on a disabled button the browser does not send click, while the second end of the gate in
+   setDocMode must be checked on click too (see applyDocModeLock).
+   The look is the same as for the other disabled shell controls:
+   @vo-text-off plus cursor default; hover and active are removed explicitly, because
+   in .vo-mode they are written without :not(:disabled) and the class would not override them.
+   The accent look is removed along the way: a filled button under the lock would call for an
+   action that does not exist. */
+.vo-mode.vo-locked,
+.vo-mode.vo-locked.accent {
+    background: @vo-surface;
+    border-color: @vo-outline-stroke;
+    color: @vo-text-off;
+    font-weight: 400;
+    cursor: default;
+
+    &:hover, &:active { background: @vo-surface; color: @vo-text-off; }
+    .vo-heading-caret { color: @vo-text-off; }
+}
+
+/* The mode switch is the same dropdown as the heading one. */
+.vo-docmode {
+    .vo-mode {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;                    /* btn-dropdown-icon-inline-space sm */
+    }
+
+    /* The chevron per the AIR spec, not per our habit: 16px instead of 13 and
+       the label color instead of the muted one. design-outline-content-chevron is
+       base-2, the same token as the button text; a pale chevron made the
+       button look homemade. The rule is deliberately narrowed to .vo-docmode:
+       the heading dropdown has its own caret, and we do not touch it. */
+    .vo-heading-caret {
+        /* This caret had no layout of its own: the rule with inline-flex lies
+           under the heading dropdown and did not reach here, so the span stayed
+           a block, and the glyph inside was an inline-block on the baseline. In a row
+           of height 18.57px this raised the chevron 2.29px above the button center;
+           measured, not derived. Flex puts the glyph at the box center, and the caret
+           box is centered by the button itself. */
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        color: inherit;
+
+        svg, .vo-air { width: 16px; height: 16px; }
+    }
+
+    /* Pressing to the right. `&.vo-pop-wrap` is not here for beauty: the mode wrapper
+       carries BOTH classes, and without it the selector `.vo-docmode .vo-pop` (0,2,0)
+       competed on equal terms with `.vo-pop-wrap .vo-pop` (0,2,0) from the block further down the
+       file, and lost to it by order. There was in fact no pressing to the right:
+       the measurement gave transform-origin `0px 0px` instead of `100% 0`, and
+       the popover left edge coincided with the wrapper left edge. The extra class gives
+       (0,3,0) and settles the dispute by specificity, not by what lies lower.
+
+       The mode button is placed in the right header cluster, so the popover
+       must expand inward into the window. With a left anchor and width 270 it
+       stuck out past the right edge by 12.5px in a 1488 window. */
+    &.vo-pop-wrap .vo-pop {
+        left: auto;
+        right: 0;
+        transform-origin: 100% 0;
+
+        /* Its own width, not 208 from `.vo-pop-rich`. The mode row is two-line,
+           and at 208 only 93px were left for the text, while the longest
+           description ("The document is available for reading") needs 169.8px: the labels
+           were cut, and it was visible. 270 was taken by measurement: with a bare
+           glyph instead of a box the popover by content asks for 268.77px.
+           The value is separate from `.vo-pop-rich`, because the same class carries
+           the paragraph style choice, and its width must not change.
+
+           The row height here stays 44 from `.vo-pop-rich`, and this is not
+           a leftover of the box: two-line text itself takes 36.71px
+           (heading 20 + gap 1 + description 15.71), 44 gives it 3.6px
+           of air above and below. Measured after the box was removed. */
+        min-width: 270px;
+    }
+}
+
+/* The "Download" menu is also in the right header cluster, and expands the same way,
+   inward into the window: the popover right edge at the button right edge. Specificity
+   (0,3,0) for the same reason as for the mode above: with `.vo-pop-wrap .vo-pop`
+   from the block further down the file the dispute would be settled by order, and the left
+   anchor would win. The width and rows are shared for lists (.vo-pop-list). */
+.vo-download.vo-pop-wrap .vo-pop {
+    left: auto;
+    right: 0;
+    transform-origin: 100% 0;
+}
+
+#vo-back {
+    margin: 0 8px;
+    vertical-align: middle;
+}
+
+/* A fallback if the right group of the stock header was not found. */
+#vo-back.vo-back-float {
+    position: fixed;
+    top: 6px;
+    right: 12px;
+    z-index: @vo-z-float;
+}
+
+/* --- Lists: almost without borders --------------------------------------- */
+
+/* --- Value list ----------------------------------------------------------- */
+/* A button instead of a native <select>: a label on the left, a chevron on the right. The former
+   control drew the chevron with a background image with a color baked into a data-URI:
+   such a hardcode was not found by grepping token names and survived the move
+   of the palette to AIR. Now the chevron is a regular glyph of the set, and it is colored
+   by a token along with everything else.
+
+   The widths stayed the same (@vo-w-zoom/font/size on the wrapper): both the "…" appearance threshold
+   and the lower row threshold depend on the sum of row widths, so
+   the widths were not changed here. */
+.vo-value {
+    .vo-value-btn {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0 @vo-value-pad-r 0 @vo-value-pad-l;
+        color: @vo-text;
+    }
+
+    .vo-value-label {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .vo-value-caret {
+        display: inline-flex;
+        flex: 0 0 auto;
+        color: @vo-text-off;
+
+        svg, .vo-air { width: @vo-value-caret; height: @vo-value-caret; }
+    }
+}
+
+.vo-w-zoom  { width: @vo-w-zoom; }
+.vo-w-style { width: @vo-w-style; }
+.vo-w-font  { width: @vo-w-font; }
+.vo-w-size  { width: @vo-w-size; }
+
+/* --- Button with a popover ------------------------------------------------ */
+
+/* A dropdown button: the glyph of the current value plus a chevron. The chevron is muted:
+   it is auxiliary, and the glyph carries the meaning. No width of its own is set: the control is wider than
+   an icon button exactly by the chevron, and flex counts that.
+   The glyph lies in a separate node (.vo-drop-i), because it is redrawn by
+   the state callback; the chevron must survive: see dropBtn. */
+.vo-ib.vo-drop {
+    gap: 2px;
+    padding: 0 3px 0 5px;
+
+    .vo-drop-i { display: inline-flex; }
+
+    .vo-drop-c {
+        display: inline-flex;
+        color: @vo-text-off;
+    }
+
+    &:hover:not(:disabled) .vo-drop-c { color: @vo-icon; }
+}
+
+.vo-pop-wrap {
+    position: relative;
+    display: inline-flex;
+
+    .vo-pop {
+        .vo-material-popup();
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: @vo-z-drop;
+        padding: 8px 10px;
+        animation: vo-pop @vo-dur-pop @vo-ease;
+        transform-origin: 0 0;
+    }
+
+    &.open .vo-pop { display: block; }
+
+    /* A popover list: alignment and everything chosen from several
+       named values. An icon on the left, a label on the right: this way the row
+       reads both without an icon and without a label. */
+    .vo-pop.vo-pop-list { .vo-row-box(); }
+
+    .vo-pop-item {
+        .vo-row();
+    }
+
+    /* AIR marks the selected value with a check mark on the right, not a row fill
+       (--menu-popup-item-accept-image, accent-main-primary). The former fill
+       took the design-selection-* pair, that is the role "selected text": similar
+       in look, but the role is different.
+
+       The room for the check mark is always kept: visibility, not display, otherwise the row
+       changes width at the moment of selection and labels jump. */
+    .vo-pop-check {
+        display: inline-flex;
+        flex: 0 0 auto;
+        margin-left: auto;
+        padding-left: @vo-row-gap;
+        color: @vo-accent;
+        visibility: hidden;
+    }
+
+    .vo-pop-item.on .vo-pop-check { visibility: visible; }
+
+    /* A disabled row: a class, not the disabled attribute, as for the
+       mode button (.vo-mode.vo-locked), so that the tooltip with the reason is shown.
+       The disabled color, without the hover fill. */
+    .vo-pop-item.vo-locked,
+    .vo-pop-item.vo-locked:hover,
+    .vo-pop-item.vo-locked:active {
+        color: @vo-text-off;
+        background: transparent;
+        cursor: default;
+    }
+
+    /* As for a menu bar item: the glyph and mark of a disabled row dim together with the label. */
+    .vo-pop-item.vo-locked .vo-pop-i,
+    .vo-pop-item.vo-locked .vo-pop-check { color: @vo-text-off; }
+
+    /* The row under the keyboard cursor. The fill is the same as for hover: after
+       the switch to the check mark the fill means only "this is being looked at now", and
+       it can no longer be confused with the selected value.
+       :focus-visible is the same cursor where focus is on the row itself
+       (the "Download" menu in the header): the browser outline across the full-width row
+       would be cut by the container clip (.vo-row-box, overflow: hidden). */
+    .vo-pop-item.hi,
+    .vo-pop-item:focus-visible { background: @vo-hover; outline: none; }
+
+    /* The value list can be long (16 font sizes), while the popover must remain
+       a popup surface, not a strip across the whole screen. The scroll axis
+       is written explicitly: .vo-row-box() sets overflow: hidden to clip the fill behind
+       the rounding, and one axis must be given back without losing the other.
+       min-width keeps the popover no narrower than its button. */
+    .vo-pop.vo-pop-list.vo-pop-value {
+        min-width: 100%;
+        max-height: 320px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, .22) transparent;
+    }
+
+    .vo-pop-i {
+        display: inline-flex;
+        color: @vo-icon;
+        flex: 0 0 auto;
+    }
+
+    /* A section separator inside one list: alignment and spacing
+       values, lists and indents. The paddings are the same as for the line in the
+       headings list (.vo-pop-rest-on), otherwise the lines in the two popovers are placed
+       differently. */
+    .vo-pop-sep {
+        .vo-row-sep();
+    }
+
+    /* A list with descriptions, as in the heading choice: on the left
+       a square with an icon, on the right the name and a description label under it. */
+    .vo-pop-rich {
+        min-width: 208px;
+
+        /* The box 34 does not fit into the row 36: this branch has its own height. */
+        .vo-pop-item { min-height: 44px; }
+
+        .vo-pop-box {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            flex: 0 0 auto;
+            border-radius: @vo-r-sm;
+            background: @vo-hover;
+            color: @vo-text;
+        }
+
+        .vo-pop-text {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            min-width: 0;
+        }
+
+        .vo-pop-t { font-weight: 500; }
+        .vo-pop-d { color: @vo-text-off; font-size: 11px; }
+
+        /* The other document styles: the same rows, but without an icon and denser:
+           this is the second echelon, not equal items. */
+        .vo-pop-rest {
+            max-height: 220px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0, 0, 0, .22) transparent;
+
+            &.vo-pop-rest-on {
+                margin-top: @vo-sep-gap;
+                padding-top: @vo-sep-gap;
+                border-top: 1px solid @vo-separator;
+            }
+
+            .vo-pop-item { min-height: @vo-row-h; }
+        }
+    }
+}
+
+/* --- Heading choice button ----------------------------------------------- */
+/* The @vo-w-style width: the "Heading 1…9" labels fit whole,
+   and the panel does not spread. */
+
+.vo-heading .vo-heading-btn {
+    width: @vo-w-style;
+    justify-content: space-between;
+    padding: 0 @vo-value-pad-r 0 @vo-value-pad-l;
+    color: @vo-text;
+
+    .vo-heading-label {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .vo-heading-caret {
+        display: inline-flex;
+        flex: 0 0 auto;
+        color: @vo-text-off;
+
+        svg, .vo-air { width: @vo-value-caret; height: @vo-value-caret; }
+    }
+}
+
+/* --- Color buttons ------------------------------------------------------- */
+
+.vo-cb {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+
+    .vo-cb-line {
+        width: 15px;
+        height: 3px;
+        margin-top: -5px;
+        border-radius: 2px;
+        pointer-events: none;
+    }
+
+    /* A popover with a palette. Inside is its own grid (the stock
+       ThemeColorPalette is no longer here), so the width is set by the content,
+       not by an inline style from JS. */
+    .vo-cb-pop {
+        .vo-material-popup();
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: @vo-z-drop;
+        /* The AIR metric instead of the former 5px all around: air only vertically,
+           rows go the full width, overflow clips the hover fill behind the
+           popover rounding. The same mixin as for the other popovers. */
+        .vo-row-box();
+        animation: vo-pop @vo-dur-pop @vo-ease;
+        transform-origin: 0 0;
+    }
+
+    &.open .vo-cb-pop { display: block; }
+
+    /* "Automatic" / "No fill" is a regular AIR menu row: height 36,
+       font size 14, padding 0 18, full width without rounding, hover and
+       press fill from edge to edge. Before, this was an inset plate with the 13
+       font size and radius 6: the only place in the shell where a popover
+       row lived by its own metric. */
+    .vo-cb-reset {
+        .vo-row();
+    }
+
+    /* Separates the command from the values, the same way as the separators in other
+       popovers. Full width: the pair with the rest matters more than insetting by 18. */
+    .vo-cb-sep {
+        .vo-row-sep();
+    }
+
+    /* The side paddings equal the row text indent: the grid and labels sit on one
+       line, otherwise the "Automatic" row would start to the left of the swatches. */
+    .vo-cb-palette { padding: 0 @vo-row-pad-x; }
+
+    /* A local utility, not a global one: in the palette sample this is the modifier
+       `--hidden`, but classes with two leading hyphens are not accepted anywhere in ours. */
+    .vo-hidden { display: none; }
+
+    /* --- Palette grid: the layout follows the design system palette sample -------
+       The values are from there one to one: gap 4px (--ui-space-inline-2xs), the swatch is
+       square, radius 6px (--ui-border-radius-xs), the selected one is marked with
+       a check mark IN THE CENTER with a drop-shadow, not a border: a border gets lost on
+       the dark swatches of the lower rows, while a check mark with a shadow reads on any.
+
+       The difference is one: in the sample the columns are set as minmax(0, 1fr), because
+       there the grid stretches by the side panel width. Here the popover
+       is measured by its content, and the column is set by the swatch size:
+       otherwise the width would depend on what lies next to it. The number of columns
+       comes from JS in --vo-pal-cols: 14 for text color, 8 for a marker. */
+    @vo-pal-cell: 18px;
+    @vo-pal-gap:  4px;
+
+    .vo-pal-grid {
+        display: grid;
+        grid-template-columns: repeat(var(--vo-pal-cols, 14), @vo-pal-cell);
+        gap: @vo-pal-gap;
+        align-content: start;
+    }
+
+    .vo-pal-item {
+        position: relative;
+        width: @vo-pal-cell;
+        height: @vo-pal-cell;
+        min-width: 0;
+        padding: 0;
+        border: none;
+        border-radius: @vo-r-xs;
+        cursor: pointer;
+
+        /* A white swatch on a white popover would otherwise get lost completely. An inner
+           shadow, not a border: a border would eat the swatch size, while inset stays
+           inside and does not shift the grid. */
+        box-shadow: inset 0 0 0 1px @vo-border;
+
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-pal-check {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        transform: translate(-50%, -50%);
+        /* The shadow is of the glyph, not the swatch: it keeps the check mark readable on a color close
+           to its own. The check mark color itself is computed by JS from the
+           swatch brightness. */
+        filter: drop-shadow(0 0 1px rgba(0, 0, 0, .4));
+        pointer-events: none;
+    }
+
+    .vo-pal-item.on .vo-pal-check { display: inline-flex; }
+
+    /* --- Color code field -------------------------------------------------- */
+    /* The top padding 6px is --ui-space-stack-2xs2 from the sample. */
+    .vo-pal-toggle,
+    .vo-pal-custom { margin-top: 6px; }
+
+    .vo-pal-toggle {
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: @vo-selected-fg;
+        font-family: @vo-font;
+        font-size: 13px;
+        cursor: pointer;
+
+        &:hover { text-decoration: underline; }
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-pal-field {
+        display: flex;
+        align-items: center;
+        gap: @vo-pal-gap;
+    }
+
+    .vo-pal-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid @vo-border;
+        border-radius: @vo-r-xs;
+        background: @vo-surface;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: 13px;
+        text-transform: uppercase;
+
+        &:focus { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-pal-preview {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+        border-radius: @vo-r-xs;
+        background: transparent;
+        box-shadow: inset 0 0 0 1px @vo-border;
+        pointer-events: none;
+    }
+}
+
+/* --- Link settings popup ------------------------------------------------- */
+/* Its own surface instead of the stock DE.Views.HyperlinkSettingsDialog.
+   What exactly of the stock dialog is carried over is listed at linkBtn
+   in CompactToolbar.js, so that the replacement does not turn out to be an exchange of look for
+   functionality.
+
+   Three rules of this surface:
+   1) we carry over ALL the work of the stock dialog, not only what is drawn;
+   2) the surface is a popover under the "Link" button, not a modal window;
+   3) when the design mockup and the AIR component diverge, the component wins.
+
+   VALUES ARE THE COMPONENTS', not picked by eye. There is no design-tokens package in
+   the editor, so literals with the token name in a comment are the same
+   mechanism as for the palette and icons. Sources:
+   — box, paddings, header and footer: the ui.system.dialog dialog;
+   — fields: ui.system.input, the `--light-grey` variant;
+   — buttons: AIR buttons, size md;
+   — heading: Headline md from the AIR typography;
+   — popup material: the same `.vo-material-popup()` as for the six other
+     surfaces of the shell.
+
+   WHAT DIVERGES FROM THE MOCKUP, by rule 3, each place is named:
+   — the field labels in the mockup are almost black and large; here they are gray 13
+     (base-3 + font-size-sm: this is how the label is set in ui.system.input);
+   — OK and "Cancel" in the mockup are centered; here they are pressed to the right
+     (ui-system-dialog__right-buttons);
+   — above the footer in the mockup there is a line; in ui.system.dialog the footer is not
+     separated by anything, there is no line.
+   The cross, on the contrary, is kept: it is both in the mockup and in the header
+   ui.system.dialog (ui-system-dialog__header-close-btn).
+
+   WHY THE NODE IS ON BODY, not inside the button wrapper, like the other panel
+   popovers. The "Link" button lies in the second-to-last row group: at narrow
+   widths relayout marks it .vo-collapsed (display:none !important), and
+   openOverflow moves it into the "…" popover. A nested popover would live inside
+   a hidden ancestor and would not show at all, although the link window
+   can be opened from three more places (the selection bubble, the "/" menu, the "Insert" menu).
+   Hence the node is on body and the coordinates by measurement, as for #vo-slash and #vo-bubble. */
+
+#vo-link {
+    /* The card width. ui.system.dialog has no width token of its own: it
+       is set by the popup wrapper, so it is taken from the mockup: the card was shot at 2×,
+       836/2 = 418, rounded to 420. */
+    @vo-link-w:       420px;
+    @vo-link-pad-x:   24px;      /* --ui-system-dialog-padding-x */
+
+    @vo-link-fld-h:   38px;      /* --min-height of .ui-system-input */
+    @vo-link-fld-pad: 12px;      /* --padding-horizontal → --ui-space-inline-sm */
+    @vo-link-fld-r:   8px;       /* --ui-border-radius-sm */
+    @vo-link-fld-bd:  #edeef0;   /* base-7; .ui-system-input.--light-grey */
+    @vo-link-fld-fs:  15px;      /* --ui-font-size-lg */
+
+    @vo-link-lbl-fs:  13px;      /* --ui-font-size-sm */
+    @vo-link-lbl-fg:  #828b95;   /* base-3 */
+    @vo-link-lbl-gap: 6px;       /* --ui-space-stack-2xs2 */
+
+    @vo-link-btn-h:   34px;      /* --ui-btn-size-md */
+    @vo-link-btn-r:   10px;      /* --ui-border-radius-md */
+    @vo-link-btn-pad: 13px;      /* --ui-btn-padding-left/right at md */
+    @vo-link-btn-fs:  14px;      /* --ui-font-size-md */
+
+    @vo-link-gap:     16px;      /* --ui-space-stack-md: between field blocks */
+    @vo-link-gap-lg:  20px;      /* --ui-space-stack-lg: under the tabs */
+
+    .vo-material-popup();
+    display: none;
+    position: absolute;
+    z-index: @vo-z-float;
+    box-sizing: border-box;
+    width: @vo-link-w;
+    font-family: @vo-font;
+    text-align: left;
+    animation: vo-pop @vo-dur-pop @vo-ease;
+    transform-origin: 0 0;
+
+    &.open { display: block; }
+
+    /* Pressed to the right edge of the window: it grows from under its right corner.
+       The side is chosen by measurement on open, not by a media query. */
+    &.vo-link-right { transform-origin: 100% 0; }
+
+    /* A show/hide utility. !important here is not overinsurance: list
+       rows take display:flex from the .vo-row() mixin, their selector has exactly
+       the same specificity (1,1,0), and the rule order would decide who wins:
+       exactly how the one-class .vo-hidden of the palette loses to a neighboring
+       rule. The same technique as for .vo-collapsed in the row. */
+    .vo-link-off { display: none !important; }
+
+    /* --- Header: ui-system-dialog__header ---------------------------------- */
+    /* The heading at the left edge, as in the component
+       (header-left, align-items: flex-start). */
+    .vo-link-hd {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 14px @vo-link-pad-x 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    /* Headline md: 19/26, letter spacing −0.01em (−0.2px on the AIR scale),
+       medium weight. */
+    .vo-link-title {
+        color: @vo-text;
+        font-size: 19px;
+        line-height: 26px;
+        letter-spacing: -.01em;
+        font-weight: 500;
+    }
+
+    .vo-link-x {
+        position: relative;
+        right: -4px;
+        flex: 0 0 auto;
+        width: 24px;
+        height: 26px;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: @vo-text-off;                 /* base-4, as in the component */
+        cursor: pointer;
+
+        &:hover { color: @vo-text-2; }
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    /* --- Body: ui-system-dialog__content ---------------------------------- */
+    .vo-link-body { padding: 12px @vo-link-pad-x 18px; }
+
+    /* --- Tabs ------------------------------------------------------------- */
+    /* AIR has no dedicated component for two tabs: it was not found in ui.system,
+       nested-switcher is about something else. Assembled from what exists:
+       a track on bg-content-tertiary, the selected half is a button in the
+       tinted style, the unselected one is plain. The roles are the same as in the stock dialog: there
+       these are two buttons in a toggle group (Common.UI.GroupedButtons). */
+    .vo-link-tabs {
+        display: flex;
+        margin-bottom: @vo-link-gap-lg;
+        border-radius: @vo-link-btn-r;
+        background: @vo-canvas-bg;           /* bg-content-tertiary */
+        overflow: hidden;
+    }
+
+    .vo-link-tab {
+        flex: 1 1 0;
+        min-width: 0;
+        height: @vo-link-btn-h;
+        padding: 0 @vo-link-btn-pad;
+        border: none;
+        border-radius: @vo-link-btn-r;
+        background: transparent;             /* design-plain-bg */
+        color: @vo-text-2;                   /* design-plain-content → base-2 */
+        font-family: @vo-font;
+        font-size: @vo-link-btn-fs;
+        cursor: pointer;
+
+        &:hover:not(.on)  { background: @vo-hover; }
+        &:active:not(.on) { background: @vo-active; }
+        &:focus-visible { outline: none; box-shadow: inset 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-link-tab.on {
+        background: @vo-tinted-bg;            /* design-tinted-bg */
+        color: @vo-tinted-fg;                 /* design-tinted-content */
+    }
+
+    /* --- Field: ui.system.input ------------------------------------------- */
+    .vo-fld {
+        position: relative;                  /* for the error label */
+        display: block;
+    }
+
+    .vo-fld + .vo-fld { margin-top: @vo-link-gap; }
+
+    /* The tab panel is not .vo-fld, so the rule above does not catch it, and
+       without this line "Display" would stick to the address field. */
+    .vo-link-pane + .vo-fld { margin-top: @vo-link-gap; }
+
+    .vo-fld-label {
+        display: block;
+        max-width: max-content;
+        margin-bottom: @vo-link-lbl-gap;
+        color: @vo-link-lbl-fg;
+        font-size: @vo-link-lbl-fs;
+        line-height: 1.3;                    /* --ui-font-line-height-2xs */
+    }
+
+    .vo-fld-box {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        gap: @vo-link-fld-pad;
+        min-height: @vo-link-fld-h;
+        padding: 0 @vo-link-fld-pad;
+        border: 1px solid @vo-link-fld-bd;
+        border-radius: @vo-link-fld-r;
+        background: @vo-surface;
+        cursor: text;
+    }
+
+    /* The border of an active field is accent-main-primary: in the --light-grey variant
+       it is what is set in --border-color-active, not accent-main-link. */
+    .vo-fld-box.on { border-color: @vo-accent; }
+
+    .vo-fld-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-link-fld-fs;
+        line-height: 1.35;                   /* --ui-font-line-height-sm */
+
+        &:focus { outline: none; }
+        &::placeholder { color: @vo-text-off; }   /* base-4 */
+    }
+
+    /* The unavailable "Display" field: the engine did not give the selection text: there is
+       nothing to change. The values are from the .ui-system-input.--disabled block. */
+    .vo-fld.vo-fld-dis .vo-fld-box {
+        border-color: transparent;
+        background: @vo-outline-stroke;      /* base-7 */
+        pointer-events: none;
+    }
+
+    .vo-fld.vo-fld-dis .vo-fld-input { color: #c9ccd0; }   /* base-5 */
+
+    .vo-fld-icon {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        color: @vo-link-lbl-fg;              /* --icon-color → base-3 */
+        pointer-events: none;
+    }
+
+    /* Address validation error. It does not move the layout: in the component the label
+       lies absolutely on the bottom edge of the field and covers it. */
+    .vo-fld.vo-fld-err .vo-fld-box { border-color: @vo-danger; }
+
+    .vo-fld-msg {
+        position: absolute;
+        bottom: -6px;
+        left: 8px;
+        max-width: calc(100% - 16px);
+        padding: 0 4px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        border-radius: 4px;                  /* --ui-border-radius-2xs */
+        background: @vo-surface;
+        color: @vo-danger;
+        font-size: @vo-link-lbl-fs;
+        line-height: 1.3;
+    }
+
+    /* --- The "Place in document" list ------------------------------------- */
+    /* A box of the same recipe as the field: it is the second look of the same
+       "Link to" row. The rows inside use the AIR row metric (the .vo-row() mixin), the
+       same as for the other shell popovers. */
+    .vo-link-list {
+        max-height: 180px;                   /* five rows of 36 */
+        overflow-y: auto;
+        border: 1px solid @vo-link-fld-bd;
+        border-radius: @vo-link-fld-r;
+        background: @vo-surface;
+    }
+
+    .vo-link-row {
+        .vo-row();
+
+        /* The separator is drawn with a border, not an inset box-shadow: the separator
+           shadow would compete with the focus ring for the same property
+           at equal specificity (1,2,0) and, lying lower in the source, would turn off
+           the ring for all rows except the first. And rows are focused
+           by arrows programmatically, so the indicator is mandatory.
+
+           Every row has a border, the first one a transparent one: otherwise the rows
+           would diverge in height by 1px. box-sizing is explicit: the border must
+           eat the height inside, not grow on top of min-height, otherwise five
+           rows will stop fitting in the list max-height (180 = 5 × 36). */
+        box-sizing: border-box;
+        border-top: 1px solid transparent;
+
+        &:focus-visible { outline: none; box-shadow: inset 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    /* The separator between rows is divider-default. */
+    .vo-link-row + .vo-link-row { border-top-color: #f0f0f0; }
+
+    /* Nested rows: headings and bookmarks inside their sections. The indent
+       is counted from the row padding, the step is --ui-space-inline-sm. */
+    .vo-link-row.vo-link-l1 { padding-left: @vo-row-pad-x + 12px; }
+    .vo-link-row.vo-link-l2 { padding-left: @vo-row-pad-x + 24px; }
+    .vo-link-row.vo-link-l3 { padding-left: @vo-row-pad-x + 36px; }
+
+    /* A section row is not selectable by itself: in the stock dialog selecting
+       level 0 with an index above zero leaves OK unavailable. */
+    .vo-link-row.vo-link-grp { color: @vo-text-2; }
+
+    .vo-link-chev {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        /* The width is set, not taken from the glyph: for rows without a chevron the node is empty,
+           and without it their labels would shift left by the chevron width and gap. */
+        width: 16px;
+        color: @vo-text-off;
+        transition: transform @vo-dur-state @vo-ease;
+    }
+
+    .vo-link-row.vo-link-open .vo-link-chev { transform: rotate(180deg); }
+
+    .vo-link-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* The selected row is marked with a check mark on the right, the same as the selected
+       value in the other popovers. */
+    .vo-link-check {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        visibility: hidden;
+        color: @vo-selected-fg;
+    }
+
+    .vo-link-row.on .vo-link-check { visibility: visible; }
+
+    .vo-link-empty {
+        display: flex;
+        align-items: center;
+        min-height: @vo-row-h;
+        padding: 0 @vo-row-pad-x;
+        color: @vo-text-off;
+        font-size: @vo-fs-row;
+    }
+
+    /* --- Footer: ui-system-dialog__footer --------------------------------- */
+    .vo-link-ft {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0 12px;
+        padding: 0 @vo-link-pad-x;
+    }
+
+    .vo-link-btn {
+        height: @vo-link-btn-h;
+        margin-bottom: 24px;
+        padding: 0 @vo-link-btn-pad;
+        border: none;
+        border-radius: @vo-link-btn-r;
+        font-family: @vo-font;
+        font-size: @vo-link-btn-fs;
+        cursor: pointer;
+
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    /* OK is filled, "Cancel" is filled-white: both from the AIR button set, the second
+       with exactly the light fill in which it is drawn in the mockup
+       (design-filled-white-bg; the border of this style has zero thickness). */
+    .vo-link-btn.vo-link-ok {
+        background: @vo-accent;
+        color: #ffffff;                      /* design-filled-content */
+
+        &:hover:not(:disabled) { background: @vo-accent-hover; }
+        &:disabled { background: @vo-text-off; cursor: default; }   /* filled-na-bg → base-4 */
+    }
+
+    .vo-link-btn.vo-link-cancel {
+        background: #fafafc;                 /* design-filled-white-bg */
+        color: @vo-text-2;                   /* design-filled-white-content → base-2 */
+
+        &:hover  { background: #f3f3f5; }    /* + bg-state-hover-default */
+        &:active { background: #ebebed; }    /* + bg-state-click-default */
+    }
+}
+
+/* --- Status -------------------------------------------------------------- */
+
+#vo-status {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: @vo-h-status;
+    padding: 0 @vo-pad-x;
+    background: @vo-shell-bg;
+    font-family: @vo-font;
+    font-size: @vo-fs-status;
+    color: @vo-text-2;
+
+    .vo-st-left { margin-right: auto; }
+    .vo-st-item { white-space: nowrap; }
+
+    /* The status toggles are textual, without borders: the bottom row must
+       read as a label, not as a row of buttons. The enabled state is given by
+       the accent color, not a fill. */
+    .vo-st-btn {
+        height: 18px;
+        padding: 0 6px;
+        border: none;
+        border-radius: @vo-r-sm;
+        background: transparent;
+        color: @vo-text-2;
+        font-family: @vo-font;
+        font-size: @vo-fs-status;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover { background: @vo-hover; color: @vo-text; }
+        &.on { color: @vo-selected-fg; }
+    }
+
+    /* The status buttons are lower and lighter than the panel buttons: this is a reference strip,
+       not a working surface. */
+    .vo-st-btn {
+        height: 18px;
+        padding: 0 7px;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        color: @vo-text-2;
+        font-family: @vo-font;
+        font-size: @vo-fs-status;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover { background: @vo-hover; color: @vo-text; }
+    }
+
+    /* A status button under the stock editing ban. Of the whole strip only
+       spelling gets here: the stock does not touch zoom and counters under the ban
+       (Statusbar.SetDisabled dims the language and the review
+       toggle), and the language is a label for us, not a control.
+       A class, not disabled: by the same rule as in the menu bar.
+       It goes after both .vo-st-btn blocks on purpose: their weight is the same,
+       and the order decides. */
+    .vo-st-btn.vo-locked {
+        color: @vo-text-off;
+        cursor: default;
+
+        &:hover { background: transparent; color: @vo-text-off; }
+        &.on { color: @vo-text-off; }
+    }
+
+    .vo-st-zoom {
+        height: 18px;
+        width: 62px;
+        padding: 0 15px 0 5px;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        color: @vo-text-2;
+        font-family: @vo-font;
+        font-size: @vo-fs-status;
+        line-height: 1;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1.25 1.75L4.5 4.75l3.25-3' fill='none' stroke='%236e6e73' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 4px center;
+
+        &:hover { background-color: @vo-hover; color: @vo-text; }
+        &:focus { outline: none; }
+    }
+}
+
+/* ========================================================================= */
+/*  Desktop adaptivity                                                       */
+/* ========================================================================= */
+
+/* The order of groups in the tail is set by their priority: from left to right it falls
+   monotonically, so hiding the tail leaves no holes in the middle of the row. */
+
+#vo-tb .vo-of {
+    display: flex;
+    position: relative;
+    align-items: center;
+    gap: @vo-gap-group;
+}
+
+/* The separator before the tail is the same as between regular groups. */
+#vo-tb .vo-g + .vo-of::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: @vo-sep-h;
+    background: @vo-separator;
+}
+
+/* Collapsing is computed by JS (CompactToolbar.relayout): it measures the row and hides
+   controls one by one from the end. There are no more media queries with numbers: they
+   went stale with every added control, including one not in the panel.
+
+   The class hangs on both the control and the emptied group and the tail itself:
+   the separator is drawn via ::before and without this hangs in the air.
+   The same class hides the "…" button when there is nothing to hide: the popover would
+   otherwise open onto emptiness. */
+#vo-tb .vo-collapsed { display: none !important; }
+
+/* The overflow popover. Separate controls move into it (see
+   openOverflow), and .vo-collapsed is removed from them: the class means "does not
+   fit in the row", and here they must be visible.
+
+   The reference is .vo-more-wrap, the wrapper of its own button: right:0
+   aligns the right edges of the popover and "…", transform-origin grows it
+   from under it. Earlier the ancestor was .vo-tb-end, and the popover expanded at the
+   right edge of the panel, apart from the button that opened it. */
+.vo-of-pop {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: @vo-z-drop;
+    flex-wrap: wrap;
+    align-items: center;
+    /* An absolute flex container shrinks to min-content and breaks the row
+       into one button per line. We ask for width by content and limit
+       from above so that the popover does not stretch across the whole screen. */
+    width: max-content;
+    max-width: 420px;
+    box-sizing: border-box;
+    row-gap: 4px;
+    column-gap: @vo-gap-group;
+    padding: 6px 10px;
+    .vo-material-popup();
+    animation: vo-pop @vo-dur-pop @vo-ease;
+    transform-origin: 100% 0;
+}
+
+#vo-tb.vo-of-open .vo-of-pop { display: flex; }
+
+/* Groups in the popover are their own, empty wrappers: they are built by openOverflow to
+   keep the split of the moved controls. */
+.vo-of-pop > .vo-g {
+    display: flex;
+    align-items: center;
+    gap: @vo-gap-item;
+    position: relative;
+
+    &::before { display: none; }
+}
+
+/* "…" sits in the row itself, right after the last group, and is separated
+   from it by the same stick as groups from each other. The separator is absolute
+   and does not enter the control width: it does not affect the collapse computation.
+
+   The wrapper around "…" is not a group and deliberately does not carry the .vo-g class: an empty
+   group outside the tail would stay drawn at wide widths, where "…" is
+   hidden, and would give a separator hanging in the air (syncGroups goes over
+   only the groups inside .vo-of). Here the wrapper itself is hidden entirely,
+   .vo-collapsed takes the pseudo-element away with it.
+
+   The wrapper is needed by the popover: it is absolute and is counted from the nearest
+   positioned ancestor. While that was .vo-tb-end, the popover expanded at the
+   right edge of the panel, where its button no longer is. */
+#vo-tb .vo-more-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+
+    &::before {
+        content: '';
+        position: absolute;
+        left: -7px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: @vo-sep-h;
+        background: @vo-separator;
+    }
+}
+
+/* Lists narrow on a narrow screen: this is about density, not about collapsing,
+   so it stayed a media query. */
+@media (max-width: 1280px) {
+    #vo-tb .vo-w-font { width: 88px; }
+    #vo-tb .vo-heading .vo-heading-btn { width: 108px; }
+}
+
+/* The rule "below 980 hide the font" is no longer here. It was an emergency
+   valve against overflow, and it hid a CORE control, outside the tail: it does not
+   move into "…", there was nothing to show it with, and the command became unreachable.
+   It also left an empty group with a hanging separator in the row. The valve is not
+   needed: the row counts itself, the core with the right corner fits even in 860 px. */
+
+
+/* ========================================================================= */
+/*  Document outline beside the page                                         */
+/* ========================================================================= */
+/* The rail lies OVER the field around the page, and does not push it aside: the page
+   stays in place on show and hide.
+
+   The rail has NO surface: neither an area material nor a light backing of its own.
+   There is no section heading either.
+   The expanded rail is rows of headings right on the field around the page,
+   with a chevron above them; the collapsed one is a single pill with the number of headings.
+
+   Hence two consequences that are easy to lose in the next edit:
+
+   1. **The column width stayed and is still computed from the page.** It is not
+      visible, but it cuts long headings with an ellipsis and keeps them
+      away from the document text: otherwise the rail rows and the page text
+      would merge into one mess on a narrow screen.
+   2. **Clicks through the rail must pass.** While there was a backing, the column
+      honestly intercepted the mouse over its whole height. Without a backing such
+      a column would become an invisible strip that eats clicks on the document,
+      so `pointer-events` is enabled selectively: on the chevron and on the list, and
+      the list holds the height by content, not the whole column.
+
+   A note on readability: the rows lie on the field (`--vo-canvas-bg`, #eef2f4),
+   and at a large zoom on the white page. Both backings are light, the row color
+   `base-2` reads on each; this support becomes thin only
+   if the page turns out dark, and we have no dark palette on purpose. */
+
+/* The width is one and fixed. The 180 / 240 at ≥1320 / 280
+   at ≥1600 ladder was canceled together with the measurement-based choice: the rail always takes room and
+   never gives its width back.
+
+   160, not 180, by measurement: at 1024 the width
+   180 leaves the document 3px of horizontal scrolling, and a strip at the bottom of the canvas
+   appears for three pixels. 160 gives a canvas of 864 with 847 needed,
+   that is a reserve of 17. The former price of such narrowing, cutting headings
+   with an ellipsis, was removed by line wrapping.
+
+   The number is duplicated in OutlineRail.js (RAIL_W): keep them paired. If they diverge,
+   the spacer stops matching the column, and this was already caught by measurement:
+   the gap went from 28 to 8. */
+@vo-rail-w:         160px;
+
+/* The spacer holds the room for the rail in the layout: it has no look of its own,
+   the rail lies over it as a separate layer. The width is written by JS: 0 means
+   "we take no room". */
+#vo-rail-slot {
+    height: 100%;
+    /* Filled with the FIELD color, not transparent: a backing in the background color and without a shadow,
+       so that it is not visible.
+
+       The rail still has no surface of its own: the spacer is painted, that is
+       the place in the layout. When transparent it showed the stock #viewport
+       (#f7f7f7), and against the canvas background (#eef2f4) this read as a separate backing
+       with a seam at the right edge. There was no shadow on any node there: the junction
+       of two colors itself was taken for a shadow (measured along the whole chain of
+       ancestors).
+
+       While the rail lay OVER the canvas, the spacer was zero and the question
+       did not arise; it appeared together with the permanent column. */
+    background: @vo-canvas-bg;
+    pointer-events: none;
+}
+
+#vo-outline {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 12;
+    pointer-events: none;   // clicks go past the panel to the canvas
+
+    &.has-items { display: block; }
+
+    /* --- Column ---------------------------------------------------------- */
+    /* The column sets only geometry: it has no background, border or shadow, and
+       it does not intercept the mouse: the mouse passes to the document everywhere except the
+       chevron and the rows themselves. */
+    .vo-outline-panel {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: @vo-rail-w;
+        height: 100%;
+        padding: 8px;
+    }
+
+    &.open .vo-outline-list {
+        animation: vo-slide-left @vo-dur-pop @vo-ease;
+    }
+
+    &:not(.open) .vo-outline-panel {
+        width: auto;
+        height: auto;
+        padding: 10px 8px;
+    }
+
+    &:not(.open) .vo-outline-list { display: none; }
+
+    /* --- Toggle ---------------------------------------------------------- */
+    /* With an open rail the toggle is a bare chevron icon inside the column: a plate
+       with a shadow would read as a second object over the first. When collapsed, the same
+       button becomes a pill with the number of headings: it remains
+       the only entry to the outline, and it must be visible on the field. */
+    .vo-outline-toggle {
+        pointer-events: auto;
+        flex: 0 0 auto;
+        align-self: flex-start;
+        color: @vo-text-2;
+    }
+
+    /* With a collapsed rail the button is the only thing left on the screen, and
+       the only entry to the outline. It has its own fill: without it the pill with
+       the number would read as a scrap of text on the field, not as a button. */
+    &:not(.open) .vo-outline-toggle {
+        gap: 4px;
+        padding: 0 8px;
+        background: @vo-surface;
+        box-shadow: @vo-shadow-raised;
+        font-size: 13px;
+    }
+
+    /* With an expanded rail the button has an arrow, and the arrows stay 18px:
+       the main icon size in Icons.js is 24px, it does not touch them. */
+    &.open .vo-outline-toggle {
+        svg, .vo-air { width: 18px; height: 18px; }
+    }
+
+    .vo-outline-count { display: none; }
+    &:not(.open) .vo-outline-count { display: inline; }
+
+    /* --- List ------------------------------------------------------------ */
+    /* The width is set by the column: the former max-width here was the only thing that
+       defined it. The height is by content (`flex: 0 1 auto`), not the whole
+       column: the list catches the mouse, and stretched to the full height it would eat
+       clicks on the document below the last heading. */
+    .vo-outline-list {
+        pointer-events: auto;
+        flex: 0 1 auto;
+        min-height: 0;
+        margin-top: 6px;
+        overflow-y: auto;
+
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, .18) transparent;
+        &::-webkit-scrollbar { width: 6px; }
+        &::-webkit-scrollbar-track { background: transparent; }
+        &::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, .18);
+            border-radius: 3px;
+        }
+    }
+
+    /* The level is conveyed by the left padding (set by JS). The current section is
+       a fill of the whole row, as in the mockups; the former strip-border and
+       bold weight were removed along with it. The fill is neutral, not
+       `--vo-selected`: the current section is a position pointer, not
+       a selected item and not selected text. */
+    .vo-outline-item {
+        display: block;
+        width: 100%;
+        min-height: 36px;
+        padding: 8px 10px;
+        border: none;
+        border-radius: @vo-r-sm;
+        background: transparent;
+        color: @vo-text-2;
+        font-family: @vo-font;
+        font-size: 14px;
+        line-height: 1.35;
+        text-align: left;
+        /* Headings wrap entirely. The former
+           nowrap + overflow + text-overflow were removed: cutting with an ellipsis was
+           the price of a narrow column, and now the price is paid in height, not in the loss of
+           text. min-height stays the floor of a one-line item, beyond that
+           the height grows by content, and the list can scroll anyway.
+
+           overflow-wrap is mandatory: a heading without spaces used to be held by
+           nowrap, and now there is nothing to hold it: one long word would stick
+           out of the column. */
+        white-space: normal;
+        overflow-wrap: anywhere;
+        cursor: pointer;
+        transition: background-color @vo-dur-state ease-out,
+                    color @vo-dur-state ease-out;
+
+        &:hover { background: @vo-hover; color: @vo-text; }
+        &:active { background: @vo-active; }
+
+        &.on {
+            background: @vo-active;
+            color: @vo-text;
+        }
+    }
+
+    /* The empty state explains where the headings will come from,
+       instead of silently showing nothing. */
+    .vo-outline-empty {
+        padding: 6px 10px;
+        color: @vo-text-off;
+        font-family: @vo-font;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    /* The rail under the navigation ban is strictly by the options.navigation.disable key
+       from the stock payload (CompactShell.applyEditingLock). On the same key the stock
+       dims the btnNavigation button and closes the left menu; the rail is our twin of
+       this panel. A class, not disabled: the decision is made by the `locked` field
+       in OutlineRail, the handlers ask it themselves. */
+    &.vo-locked {
+        .vo-outline-toggle,
+        .vo-outline-item {
+            color: @vo-text-off;
+            cursor: default;
+
+            &:hover, &:active { background: transparent; color: @vo-text-off; }
+        }
+
+        .vo-outline-item.on { background: transparent; color: @vo-text-off; }
+    }
+}
+
+
+
+@keyframes vo-slide-left {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* ========================================================================= */
+/*  Floating panel at the selection                                          */
+/* ========================================================================= */
+
+#vo-bubble {
+    .vo-material-popup();
+    display: none;
+    position: absolute;
+    z-index: @vo-z-float;
+    align-items: center;
+    gap: @vo-gap-item;
+    padding: 5px;
+    animation: vo-pop @vo-dur-pop @vo-ease;
+    transform-origin: 50% 100%;   // grows from the text it is attached to
+
+    &.open { display: flex; }
+
+    // Restore the normal layer when menus close so the permanent toolbar cannot cover these controls.
+    &.vo-under-menu { z-index: @vo-z-toolbar - 1; }
+
+    .vo-bubble-sep {
+        width: 1px;
+        height: @vo-sep-h;
+        margin: 0 3px;
+        background: @vo-separator;
+    }
+}
+
+/* ========================================================================= */
+/*  Animations                                                               */
+/* ========================================================================= */
+
+/* The vo-pop keyframes are shared, in compact/menu.less: they are used by both the dropdown
+   lists of the menu bar and the surfaces below. */
+
+/* The "/" menu appears the same way as the floating panel, but grows from its anchor
+   point, the top left, like the dropdown lists of the menu bar. */
+#vo-slash.open {
+    animation: vo-pop @vo-dur-pop @vo-ease;
+    transform-origin: 0 0;
+}
+
+
+/* Hover and press have one time across the whole shell (in the menu bar, in
+   the shared rules). */
+.vo-ib, .vo-mode, .vo-slash-item {
+    transition: background-color @vo-dur-state ease-out,
+                color @vo-dur-state ease-out,
+                box-shadow @vo-dur-state ease-out;
+}
+
+/* We respect the system setting: motion is turned off entirely, states
+   keep working instantly. */
+@media (prefers-reduced-motion: reduce) {
+    #vo-shell,
+    .vo-compact #toolbar,
+    .vo-compact .toolbar,
+    .vo-ib, .vo-mode, .vo-slash-item,
+    body.vo-compact #vo-tb .vo-size .vo-size-box {
+        transition: none;
+    }
+    .vo-of-pop,
+    #vo-bubble,
+    #vo-slash.open {
+        animation: none;
+    }
+    /* The header and menu bar go away and return at once, without a shift. */
+    .vo-compact #vo-shell > .vo-hd,
+    .vo-compact #vo-shell > .vo-mn,
+    .vo-compact.vo-top-away #vo-shell > .vo-hd,
+    .vo-compact.vo-top-away #vo-shell > .vo-mn {
+        transition: none;
+    }
+}
+
+/* ========================================================================= */
+/*  "/" command menu                                                         */
+/* ========================================================================= */
+
+#vo-slash {
+    .vo-material-popup();
+    display: none;
+    position: absolute;
+    z-index: @vo-z-float;
+    min-width: 252px;
+    max-height: 296px;
+    overflow-y: auto;
+    padding: @vo-pop-pad-y 0;
+    font-family: @vo-font;
+
+    /* The scrollbar is over the content and without a backing: the list does not
+       jump when scrolling appears. */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, .22) transparent;
+    &::-webkit-scrollbar { width: 8px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, .22);
+        border: 2px solid transparent;
+        background-clip: content-box;
+        border-radius: 4px;
+    }
+
+    &.open { display: block; }
+
+    /* `.on` here is the keyboard cursor (SlashMenu, i === me.index when the list is drawn), not
+       the selected value: it stays a fill, it gets no check mark. */
+    .vo-slash-item {
+        .vo-row();
+        &.on { background: @vo-hover; }
+    }
+
+    .vo-slash-query {
+        padding: 6px @vo-row-pad-x 8px;
+        margin-bottom: 3px;
+        border-bottom: 1px solid @vo-separator;
+        color: @vo-text-2;
+        font-size: 12px;
+        font-family: @vo-font-mono;
+    }
+
+    .vo-slash-i {
+        display: inline-flex;
+        color: @vo-icon;
+        flex: 0 0 auto;
+    }
+
+    .vo-slash-t { color: @vo-text; }
+    .vo-slash-h { margin-left: auto; color: @vo-text-off; font-size: 11px; }
+
+    .vo-slash-empty {
+        padding: 10px @vo-row-pad-x;
+        color: @vo-text-off;
+        font-size: 13px;
+    }
+}
+
+/* Advanced stays the stock editor without our cosmetics: an attempt to
+   recolor it made the interface less consistent than the original did.
+   We hide only our shell. */
+
+/* ==========================================================================
+   Shell look: colors and sizes of the header, panel, menu, outline,
+   bottom row and search bar. The block is placed after the main rules and
+   overrides them: a LESS variable takes the last declaration in the file,
+   a property takes the last rule of the same specificity. The heights of the header, menu and
+   panel are duplicated in CompactShell.js (H_HEADER, H_MENU, H_TOOLBAR,
+   H_TB_GAP) and are changed in pairs.
+   ========================================================================== */
+
+@vo-r-pop:          12px;      // popup surfaces
+@vo-row-h:          38px;      // menu row: glyph 24 + step 14
+@vo-row-pad-x:      19px;      // row side padding of the other lists; for the menu it is @vo-row-pad-l/-r below
+@vo-row-gap:        11px;      // icon → label
+@vo-pop-pad-y:      14px;      // window vertical padding of the other lists; for the menu it is @vo-pop-pad-top/-bottom below
+@vo-fs-row:         13px;      // menu row font size
+
+body.vo-compact,
+body.vo-boot {
+    --vo-canvas-bg:      #f2f3f4;                     /* canvas background */
+    --vo-shadow:         0 10px 5px rgba(0, 0, 0, .15);  /* popup window shadow */
+    --vo-shadow-raised:  0 1px 2px rgba(0, 0, 0, .15);   /* panel card shadow */
+    --vo-icon:           #6e6e6e;                     /* panel icons */
+    --vo-fig-menu-fg:    #454545;                     /* labels of the menu bar and panel */
+    --vo-fig-row-fg:     #292929;                     /* dropdown menu row label */
+    --vo-fig-row-icon:   #a6a6a6;                     /* dropdown menu row icon */
+    --vo-fig-on-bg:      rgba(75, 145, 255, .14);     /* active button backing */
+    --vo-fig-on-fg:      #0080ff;                     /* active button glyph */
+    --vo-fig-sep:        rgba(0, 0, 0, .1);           /* panel separators */
+    --vo-fig-rail-fg:    rgba(24, 24, 24, .4);        /* outline headings */
+    --vo-fig-pill-fg:    #646464;                     /* heading count on the outline button */
+    --vo-fig-pill-icon:  #989898;                     /* outline button icon */
+}
+
+/* The name uses the font size and spacing of the early rule, as in the spreadsheet header: 18px,
+   @vo-track-tight; the twin takes them from there, so the field width measurement
+   converges with the name. */
+body.vo-compact {
+    .vo-hd .vo-hd-title { color: #181818; }
+}
+
+/* The white header zone is separated from the canvas by the menu bar shadow: 0 1 1 5%. */
+body.vo-compact {
+    .vo-mn {
+        gap: 14px;                                   /* 30 between labels = 8 + 14 + 8 */
+        box-shadow: 0 1px 1px rgba(0, 0, 0, .05);
+        /* The shadow must lie over the gray panel strip, so the menu bar
+           is raised. The layer is like its dropdown's, otherwise it goes under the panel. */
+        position: relative;
+        z-index: @vo-z-drop;
+    }
+}
+
+/* The header is a layer above the menu bar: the bar is raised to the dropdown layer and
+   comes later in the markup, so the popovers of the header right cluster
+   (mode, "Download") went under it with their top rows. */
+body.vo-compact {
+    .vo-hd {
+        position: relative;
+        z-index: @vo-z-drop + 1;
+    }
+}
+
+/* Floating panel. */
+body.vo-compact {
+    #vo-tb {
+        background: rgba(255, 255, 255, .9);
+        -webkit-backdrop-filter: blur(12px);
+                backdrop-filter: blur(12px);
+        .vo-g + .vo-g::before,
+        .vo-g + .vo-of::before { background: var(--vo-fig-sep); }
+        .vo-value-btn, .vo-heading-btn { color: var(--vo-fig-menu-fg); }
+        .vo-ib.on { background: var(--vo-fig-on-bg); color: var(--vo-fig-on-fg); border-radius: @vo-r-sm; }
+    }
+}
+
+/* Dropdown menus. The menu bar and its lists are painted by the shared rules
+   (compact/menu.less) by the --vo-menu-* tokens: here are their values for documents.
+   Hover in the menu does not change the icon color: only the row backing changes. */
+body.vo-compact {
+    --vo-menu-fg:         var(--vo-fig-menu-fg);
+    --vo-menu-row-fg:     var(--vo-fig-row-fg);
+    --vo-menu-icon:       var(--vo-fig-row-icon);
+    --vo-menu-icon-hover: var(--vo-fig-row-icon);
+}
+
+body.vo-compact {
+    .vo-pop-item { color: var(--vo-fig-row-fg); font-size: @vo-fs-row; }
+    .vo-pop-i { color: var(--vo-fig-row-icon); }
+}
+
+/* Outline on the left: the collapsed pill and the headings. */
+body.vo-compact {
+    #vo-outline {
+        &:not(.open) .vo-outline-toggle {
+            background: rgba(255, 255, 255, .5);
+            border-radius: 12px;
+            color: var(--vo-fig-pill-icon);
+            .vo-outline-count { color: var(--vo-fig-pill-fg); }
+        }
+        .vo-outline-item {
+            min-height: 28px;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            color: var(--vo-fig-rail-fg);
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 16px;
+        }
+    }
+}
+
+/* --- Header ----------------------------------------------------------------
+   The white zone of 76px = 46 (name) + 30 (menu), as in the spreadsheet header; the pair is
+   duplicated in CompactShell.js (H_HEADER / H_MENU) and changes together with it.
+   The row paddings are those of the base .vo-hd and .vo-mn rules. Name: the row center at 25
+   (10 + 30/2), the cluster buttons on the same center; menu: items at 46..66,
+   the first label at x = 20, on one line with the name. */
+@vo-h-header:       46px;
+@vo-h-menu:         30px;
+
+body.vo-compact {
+    .vo-hd {
+        .vo-hd-state.saved .vo-air { width: 18px; height: 18px; }   /* badge height, --ui-system-label-size md */
+        .vo-hd-right { gap: 19px; }
+        /* Document mode button. */
+        .vo-mode {
+            height: 32px;
+            padding: 0 6px 0 12px;
+            border-radius: 8px;
+            font-size: 15px;
+            letter-spacing: normal;                  /* at 15px without the sm button spacing */
+            .vo-heading-caret svg,
+            .vo-heading-caret .vo-air { width: 20px; height: 20px; }
+        }
+        /* "Download": a bare icon 24, without a border and backing. The button lies
+           in the menu wrapper (.vo-download), so the selector is without `>`. The focus ring
+           is returned: box-shadow: none turned it off too, and Esc from the menu
+           puts focus exactly on this button. */
+        .vo-hd-right .vo-ib.vo-outlined {
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            padding: 0;
+            border: none;
+            box-shadow: none;
+            background: transparent;
+            color: #656565;
+
+            &:focus-visible { box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+        }
+    }
+}
+
+/* --- Panel -----------------------------------------------------------------
+   Height 44, glyphs at y 10. Between any two elements there are 14px of visible
+   gap; separators are separate elements 5–8 wide (visible 6 and 8,
+   empty 5), also with 14 at the sides.
+   Our buttons are 30 × 30 boxes, that is 3px wider than the glyph on each
+   side. Hence all the gaps below = visible gap − 6.
+     element → element:            14 − 6 = 8
+     across a separator of width w:   14 + w + 14 − 6 = 22 + w
+   Value lists (zoom, font, style, font size) are as in spreadsheets: a box of
+   constant width @vo-w-*, the height of a row button; the label 8 from the left
+   edge, the 13 chevron 6 from the right, with air between them. */
+@vo-h-toolbar:      44px;      // pair to H_TOOLBAR in CompactShell.js
+@vo-tb-gap-top:     4px;       // pair to H_TB_GAP_TOP; the card top 76 + 4 = 80, as in spreadsheets
+@vo-tb-gap:         8px;       // pair to H_TB_GAP; under the card, as in spreadsheets
+
+body.vo-compact #vo-tb {
+    margin: @vo-tb-gap-top @vo-pad-x @vo-tb-gap;      /* as in spreadsheets; the sides are in the "Panel at full width" rule */
+    padding: 0 @vo-tb-pad;                           /* as in spreadsheets; the button here is 30, not 32, so glyphs are 1 further left */
+    gap: 28px;                                       /* a group junction via a separator of 6 */
+    .vo-of { gap: 28px; }
+    /* Before the tail the separator is 8, not 6: +2 to the gap. By padding, not margin:
+       relayout measures widths with getBoundingClientRect, it does not see outer
+       margins and would stop moving buttons into "…" in time. */
+    > .vo-g:first-child { padding-right: 2px; }
+    .vo-g { gap: 8px; }
+    .vo-g + .vo-g::before { left: -14px; background: var(--vo-fig-sep); }
+    .vo-g + .vo-of::before { left: -15px; background: var(--vo-fig-sep); }
+
+    .vo-ib {
+        min-width: 30px;
+        height: 30px;
+        padding: 0 3px;
+        border-radius: @vo-r-sm;                     /* like the AIR sm button: --ui-border-radius-sm */
+    }
+
+    /* Value list widths are from the @vo-w-* of the base rules. The button padding here
+       is repeated so that it is not overridden by the padding 3 of .vo-ib above. */
+    .vo-value .vo-value-btn,
+    .vo-heading .vo-heading-btn { padding: 0 @vo-value-pad-r 0 @vo-value-pad-l; }
+    .vo-value-label, .vo-heading-label { color: var(--vo-fig-menu-fg); font-size: 13px; letter-spacing: 0; }
+
+    /* An empty separator of 5px "font size → B": 22 + 5 = 27, beyond the group gap
+       8 → 19. The other paddings are placed across the group gap: the air in them is inside the
+       boxes. */
+    /* By the wrapper padding, not margin, for the same reason; for the box itself a padding
+       would inflate the hover backing. content-box: the font size box stays
+       @vo-w-size with the stock border-box; stretch: the box (height: 100%)
+       takes the group height, that is the row buttons. */
+    .vo-w-size {
+        box-sizing: content-box;
+        align-self: stretch;
+        padding-right: 19px;
+    }
+
+    /* A button with a chevron (alignment, lists): glyph 24, gap 5, chevron
+       box 4 with a glyph 24 shifted −10 → width 33. */
+    .vo-ib.vo-drop {
+        gap: 0;
+        padding: 0 3px;
+        .vo-drop-c {
+            margin-left: -5px;
+            margin-right: -10px;
+            svg, .vo-air { width: 24px; height: 24px; }
+        }
+    }
+}
+
+/* Color buttons: glyph 24 at y 10, a strip 16 × 3 under it at y 33,
+   radius 2. */
+body.vo-compact #vo-tb {
+    .vo-cb { height: 30px; }
+    .vo-cb-line {
+        position: absolute;
+        top: 26px;
+        left: 7px;
+        width: 16px;
+        margin: 0;
+    }
+}
+
+/* backdrop-filter makes the panel a separate layer, and its dropdown lists
+   ended up locked under the document. We raise the panel itself, one layer below
+   the menu bar (@vo-z-drop), so that the "File…Help" menus still lie
+   over it. */
+body.vo-compact #vo-tb { z-index: @vo-z-drop - 1; }
+
+/* The arrow of buttons with a chevron (alignment, spacing, lists): its own small
+   chevron (drop.svg), not Chevron Down, #333 with opacity 0.3. We replace the
+   mask source over the inline --vo-air-src that is set by
+   Icons.svg('chevron'): otherwise we would have to touch the calls in CompactToolbar.js.
+   Value lists keep the AIR chevron (chevron.svg), as in spreadsheets. */
+body.vo-compact #vo-tb {
+    .vo-drop-c {
+        color: rgba(51, 51, 51, .3);
+        .vo-air { --vo-air-src: url("@{vo-air-url}drop.svg") !important;   /* path from the built stylesheet, @vo-air-url */ }
+    }
+    .vo-ib.vo-drop:hover:not(:disabled) .vo-drop-c { color: rgba(51, 51, 51, .3); }
+}
+
+/* --- Dropdown menus -------------------------------------------------------
+   Glyphs 24 at a step of 38 (gap 14); icon 24, 11 to the label; label 13;
+   window rounding 12. Width and paddings are below, "Paddings of all menus".
+   Our row is a 38 box, full width (hover paints it entirely), the glyph
+   is centered, that is 7 below the row top. Separators between sections
+   stay: we do not change the menu composition.
+   The menu bar receives these values via the shared rule variables
+   (compact/menu.less): @vo-r-pop, @vo-row-h, @vo-row-gap, in the "Shell
+   look" block, the glyph is here. The toolbar lists (.vo-pop-wrap) read
+   the same variables, so the menu and lists match. */
+@vo-menu-glyph:     24px;      // room for the item glyph and the glyph itself
+
+body.vo-compact {
+    .vo-pop-wrap .vo-pop.vo-pop-list { border-radius: @vo-r-pop; }
+    .vo-pop-wrap .vo-pop-item {
+        min-height: @vo-row-h;
+        gap: @vo-row-gap;
+    }
+    .vo-pop-wrap .vo-pop-i {
+        width: @vo-menu-glyph;
+        height: @vo-menu-glyph;
+    }
+    .vo-mn .vo-mn-i,
+    .vo-pop-wrap .vo-pop-i {
+        svg, .vo-air { width: @vo-menu-glyph; height: @vo-menu-glyph; }
+    }
+}
+
+/* The hover backing of buttons with a chevron (alignment, lists) is 6px wider
+   on the right: the chevron sticks out of the box and otherwise does not fit in the backing.
+   Padding +6 on the right and margin −6: the backing grows, while the place in the row and the position
+   of neighbors do not change (relayout measures the wrapper, which is of the same width). */
+body.vo-compact #vo-tb .vo-ib.vo-drop {
+    padding-right: 9px;
+    margin-right: -6px;
+}
+
+/* The document name was cut by 2px: fitTitle (CompactShell.js) measures the width
+   once, before the font and font size of this block applied, and writes it
+   inline. field-sizing: content gives the field a width by text itself, without
+   measuring, for any font; the ceiling is as before (max-width 40%). */
+body.vo-compact .vo-hd .vo-hd-title {
+    field-sizing: content;
+    width: auto !important;
+}
+
+/* --- Outline button --------------------------------------------------------
+   56 × 34 at x 63, y 162 (under the panel: 135 + 27). The Bulleted List icon 24 at
+   x 7.5, the number 13 at x 32.5: gap 1. The background is white 50%, radius 12, shadow
+   0 1 2 15% (already set above). The collapsed rail is placed at the window
+   edge with padding 8 on top and on the side of the header bottom: the padding sets the position. */
+body.vo-compact #vo-outline {
+    &:not(.open) .vo-outline-panel { padding: 14px 0 0 63px; }
+    &:not(.open) .vo-outline-toggle {
+        box-sizing: border-box;
+        min-width: 56px;
+        height: 34px;
+        padding: 0 7.5px;
+        gap: 1px;
+        /* From the left padding, not centered: the number width depends on
+           the system font, and when centered the icon moved off x 7.5. */
+        justify-content: flex-start;
+        font-size: 13px;
+        .vo-outline-count { line-height: 16px; }
+    }
+}
+
+/* ==========================================================================
+   Colors are only AIR tokens: the values above are replaced with the nearest tokens.
+   Closeness is by the RGB difference; for semi-transparent colors by the visible color
+   on white.
+     #181818 name        → base-1 #333333  (base-0 #000 is almost as close,
+                                            but it is not a text color)
+     #454545 labels      → base-1 #333333
+     #292929 rows        → base-1 #333333
+     #6e6e6e icons       → base-2 #525c69  (= design-plain-content-icon)
+     #656565 "Download"  → base-2 #525c69
+     #646464 number      → base-2 #525c69
+     #989898 pill icon   → base-3 #828b95
+     #a6a6a6 menu icons  → base-4 #a8adb4  (= design-plain-content-icon-secondary)
+     #181818 40% left headings (≈#a3a3a3) → base-4 #a8adb4
+     #333 30% chevron (≈#c2c2c2)            → base-4 #a8adb4
+     #0080ff active     → accent-main-primary #0075ff
+     #4b91ff 14% active backing (≈#eaf3ff) → design-tinted-bg #e6f4ff
+     #000 10% separator → divider-vibrant-accent #000 8%
+     #f2f3f4 canvas      → bg-content-tertiary #eef2f4
+   ========================================================================== */
+body.vo-compact,
+body.vo-boot {
+    --vo-canvas-bg:      #eef2f4;      /* bg-content-tertiary */
+    --vo-icon:           #525c69;      /* base-2 */
+    --vo-fig-menu-fg:    #333333;      /* base-1 */
+    --vo-fig-row-fg:     #333333;      /* base-1 */
+    --vo-fig-row-icon:   #a8adb4;      /* base-4 */
+    --vo-fig-on-bg:      #e6f4ff;      /* design-tinted-bg */
+    --vo-fig-on-fg:      #0075ff;      /* accent-main-primary */
+    --vo-fig-sep:        rgba(0, 0, 0, .08);   /* divider-vibrant-accent */
+    --vo-fig-rail-fg:    #a8adb4;      /* base-4 */
+    --vo-fig-pill-fg:    #525c69;      /* base-2 */
+    --vo-fig-pill-icon:  #828b95;      /* base-3 */
+}
+
+body.vo-compact {
+    .vo-hd .vo-hd-title { color: #333333; }                         /* base-1 */
+    .vo-hd .vo-hd-right .vo-ib.vo-outlined { color: #525c69; }      /* base-2 */
+}
+
+body.vo-compact {
+    #vo-tb .vo-value-caret,
+    #vo-tb .vo-heading-caret,
+    #vo-tb .vo-drop-c,
+    #vo-tb .vo-ib.vo-drop:hover:not(:disabled) .vo-drop-c { color: #a8adb4; }   /* base-4 */
+}
+
+/* The hover backing of menu bar items is 4px wider on each side.
+   Padding +4 and margin −4: the backing grows, the labels and the menu step (30 between
+   words) stay in place. The rounding is like the AIR button of the same height
+   (sm, 28px): --ui-border-radius-sm. */
+body.vo-compact .vo-mn .vo-mn-item {
+    height: 28px;
+    padding: 4px 12px;
+    margin: -4px;
+    border-radius: @vo-r-sm;
+}
+
+/* The hover backing of buttons with a chevron (alignment, spacing, lists):
+   +4 on the left and +6 on the right. The paddings grow, a negative margin compensates them:
+   the glyph, chevron and neighbors do not move, the wrapper width for relayout is the same. */
+body.vo-compact #vo-tb {
+    .vo-ib.vo-drop {
+        padding: 0 9px 0 7px;                        /* 3 + 4 on the left, 3 + 6 on the right */
+        margin: 0 -6px 0 -4px;
+    }
+}
+
+/* Panel at full width: paddings of 20 at the sides, as in the header. */
+body.vo-compact #vo-tb {
+    margin-left: calc(20px + var(--vo-properties-inset-left, 0px));
+    margin-right: calc(20px + var(--vo-properties-inset-right, 0px));
+}
+
+/* The outline at the panel edge. The headings on the left are base-3.
+   The text of top-level headings starts at the left edge of the panel (x 20),
+   the "collapse" arrow is 5 to the right of this line; the collapsed button also
+   is placed with its left edge on the panel line. The padding numbers were taken by measurement. */
+body.vo-compact,
+body.vo-boot { --vo-fig-rail-fg: #828b95; }   /* base-3 */
+body.vo-compact #vo-outline {
+    &:not(.open) .vo-outline-panel { padding-left: 20px; }
+    /* Expanded: the column padding 8 → 10, and the top-level text (the item has its own
+       padding 10) sits at x 20. The arrow glyph sits in the button at +7, so
+       a shift of 8 puts it at x 25. */
+    &.open .vo-outline-panel { padding-left: 10px; }
+    &.open .vo-outline-toggle { margin-left: 8px; }
+}
+
+/* Main panel icons: regular ones are base-3, disabled ones (for example,
+   "Redo") are base-5. Hover and the active state are not touched. */
+body.vo-compact #vo-tb {
+    .vo-ib { color: #828b95; }                         /* base-3 */
+    .vo-ib:disabled { color: #c9ccd0; }                /* base-5 */
+}
+
+/* Headings on the left without backings: neither on hover nor for the current section:
+   no fill, no color change. */
+body.vo-compact #vo-outline .vo-outline-item {
+    &:hover, &:active, &.on, &.on:hover {
+        background: transparent;
+        color: var(--vo-fig-rail-fg);
+        box-shadow: none;
+    }
+}
+
+/* Main panel icons are between base-3 and base-2. There is no AIR token between them:
+   this is a mix of base-3 #828b95 and base-2 #525c69 in the proportion 40 / 60,
+   precomputed. */
+body.vo-compact #vo-tb .vo-ib { color: #656f7b; }
+body.vo-compact #vo-tb .vo-ib:disabled { color: #c9ccd0; }   /* base-5 */
+
+/* Headings on the left: Regular weight, item step 32. The line height
+   of wrapping headings is 16, as above: only the air between
+   items grows. */
+body.vo-compact #vo-outline .vo-outline-item {
+    font-weight: 400;
+    min-height: 32px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+/* The outline column width is by the free field to the left of the page
+   (the page is centered in the window, no room is taken for the rail), no wider than 240:
+   at 160 the headings wrapped. The number is computed by OutlineRail.fitWidth,
+   240 is the pair to RAIL_W in OutlineRail.js. */
+@vo-rail-w:         ~"var(--vo-rail-w, 240px)";   /* set by OutlineRail.fitWidth: the field to the left of the page, 140…240 */
+
+/* A scrollbar "like on a Mac". The bar is drawn by the engine as an image (canvas) by
+   the --canvas-scroll-* colors; its shape cannot be set by styles,
+   so: the arrows and background are in the canvas color (not visible), the thumb is a soft
+   AIR gray without a border and without notches, and the visible bar is narrowed to 6px by cropping
+   the scrollbar canvas. The colors are hexadecimal: the engine reads them as hex. */
+:root body.vo-compact {
+    --canvas-scroll-thumb:                #c9ccd0;   /* base-5 */
+    --canvas-scroll-thumb-hover:          #a8adb4;   /* base-4 */
+    --canvas-scroll-thumb-pressed:        #828b95;   /* base-3 */
+    --canvas-scroll-thumb-border:         #c9ccd0;
+    --canvas-scroll-thumb-border-hover:   #a8adb4;
+    --canvas-scroll-thumb-border-pressed: #828b95;
+    --canvas-scroll-thumb-target:         #c9ccd0;   /* thumb notches are in its color */
+    --canvas-scroll-thumb-target-hover:   #a8adb4;
+    --canvas-scroll-thumb-target-pressed: #828b95;
+    --canvas-scroll-arrow:                #eef2f4;   /* bg-content-tertiary: arrows are not visible */
+    --canvas-scroll-arrow-hover:          #eef2f4;
+    --canvas-scroll-arrow-pressed:        #eef2f4;
+}
+/* Our own strip on top (OutlineRail.bindScrollbars): the engine canvas
+   is transparent, but it catches the mouse: the strip passes clicks through. 6px, rounding
+   to the full thickness, base-5; while dragged it is base-4. */
+body.vo-compact #id_vertical_scroll canvas,
+body.vo-compact #id_horizontal_scroll canvas { opacity: 0; }
+body.vo-compact .vo-sb-thumb {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 3px;
+    background: #c9ccd0;                       /* base-5 */
+    transition: background-color @vo-dur-state ease-out;
+    &.vo-sb-drag { background: #a8adb4; }      /* base-4 */
+    &.vo-sb-v { left: 4px; width: 6px; }
+    &.vo-sb-h { top: 4px; height: 6px; }
+}
+
+/* The separator in our menus (the menu bar and the panel lists): 1px,
+   divider-default, paddings from the left edge 17 and from the right 23. */
+body.vo-compact .vo-mn .vo-mn-sep,
+body.vo-compact .vo-pop-wrap .vo-pop-sep {
+    height: 1px;
+    margin: 7px 23px 7px 17px;
+    background: #f0f0f0;                             /* divider-default */
+}
+
+/* The dropdown menu shadow is one for all popup windows: the menu bar menus
+   and the panel lists. */
+body.vo-compact,
+body.vo-boot { --vo-shadow: 0 6px 12px 0 rgba(0, 0, 0, .2); }
+
+/* The current section in the outline is base-1, two tokens darker than the other
+   headings (base-3). No backing. */
+body.vo-compact #vo-outline .vo-outline-item.on,
+body.vo-compact #vo-outline .vo-outline-item.on:hover { color: #333333; }   /* base-1 */
+
+/* The expanded outline is entirely 6px to the right of the panel edge: the top-level
+   text at x 26, the arrow at 31. The collapsed outline button stays at the
+   panel edge. */
+body.vo-compact #vo-outline {
+    &.open .vo-outline-panel { padding-left: 16px; }
+    &.open .vo-outline-toggle { margin-left: 8px; }
+}
+
+/* --- Bottom row ------------------------------------------------------------
+   Height 30; background white 60% with blur 12, without a line on top; on the left
+   "Page", "Words", the language from x 20, on the right spelling, "Fit to width",
+   "Whole page"; 30 between labels; base-2.
+   Icons on the right: a cursor is view, a pencil is edit, a line, a cross
+   (without action).
+   The groups are laid out without JS edits: the empty spacer .vo-st-left does not
+   push everything to the right, "to the limit" is given to the first button of the right group.
+   Buttons have padding 7 for the hover backing and the same negative margin:
+   the labels are exactly 30 apart. */
+@vo-h-status:       30px;
+
+body.vo-compact {
+    #statusbar { border-top: none; }
+    #vo-status {
+        gap: 30px;
+        background: rgba(255, 255, 255, .6);         /* bg-content-primary 60% */
+        -webkit-backdrop-filter: blur(12px);
+                backdrop-filter: blur(12px);
+        .vo-st-left { display: none; }
+        .vo-st-item, .vo-st-btn { color: #525c69; }   /* base-2 */
+        .vo-st-btn {
+            margin: 0 -7px;
+            &.on { color: #525c69; }                  /* spelling is gray in the enabled state too */
+            &.vo-locked { color: @vo-text-off; }
+        }
+        .vo-st-item + .vo-st-btn { margin-left: auto; }
+    }
+}
+
+/* The row lies over the document: the page goes under it and shows through
+   the white 95%, without blur. The row takes no room in the layout:
+   H_STATUS = 0 in CompactShell.js, the document reaches the window bottom.
+   Labels are base-3 #828b95.
+   Icons on the right: 107 wide at the right edge, 24 from "Whole page";
+   the cursor and pencil 20, the cross 24, all black 30%; 10 between them; the line
+   1 × 16, 10% black. Only drawn, without actions. */
+body.vo-compact {
+    #statusbar {
+        height: 0 !important;
+        min-height: 0;
+        overflow: visible;
+        position: relative;
+        z-index: 500;                                 /* above the document scrollbar: it went to the window bottom and intercepted the mouse from the cross; below the stock dropdowns (1000) */
+        background: none;
+    }
+    #vo-status {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding-right: 0;
+
+        background: rgba(255, 255, 255, .95);         /* bg-content-primary 95% */
+        -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+
+        .vo-st-item, .vo-st-btn,
+        .vo-st-btn.on { color: #828b95; }             /* base-3 */
+
+        /* Hover is by color only, without a backing: the label is one step
+           darker (base-2), the icon denser. */
+        .vo-st-btn:hover,
+        .vo-st-btn.on:hover { background: transparent; color: #525c69; }
+        .vo-st-btn.vo-locked:hover { color: @vo-text-off; }
+        .vo-st-ico:hover { opacity: .6; }
+
+        /* The finger and hover area are wider than the icon itself: an invisible frame
+           by 5 to the sides (half of the step 10) and the full row height: the look
+           and layout do not change. */
+        .vo-st-ico {
+            position: relative;
+            cursor: pointer;
+            &::after {
+                content: '';
+                position: absolute;
+                inset: -5px;
+            }
+        }
+        .vo-st-close::after { inset: -3px -10px -3px -5px; }   /* to the right by 10, up to the window edge */
+    }
+
+    .vo-st-tools {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 107px;
+        height: 24px;
+        margin-left: -6px;                            /* 30 → 24 */
+        flex: none;
+    }
+    .vo-st-ico {
+        display: flex;
+        width: 20px;
+        height: 20px;
+        color: #000;
+        opacity: .3;
+        svg { display: block; }
+    }
+    .vo-st-close {
+        width: 24px;
+        height: 24px;
+    }
+    .vo-st-sep {
+        position: relative;
+        width: 5px;
+        height: 24px;
+        flex: none;
+        &::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: 4px;
+            width: 1px;
+            height: 16px;
+            background: rgba(0, 0, 0, .1);
+        }
+    }
+}
+
+/* Scrollbars are above the row. The engine puts them down to the bottom of the document
+   area, and the row on top covered the horizontal one entirely, and the bottom of the
+   vertical one together with the thumb at the end of the document.
+   The horizontal one is raised by the row height with a top padding: the engine
+   converts the mouse to bar coordinates via offsetTop (sdkjs/common/scroll.js,
+   getMousePosition), and the padding shifts that too. The raised bar lies over
+   the sheet: without a background, only the thumb strip is visible; it is above the sheet canvases
+   (they have z-index 1 and 2, sdkjs/word/api.js), the bar's transparent canvas with
+   the mouse is above it.
+   The vertical one ends above the row, and with a horizontal one above it:
+   the engine then shortens the right panel by its height itself. The node height of the bar
+   is written by the engine, so the bottom is a top/bottom pair with !important; the bar
+   canvas is measured by the engine from this node (clientHeight). */
+body.vo-compact {
+    #id_horscrollpanel {
+        margin-top: -@vo-h-status;
+        background-color: transparent !important;
+    }
+    #id_horizontal_scroll .vo-sb-thumb { z-index: 3; }
+    #id_vertical_scroll {
+        height: auto !important;
+        bottom: @vo-h-status;
+    }
+}
+
+/* The panel over the document. The layout reserves the header, menu and the gray
+   gap 4 above the card (layoutHeight in CompactShell.js):
+   the document starts from the top edge of the card, goes under it and is visible
+   at the sides and in the gap under it; between the menu and the card is only gray.
+   The card goes past the bottom of #toolbar, so #toolbar has no background, and it
+   sits over the document area; the shell holds the canvas color under the gap. */
+body.vo-compact {
+    #toolbar {
+        z-index: @vo-z-toolbar;
+        overflow: visible;
+    }
+    #vo-shell {
+        height: auto;
+        // The transparent area beside the floating card must not intercept sidebar input.
+        pointer-events: none;
+        > * { pointer-events: auto; }
+    }
+    /* The shell canvas is only down to the bottom of #toolbar (header, menu, gap):
+       below it the card is surrounded by the document. */
+    #vo-shell { background: transparent; }
+    #toolbar { background: @vo-canvas-bg; }
+}
+
+/* The structure rail starts under the card: 44 + 8 = 52. Without a card
+   (view, panel collapsed) it is from the top of the area. */
+body.vo-compact {
+    &:not(.vo-view):not(.vo-tb-hidden):not(.vo-rulers) #vo-outline { top: @vo-h-toolbar + @vo-tb-gap; }
+    &.vo-rulers #vo-outline { top: 26px; }
+}
+
+body.vo-compact {
+    /* The left panels (comments, chat, navigation, advanced search in
+       #left-menu; version history is its own column) are also under the card and
+       above the bottom row: both lie over the document area and covered
+       the panel header with the cross and the input field with the buttons below. The layout
+       (HBoxLayout) writes only left and width to these columns, so the top and
+       bottom are set here; the height is given by the top/bottom pair. Without a card (view,
+       panel collapsed) the panel starts from the top of the area, like the rail. */
+    #left-menu,
+    #left-panel-history {
+        height: auto;
+        bottom: @vo-h-status;
+    }
+    &:not(.vo-view):not(.vo-tb-hidden):not(.vo-rulers) {
+        #left-menu,
+        #left-panel-history { top: @vo-h-toolbar + @vo-tb-gap; }
+    }
+}
+
+body.vo-compact #vo-outline .vo-outline-item { font-size: 12px; }
+
+/* The floating panel at selection: left and right padding 13, top and bottom
+   the former 5. */
+body.vo-compact #vo-bubble { padding-left: 13px; padding-right: 13px; }
+
+/* Paddings of all menus: from the window edge to the glyphs 14 on the left, 20 on top, 18 on the right,
+   24 at the bottom, gap between items 14, width from 266, height by content.
+   The row is a 38 box full width, the glyph 24 at +7, so the window paddings
+   vertically = the paddings to the glyphs − 7: 13 on top, 17 at the bottom. The horizontal paddings are
+   at the row itself, so that the hover backing runs edge to edge. The icon from 14,
+   the label from 14 + 24 + 11 = 49. The separator is from the same padding 14.
+   The menu bar receives these values via the shared rule variables
+   (compact/menu.less), the toolbar lists via the rules below. */
+@vo-menu-drop-min-w: 266px;    // menu window width is no less than
+@vo-pop-pad-top:     13px;     // window top padding: 20 to the glyph − 7
+@vo-pop-pad-bottom:  17px;     // window bottom padding: 24 to the glyph − 7
+@vo-row-pad-l:       14px;     // row left padding, up to the glyph
+@vo-row-pad-r:       18px;     // row right padding
+
+body.vo-compact {
+    .vo-pop-wrap .vo-pop.vo-pop-list {
+        min-width: @vo-menu-drop-min-w;
+        padding: @vo-pop-pad-top 0 @vo-pop-pad-bottom;
+    }
+    .vo-pop-wrap .vo-pop-item { padding: 0 @vo-row-pad-r 0 @vo-row-pad-l; }
+
+    .vo-mn .vo-mn-sep,
+    .vo-pop-wrap .vo-pop-sep { margin-left: @vo-row-pad-l; }
+}
+
+/* The right column for the check mark is at every item: the menu width is counted
+   with it, and a long label does not come closer to the edge than 18 + 24 = 42. The check mark is
+   in this column, the right edge 18 from the window edge. */
+body.vo-compact {
+    .vo-mn .vo-mn-sub,
+    .vo-pop-wrap .vo-pop-item { padding-right: 42px; position: relative; }
+    .vo-pop-wrap .vo-pop-item .vo-pop-check {        /* glyph 18 at the center of a 24 column */
+        position: absolute;
+        right: 21px;
+        top: 50%;
+        transform: translateY(-50%);
+        padding-left: 0;
+        margin-left: 0;
+    }
+}
+
+/* An item without an icon has no empty icon column, even if neighbors
+   have icons: the empty icon cell is removed in the menu bar row and the panel lists. */
+body.vo-compact {
+    .vo-mn .vo-mn-i:not(:has(> svg)):not(:has(> .vo-air)),
+    .vo-pop-wrap .vo-pop-i:empty { display: none; }
+}
+
+/* An item without an icon: the label from padding 18. */
+body.vo-compact {
+    .vo-mn .vo-mn-sub:not(:has(.vo-mn-i > svg)):not(:has(.vo-mn-i > .vo-air)),
+    .vo-pop-wrap .vo-pop-item:not(:has(.vo-pop-i:not(:empty))) { padding-left: 18px; }
+}
+
+/* The search bar (the stock Common.UI.SearchBar window) in the panel card style.
+   The stock puts the window inline over the right edge of the panel; we put it
+   as a separate card under the panel (80 + 44 + 8): under the magnifier, with its left edge at
+   its left edge, like the panel button popovers. The magnifier place is set by
+   CompactShell.bindSearchBar in --vo-search-left; without a magnifier (panel collapsed,
+   view) it is at the left padding. The background, rounding and shadow are those of popup windows.
+   The field is like AIR fields: 32, radius 8, a thin border; the buttons are like the
+   panel buttons: 32 × 32, radius 6, AIR icons of the panel icon color. Behavior is
+   stock. */
+body.vo-compact .asc-window.search-bar {
+    top: @vo-h-header + @vo-h-menu + @vo-tb-gap-top + @vo-h-toolbar + 8px !important;
+    left: var(--vo-search-left, 20px) !important;
+    right: auto;
+    height: 52px !important;                         /* equal above and below the field: 10 + 32 + 10 */
+    min-height: 0 !important;                        /* the stock window has min-height 50: with it the bottom is 4 larger */
+    border: none;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .9);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    box-shadow: var(--vo-shadow);
+    font-family: @vo-font;
+
+    .body { background: transparent; }
+    .box {
+        align-items: center;
+        gap: 4px;
+        padding: 10px 7px 10px 18px;
+    }
+    .search-input-group {
+        margin-right: 4px;
+        input[type=search] {
+            width: 220px;
+            height: 32px;
+            padding: 0 44px 0 12px !important;
+            border: 1px solid #e2e2e2;               /* divider-accent */
+            border-radius: 8px;
+            background: #ffffff;
+            color: #333333;                           /* base-1 */
+            font-family: @vo-font;
+            font-size: 13px;
+            box-shadow: none;
+            &::placeholder { color: #a8adb4; }        /* base-4 */
+            &:focus { border-color: #0075ff; }        /* accent-main-primary */
+        }
+        #search-bar-results {
+            line-height: 32px;
+            padding: 0 12px 0 4px;
+            color: #a8adb4;                           /* base-4 */
+            font-size: 12px;
+        }
+    }
+    .tools {
+        gap: 2px;
+        > div, > div:first-of-type { margin: 0; }
+        .btn-toolbar {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            &:hover:not(.disabled) { background: var(--vo-hover); }
+            &:active:not(.disabled) { background: var(--vo-active, #ebebed); }
+            &.disabled { opacity: .4; }
+            .icon {
+                width: 24px;
+                height: 24px;
+                margin: 0;
+                background: #656f7b;                  /* like the panel icons */
+                -webkit-mask: url("@{vo-air-url}chevron.svg") center / contain no-repeat;
+                        mask: url("@{vo-air-url}chevron.svg") center / contain no-repeat;
+            }
+            .icon.btn-arrow-up { transform: rotate(180deg); }
+            .icon.btn-more-vertical {
+                transform: rotate(90deg);
+                -webkit-mask-image: url("@{vo-air-url}more.svg");
+                        mask-image: url("@{vo-air-url}more.svg");
+            }
+            .icon.btn-close {
+                -webkit-mask-image: url("@{vo-air-url}close.svg");
+                        mask-image: url("@{vo-air-url}close.svg");
+            }
+        }
+    }
+}
+
+/* Without the header and menu bar the search card rises together with the toolbar
+   row. */
+body.vo-compact.vo-top-hidden:not(.vo-rulers) .asc-window.search-bar {
+    top: @vo-tb-gap-top + @vo-h-toolbar + 8px !important;
+}
+
+/* With rulers, the search card starts below the SDK ruler strip in every chrome mode. */
+body.vo-compact.vo-rulers {
+    // Unitless visibility factors survive zero-unit removal in release CSS minification.
+    --vo-search-chrome: 1;
+    --vo-search-toolbar: 1;
+    &.vo-top-hidden { --vo-search-chrome: 0; }
+    &.vo-tb-hidden,
+    &.vo-view { --vo-search-toolbar: 0; }
+    .asc-window.search-bar {
+        // The percentage fallback keeps its unit in release CSS minification.
+        top: calc(var(--vo-search-chrome) * (@vo-h-header + @vo-h-menu)
+            + var(--vo-search-toolbar) * (@vo-tb-gap-top + @vo-h-toolbar + @vo-tb-gap)
+            + var(--content-padding-top, 0%) + 26px + 8px) !important;
+    }
+}
+
+/* "⋮" in the search bar opens the "Search and replace" panel in the left area
+   (onOpenPanel → LeftMenu.onShowHideSearch, CompactShell LEFT_PANELS.search):
+   the bar is search by default, replace and options are on request, as in spreadsheets.
+   The second "⋮" is for PDF editing, documents do not need it. */
+body.vo-compact .asc-window.search-bar {
+    #search-bar-open-panel-redact { display: none; }
+}
+
+/* Document scrolling: the panel presses to the header: a shift up by the whole
+   top gap @vo-tb-gap-top and the top corners without rounding; back, the same
+   softly. The shift is by transform, not by padding: the layout and canvas do not change,
+   the document does not twitch. The "scrolled" sign is set by
+   OutlineRail.bindScrollbars. */
+body.vo-compact #vo-tb {
+    transition: transform .28s @vo-ease,
+                border-top-left-radius .28s @vo-ease,
+                border-top-right-radius .28s @vo-ease;
+}
+body.vo-compact.vo-scrolled:not(.vo-rulers) #vo-tb {
+    transform: translateY(-@vo-tb-gap-top);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* The outline (the button with the number and the expanded column) rises on scrolling
+   together with the panel: by the same gap and with the same motion, the distance to
+   the panel does not change. */
+body.vo-compact #vo-outline { transition: transform .28s @vo-ease; }
+body.vo-compact.vo-scrolled:not(.vo-rulers) #vo-outline { transform: translateY(-@vo-tb-gap-top); }
+
+body.vo-compact,
+body.vo-boot {
+    --vo-fig-pill-icon: #c9ccd0;   /* base-5 */
+    --vo-fig-pill-fg:   #a8adb4;   /* base-4 */
+}
+
+/* The outline button is 11 below the panel bottom: the column padding 3 + the gap under
+   the panel 8. */
+body.vo-compact #vo-outline:not(.open) .vo-outline-panel { padding-top: 3px; }
+
+/* Hover on the outline button: the background is lighter, the icon and number are darker.
+   The stock gray hover backing of buttons is not needed here. */
+body.vo-compact #vo-outline:not(.open) .vo-outline-toggle {
+    transition: background-color @vo-dur-state ease-out, color @vo-dur-state ease-out;
+    /* There are no intermediate AIR tokens: the colors are a mix of neighboring tokens,
+       60% of the way from the regular state to the next step. */
+    &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, .8);          /* without hover it is white 50% */
+        color: #b5b9bf;                               /* 60% of the way from base-5 to base-4 */
+        .vo-outline-count { color: #9199a1; }         /* 60% of the way from base-4 to base-3 */
+    }
+}
+
+/* --- Footer --------------------------------------------------------------- */
+/* The footer hint is centered while the caret is in the footer. There is no mockup:
+   a card, as in the toolbar row, buttons as the row buttons. The hint
+   does not cover the footer text: for the header it is below, above the bottom row, for
+   the footer (the vo-hf-footer class) it is on top, under the toolbar row (with
+   a hidden top it is higher by the header and menu bar): the engine scrolls the document
+   so that the caret of the header is at the window top, and of the footer at the window bottom. */
+#vo-hf-hint {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: @vo-h-status + 12px;
+    transform: translateX(-50%);
+    z-index: @vo-z-toolbar;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 6px 6px 14px;
+    font-family: @vo-font;
+    font-size: 13px;
+    color: @vo-text-2;
+    white-space: nowrap;
+    .vo-material-area();
+
+    &.open { display: flex; }
+
+    .vo-hf-btn {
+        height: 28px;
+        padding: 0 10px;
+        border: none;
+        border-radius: @vo-r-sm;
+        background: transparent;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: 13px;
+        cursor: pointer;
+        &:hover:not(.vo-locked) { background: @vo-hover; }
+        &.vo-locked { color: @vo-text-off; cursor: default; }
+    }
+}
+body.vo-compact #vo-hf-hint.vo-hf-footer {
+    top: @vo-h-shell + 12px;
+    bottom: auto;
+}
+body.vo-compact.vo-tb-hidden #vo-hf-hint.vo-hf-footer { top: @vo-h-shell - @vo-tb-gap-top - @vo-h-toolbar + 12px; }
+body.vo-compact.vo-top-hidden #vo-hf-hint.vo-hf-footer { top: @vo-h-shell - @vo-h-header - @vo-h-menu + 12px; }
+body.vo-compact.vo-top-hidden.vo-tb-hidden #vo-hf-hint.vo-hf-footer { top: @vo-tb-gap + 12px; }
+
+/* --- Menu bar: marks, ▸ and status ---------------------------------------- */
+/* The right column of the menu bar row (padding-right 42 above) is the place for the mark and ▸, like
+   the check marks of the toolbar lists: a 24 column at padding 18, the glyph at its
+   center. The keyboard shortcut sits before the column. The ✓ mark is 18, as in
+   lists; ▸ is a mirrored 14 glyph. */
+body.vo-compact .vo-mn {
+    .vo-mn-chk,
+    .vo-mn-arrow {
+        position: absolute;
+        top: 50%;
+        right: 18px;
+        width: 24px;
+        justify-content: center;
+        margin: 0;
+    }
+    .vo-mn-chk { transform: translateY(-50%); }
+    .vo-mn-arrow { transform: translateY(-50%) scaleX(-1); }
+    .vo-mn-chk .vo-air { width: 18px; height: 18px; }
+    .vo-mn-dot { height: 24px; }
+
+    /* The option group title is from the label padding of an item without an icon. */
+    .vo-mn-grp-t { padding: 0 18px; }
+}
+
+/* Waiting for a reply to "Edit document": an hourglass before the indicator
+   text (the vo-busy class is set by DocumentActions.renderStatus). */
+body.vo-compact .vo-mn .vo-mn-status.vo-busy::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    vertical-align: -3px;
+    background: currentColor;
+    -webkit-mask: url("@{vo-air-url}hourglass.svg") center / contain no-repeat;
+            mask: url("@{vo-air-url}hourglass.svg") center / contain no-repeat;
+}
+
+/* The table size grid in the "Table" submenu (DocumentActions.tableGrid):
+   a stop button without a look of its own, the grid is stock; the live size region
+   is visible only to the screen reader. */
+body.vo-compact .vo-mn {
+    .vo-mn-dim {
+        display: block;
+        padding: 4px 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: default;
+
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; border-radius: @vo-r-xs; }
+    }
+    .vo-mn-dim-live {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+}
+
+/* A disabled "/" command is like a disabled menu bar item: the label and icon
+   dim, the cursor does not invite a press, hover and the keyboard cursor do not fill
+   the row; the reason is in the place of the group hint. */
+#vo-slash .vo-slash-item.vo-locked {
+    cursor: default;
+
+    &, &:hover, &:active, &.on { background: transparent; }
+    .vo-slash-t, .vo-slash-i, .vo-slash-h { color: @vo-text-off; }
+}
+
+/* The toolbar font size field (CompactToolbar.sizeBox): the input field and chevron in
+   one value list box; the field without its own border and fill: the look is given by the
+   box: the label font size, rounding and hover backing are as for buttons;
+   the chevron is without the button backing and is not squeezed by the field. The second selector is stronger than
+   the rules of the value list labels of the row (#vo-tb .vo-value-label): the field
+   inherits the font and color of the box. */
+.vo-size,
+body.vo-compact #vo-tb .vo-size {
+    .vo-size-box {
+        display: inline-flex;
+        align-items: center;
+        height: 100%;
+        box-sizing: border-box;
+        border-radius: @vo-r-sm;
+        font-size: @vo-fs-ctrl;
+        transition: background-color @vo-dur-state ease-out;
+
+        &:hover { background: @vo-hover; }
+    }
+    .vo-size-input {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+    }
+    .vo-ib.vo-size-caret {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 0;
+        height: auto;
+        padding: 0;
+        background: transparent;
+    }
+}
+
+/* --- Compact windows ----------------------------------------------------- */
+/* The regular window template is a separate file: the shared shell file does not
+   grow from windows. It is included last, so that the window rules come after the rules
+   of the shell. */
+@import "compact-windows.less";
+
+/* The "Bookmarks" window is its own compact window, after the template: its rules
+   complement the template under the vo-win--bookmarks mark. */
+@import "compact-bookmarks.less";
+
+/* The "Watermark settings" window is its own compact window, after the template: its
+   rules complement the template under the vo-win--watermark mark. */
+@import "compact-watermark.less";

@@ -1,0 +1,1062 @@
+/*
+ * Compact shell of the presentation editor: the frame and the shared tokens.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Top to bottom: the header (#vo-header), the menu bar (#vo-menubar), the white card
+ * of the toolbar (#vo-toolbar) on a canvas-colored field, the SDK work area and the
+ * status bar (#vo-status) over it. The stock ribbon, title, left icon column
+ * and status bar stay in the DOM and are hidden under body.vo-compact;
+ * body.vo-advanced ("Stock interface") brings them back and hides the shell nodes.
+ *
+ * The row heights are pairs to H_HEADER, H_MENU, H_TB_GAP_TOP, H_TOOLBAR, H_TB_GAP in
+ * app/view/CompactShell.js; change them in pairs.
+ *
+ * Zone styles are in their own files, imported only by this one (at the end).
+ */
+
+/* --- Tokens: color ------------------------------------------------------- */
+/* Names and values are those that the documents compact shell
+   (documenteditor/main/resources/less/compact-shell.less) finally gives to
+   body.vo-compact and the early-start class body.vo-boot, with its late refinements;
+   the palette is the AIR design system tokens. The early start frame is painted with the same
+   colors. */
+
+body.vo-compact,
+body.vo-boot {
+    --vo-shell-bg: #ffffff;
+    --vo-surface: #ffffff;
+    --vo-canvas-bg: #eef2f4;
+    --vo-border: rgba(0, 0, 0, 0.08);
+    --vo-separator: rgba(0, 0, 0, 0.05);
+    --vo-text: #333333;
+    --vo-text-2: #525c69;
+    --vo-text-3: #828b95;
+    --vo-text-off: #a8adb4;
+    --vo-icon: #525c69;
+    --vo-link: #0154c8;
+    --vo-link-underline: rgba(1, 84, 200, 0.3);
+    --vo-hover: rgba(0, 0, 0, 0.03);
+    --vo-active: rgba(0, 0, 0, 0.06);
+    --vo-selected: #edf7ff;
+    --vo-selected-fg: #0075ff;
+    --vo-tinted-bg: #e6f4ff;
+    --vo-tinted-fg: #0154c8;
+    --vo-tinted-hover: #dfedf7;
+    --vo-tinted-act: #d8e5f0;
+    --vo-outline-stroke: #edeef0;
+    --vo-outline-hover: #f7f7f7;
+    --vo-outline-act: #f0f0f0;
+    --vo-badge-na-bg: #edeef0;
+    --vo-badge-na-fg: #828b95;
+    --vo-accent: #0075ff;
+    --vo-accent-hover: #0072f8;
+    --vo-focus: #4a9dff;
+    --vo-danger: #ff5752;
+    --vo-shadow: 0 6px 12px 0 rgba(0, 0, 0, 0.2);
+    --vo-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.15);
+    --vo-win-stroke: #edeef0;
+    --vo-win-label: #828b95;
+    --vo-win-off-bg: #edeef0;
+    --vo-win-off-fg: #c9ccd0;
+    --vo-win-white: #ffffff;
+    --vo-win-filled-hover: #0071f7;
+    --vo-win-filled-act: #006ef0;
+    --vo-win-seg-stroke: #58b1ff;
+    --vo-win-divider: #f0f0f0;
+    --vo-win-cell: #c4e6ff;
+    --vo-win-cell-del: #ffcdcc;
+    --vo-win-drop-stroke: #c9ccd0;
+    --vo-win-thumb-bg: #f6fafb;
+    --vo-win-page-line: #edeef0;
+    --vo-win-page-shadow: 0 0 0 1px #edeef0, 0 1px 2px rgba(0, 0, 0, .06);
+    --vo-fig-menu-fg: #333333;
+    --vo-fig-row-fg: #333333;
+    --vo-fig-row-icon: #a8adb4;
+    --vo-fig-on-bg: #e6f4ff;
+    --vo-fig-on-fg: #0075ff;
+    --vo-fig-sep: rgba(0, 0, 0, 0.08);
+    --vo-fig-rail-fg: #828b95;
+    --vo-fig-pill-fg: #a8adb4;
+    --vo-fig-pill-icon: #c9ccd0;
+}
+
+/* Under the dark interface theme the shell stays light, as in documents:
+   the same set as their body.vo-compact.theme-type-dark block. */
+body.vo-compact.theme-type-dark,
+body.vo-boot.theme-type-dark {
+    --vo-shell-bg: #ffffff;
+    --vo-surface: #ffffff;
+    --vo-canvas-bg: #eef2f4;
+    --vo-border: rgba(0, 0, 0, 0.08);
+    --vo-separator: rgba(0, 0, 0, 0.05);
+    --vo-text: #333333;
+    --vo-text-2: #525c69;
+    --vo-text-3: #828b95;
+    --vo-text-off: #a8adb4;
+    --vo-icon: #828b95;
+    --vo-link: #0154c8;
+    --vo-link-underline: rgba(1, 84, 200, 0.3);
+    --vo-hover: rgba(0, 0, 0, 0.03);
+    --vo-active: rgba(0, 0, 0, 0.06);
+    --vo-selected: #edf7ff;
+    --vo-selected-fg: #0075ff;
+    --vo-tinted-bg: #e6f4ff;
+    --vo-tinted-fg: #0154c8;
+    --vo-tinted-hover: #dfedf7;
+    --vo-tinted-act: #d8e5f0;
+    --vo-outline-stroke: #edeef0;
+    --vo-outline-hover: #f7f7f7;
+    --vo-outline-act: #f0f0f0;
+    --vo-badge-na-bg: #edeef0;
+    --vo-badge-na-fg: #828b95;
+    --vo-accent: #0075ff;
+    --vo-accent-hover: #0072f8;
+    --vo-focus: #4a9dff;
+    --vo-danger: #ff5752;
+    --vo-shadow: 0 8px 17px rgba(0, 0, 0, 0.21);
+    --vo-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.13);
+    --vo-win-stroke: #edeef0;
+    --vo-win-label: #828b95;
+    --vo-win-off-bg: #edeef0;
+    --vo-win-off-fg: #c9ccd0;
+    --vo-win-white: #ffffff;
+    --vo-win-filled-hover: #0071f7;
+    --vo-win-filled-act: #006ef0;
+    --vo-win-seg-stroke: #58b1ff;
+    --vo-win-divider: #f0f0f0;
+    --vo-win-cell: #c4e6ff;
+    --vo-win-cell-del: #ffcdcc;
+    --vo-win-drop-stroke: #c9ccd0;
+    --vo-win-thumb-bg: #f6fafb;
+    --vo-win-page-line: #edeef0;
+    --vo-win-page-shadow: 0 0 0 1px #edeef0, 0 1px 2px rgba(0, 0, 0, .06);
+}
+
+/* --- Tokens: LESS ---------------------------------------------------------- */
+
+@vo-shell-bg:       var(--vo-shell-bg);
+@vo-surface:        var(--vo-surface);
+@vo-canvas-bg:      var(--vo-canvas-bg);
+@vo-border:         var(--vo-border);
+@vo-separator:      var(--vo-separator);
+@vo-text:           var(--vo-text);
+@vo-text-2:         var(--vo-text-2);
+@vo-text-3:         var(--vo-text-3);
+@vo-text-off:       var(--vo-text-off);
+@vo-icon:           var(--vo-icon);
+@vo-hover:          var(--vo-hover);
+@vo-active:         var(--vo-active);
+@vo-selected:       var(--vo-selected);
+@vo-selected-fg:    var(--vo-selected-fg);
+@vo-outline-stroke: var(--vo-outline-stroke);
+@vo-outline-hover:  var(--vo-outline-hover);
+@vo-outline-act:    var(--vo-outline-act);
+@vo-accent:         var(--vo-accent);
+@vo-focus:          var(--vo-focus);
+@vo-shadow:         var(--vo-shadow);
+@vo-shadow-raised:  var(--vo-shadow-raised);
+
+/* Row geometry is as in the header of documents and spreadsheets: name 46 (10 on top,
+   6 to the menu), menu 30 (10 under the labels), toolbar card 44 by 76 + 4 = 80
+   and 8 under it. */
+@vo-h-header:       46px;      // pair to H_HEADER
+@vo-h-menu:         30px;      // pair to H_MENU
+@vo-tb-gap-top:     4px;       // pair to H_TB_GAP_TOP: above the toolbar card
+@vo-h-toolbar:      44px;      // pair to H_TOOLBAR
+@vo-tb-gap:         8px;       // pair to H_TB_GAP: under the toolbar card
+@vo-h-status:       30px;      // the bar lies over the work area, H_STATUS = 0
+@vo-pad-x:          20px;
+@vo-r-sm:           8px;
+@vo-r-md:           12px;
+
+@vo-font:           system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif,
+                    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+@vo-fs-ctrl:        13px;
+@vo-fs-status:      11px;
+@vo-ease:           cubic-bezier(.32, .72, 0, 1);
+@vo-z-drop:         1000;      // stock scale: @zindex-dropdown
+@vo-z-float:        1002;      // stock scale: @zindex-popover
+
+/* Header, buttons and lists at buttons are the final numbers of the documents compact shell (its
+   "Header" and "Paddings of all menus" blocks at the end of the file), they are also the prototype look. */
+@vo-tinted-bg:      var(--vo-tinted-bg);
+@vo-tinted-fg:      var(--vo-tinted-fg);
+@vo-tinted-hover:   var(--vo-tinted-hover);
+@vo-tinted-act:     var(--vo-tinted-act);
+@vo-badge-na-bg:    var(--vo-badge-na-bg);
+@vo-badge-na-fg:    var(--vo-badge-na-fg);
+@vo-accent-hover:   var(--vo-accent-hover);
+@vo-outline-w:      1.5px;     // border-width-medium
+@vo-focus-w:        2px;
+@vo-h-ctrl:         32px;
+@vo-gap-item:       6px;
+@vo-hd-pad-l:       20px;      // left padding of the header and menu bar (@vo-pad-x): the title and the first menu item on one line
+@vo-hd-gap:         19px;      // between elements of the header right cluster
+@vo-menubar-pad-b:  10px;      // menu bar: items at 42..70, labels at 46..66 from the window top
+@vo-fs-header:      18px;      // presentation title, as in documents and spreadsheets
+@vo-track-title:    -.01em;    // title: --ui-text-letter-spacing-neg-3, as in documents and spreadsheets
+@vo-track-ctrl:     normal;    // control labels without letter spacing: --ui-text-letter-spacing-auto, as in documents and spreadsheets
+@vo-lh-header:      1.42857143; // header line: the base line height of documents and spreadsheets (name 18 → 25.71, mode 15 → 21.43)
+@vo-r-pop:          12px;      // popup surfaces
+@vo-pop-min-w:      266px;     // list width from
+@vo-pop-pad:        13px 0 17px;   // list padding: 20 above the glyphs and 24 below
+@vo-pop-row-h:      38px;      // list row
+@vo-pop-row-l:      14px;      // row left padding: icon from 14
+@vo-pop-row-l-text: 18px;      // row left padding when there are no icons
+@vo-pop-row-r:      42px;      // row right padding: mark column 24 and 18 to the edge
+@vo-pop-row-gap:    11px;      // icon → label
+@vo-fs-row:         13px;      // list row font size
+@vo-pop-sep-m:      7px 23px 7px 14px;   // separator margins
+@vo-pop-sep-bg:     #f0f0f0;   // separator: divider-default
+@vo-dur-pop:        .22s;
+@vo-dur-state:      .15s;
+
+/* The compact windows (compact-windows.less) are built on the documents window template, so
+   here is what it relies on, with the same values as in
+   documents: colors are the same custom properties from the values block above, the
+   dropdown list row is the final numbers of their menu (38 × 19, the shell lists
+   above have the same 38 row). */
+@vo-link:           var(--vo-link);
+@vo-link-underline: var(--vo-link-underline);
+@vo-danger:         var(--vo-danger);
+@vo-win-stroke:       var(--vo-win-stroke);
+@vo-win-label:        var(--vo-win-label);
+@vo-win-off-bg:       var(--vo-win-off-bg);
+@vo-win-off-fg:       var(--vo-win-off-fg);
+@vo-win-white:        var(--vo-win-white);
+@vo-win-filled-hover: var(--vo-win-filled-hover);
+@vo-win-filled-act:   var(--vo-win-filled-act);
+@vo-win-seg-stroke:   var(--vo-win-seg-stroke);
+@vo-win-divider:      var(--vo-win-divider);
+@vo-win-cell:         var(--vo-win-cell);
+@vo-win-cell-del:     var(--vo-win-cell-del);
+@vo-win-drop-stroke:  var(--vo-win-drop-stroke);
+@vo-win-thumb-bg:     var(--vo-win-thumb-bg);
+@vo-win-page-line:    var(--vo-win-page-line);
+@vo-win-page-shadow:  var(--vo-win-page-shadow);
+@vo-row-h:          @vo-pop-row-h;   // window dropdown list row: menu-popup-item height
+@vo-row-pad-x:      19px;      // row side padding, as in the documents menu (shell lists without icons have 18 on the left)
+
+/* Popup surface of a window and its dropdown list: opaque background,
+   radius of popup surfaces and their shadow, as in the shell lists. */
+.vo-material-popup() {
+    background: @vo-surface;
+    border: none;
+    border-radius: @vo-r-pop;
+    box-shadow: @vo-shadow;
+}
+
+/* --- Shell ------------------------------------------------------------------- */
+
+body.vo-compact {
+    /* The stock ribbon and status bar stay in the DOM but are not shown:
+       their nodes are siblings of our rows inside #toolbar and #statusbar. */
+    #toolbar > *:not(#vo-shell),
+    #statusbar > *:not(#vo-status) {
+        display: none !important;
+    }
+
+    /* The stock title row (the twoLevelHeader branch in Viewport.onAppShowed).
+       !important is against the stock inline show(). */
+    #app-title { display: none !important; }
+
+    /* The left menu stays alive: inside it are the stock comments,
+       search and chat panels. The icon column is always hidden, the menu itself until
+       the shell left area opens it. */
+    #left-menu {
+        display: none;
+        .tool-menu-btns { display: none; }
+    }
+
+    /* The area height is written by applyLayout; the background is the field under the toolbar card. */
+    #toolbar {
+        min-height: 0;
+        background: @vo-canvas-bg;
+        box-shadow: none;
+        border: none;
+    }
+
+    /* The status bar lies over the work area: it takes no space in the layout
+       (H_STATUS = 0), and #vo-status is pressed to the bottom of the window. */
+    #statusbar {
+        height: 0 !important;
+        min-height: 0;
+        overflow: visible;
+        position: relative;
+        z-index: 500;
+        background: none;
+        border-top: none;
+    }
+
+    #viewport { background-color: @vo-canvas-bg; }
+}
+
+/* --- Canvas ------------------------------------------------------------------ */
+/* A gray field and white cards: the thumbnail strip, the slide, the notes. The engine takes the canvas colors
+   not from CSS but from the skin: CompactShell.canvasSkin() reads them
+   from #editor_sdk and passes them to asc_setSkin after start and on every theme change.
+   The names are theme keys with the --vo-skin- prefix: inside #editor_sdk live
+   the stock context menus and hints, and they need their own theme variables.
+   Under the dark theme the values are the same: the shell stays light.
+   Colors are hexadecimal: the engine reads them as hex. */
+body.vo-compact #editor_sdk {
+    /* field around the slide, scrollbars, slide border */
+    --vo-skin-canvas-background:                 #eef2f4;   /* @vo-canvas-bg */
+    --vo-skin-canvas-content-background:         #ffffff;
+    --vo-skin-canvas-page-border:                #eef2f4;
+    /* thumbnail strip: background, border of the current and hovered, slide number */
+    --vo-skin-background-toolbar:                #ffffff;
+    --vo-skin-border-preview-select:             #0075ff;   /* @vo-accent */
+    --vo-skin-border-preview-hover:              #c9ccd0;   /* base-5 */
+    --vo-skin-text-normal:                       #525c69;   /* @vo-text-2 */
+    /* separators of the strip, slide and notes are the field color: cards without lines */
+    --vo-skin-border-toolbar:                    #eef2f4;
+    /* presenter window: background as the strip's, buttons and separators are light */
+    --vo-skin-background-normal:                 #ffffff;
+    --vo-skin-highlight-button-hover:            #f7f7f7;   /* @vo-outline-hover */
+    --vo-skin-highlight-button-pressed:          #f0f0f0;   /* @vo-outline-act */
+    --vo-skin-border-regular-control:            #c9ccd0;
+    --vo-skin-border-divider:                    #edeef0;
+    --vo-skin-text-normal-pressed:               #333333;   /* @vo-text */
+    /* rulers and tabs: as in documents */
+    --vo-skin-canvas-ruler-background:           #edf7ff;   /* @vo-selected */
+    --vo-skin-canvas-ruler-margins-background:   #ffffff;
+    --vo-skin-canvas-ruler-border:               #e2e2e2;
+    --vo-skin-canvas-ruler-mark:                 #a8adb4;   /* @vo-text-off */
+    --vo-skin-canvas-ruler-handle-border:        #0075ff;
+    --vo-skin-canvas-ruler-handle-border-disabled: #a8adb4;
+    --vo-skin-canvas-high-contrast:              #000000;
+    --vo-skin-canvas-high-contrast-disabled:     #666666;
+    /* scroll thumb: as in documents */
+    --vo-skin-canvas-scroll-thumb:                #c9ccd0;
+    --vo-skin-canvas-scroll-thumb-hover:          #a8adb4;
+    --vo-skin-canvas-scroll-thumb-pressed:        #828b95;
+    --vo-skin-canvas-scroll-thumb-border:         #c9ccd0;
+    --vo-skin-canvas-scroll-thumb-border-hover:   #a8adb4;
+    --vo-skin-canvas-scroll-thumb-border-pressed: #828b95;
+    --vo-skin-canvas-scroll-thumb-target:         #c9ccd0;
+    --vo-skin-canvas-scroll-thumb-target-hover:   #a8adb4;
+    --vo-skin-canvas-scroll-thumb-target-pressed: #828b95;
+    --vo-skin-canvas-scroll-arrow:                #eef2f4;
+    --vo-skin-canvas-scroll-arrow-hover:          #eef2f4;
+    --vo-skin-canvas-scroll-arrow-pressed:        #eef2f4;
+
+    background-color: @vo-canvas-bg;
+}
+
+/* Cards follow the engine nodes. The node geometry is driven by the engine (positions, strip
+   width, notes height and its border), so the styles change only the background and
+   rounding: no paddings, heights or handlers. */
+body.vo-compact #id_panel_thumbnails,
+body.vo-compact #id_panel_thumbnails_split {
+    background-color: #ffffff !important;
+}
+
+body.vo-compact #id_panel_thumbnails {
+    border-top-right-radius: @vo-r-md;
+    overflow: hidden;
+}
+
+/* Notes: the engine writes the background in an inline style from the same skin as the field
+   around the slide (BackgroundColorNotes = canvas-background), hence
+   !important. The "Click to add notes" hint is stock. */
+body.vo-compact #id_bottom_pannels_container,
+body.vo-compact #id_panel_notes,
+body.vo-compact #id_notes {
+    background-color: #ffffff !important;
+}
+
+body.vo-compact #id_bottom_pannels_container {
+    border-top-left-radius: @vo-r-md;
+    border-top-right-radius: @vo-r-md;
+}
+
+/* The top padding of the work area differs in the stock themes (--content-padding-top:
+   8 px for "white" and "night", 0 for the others), and a theme change would shift the canvas.
+   In the shell the field above the canvas is only the gap under the toolbar card. */
+body.vo-compact .layout-item.middle {
+    padding-top: 0;
+}
+
+/* The status bar lies over the bottom of the work area (H_STATUS = 0). In
+   documents the page scrolls under it, while in presentations the notes are at the bottom,
+   so the engine canvas ends above the bar while it is visible, and
+   a field remains under the bar. The engine computes the heights of nodes inside itself. */
+body.vo-compact:has(#vo-status:not([hidden])) #editor_sdk {
+    height: calc(100% - @vo-h-status);
+}
+
+#vo-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: @vo-canvas-bg;
+    font-family: @vo-font;
+    font-size: @vo-fs-ctrl;
+    color: @vo-text;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: height .3s @vo-ease;
+}
+
+#vo-shell > [hidden],
+#vo-status[hidden] {
+    display: none !important;
+}
+
+/* The header and menu bar are a white zone above the field; the menu is separated from the field by a shadow. */
+#vo-header {
+    display: flex;
+    align-items: center;
+    flex: 0 0 @vo-h-header;
+    height: @vo-h-header;
+    box-sizing: border-box;
+    padding: 0 @vo-pad-x 0 @vo-hd-pad-l;
+    background: @vo-shell-bg;
+    position: relative;
+    z-index: @vo-z-drop + 1;
+}
+
+/* Paddings are as in the documents menu bar: the first label at x = @vo-hd-pad-l
+   (an item has its own padding 8), on the title line; in height at 46..66 from the
+   window top, under them a 10 white field up to the shadow. */
+#vo-menubar {
+    display: flex;
+    align-items: center;
+    flex: 0 0 @vo-h-menu;
+    height: @vo-h-menu;
+    box-sizing: border-box;
+    padding: 0 (@vo-hd-pad-l - 8px) @vo-menubar-pad-b;
+    background: @vo-shell-bg;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .05);
+    position: relative;
+    z-index: @vo-z-drop;
+}
+
+/* The toolbar card on the field: gaps above and below are part of the layout. The card
+   top is at 80, as in documents and spreadsheets. */
+#vo-toolbar {
+    display: flex;
+    align-items: center;
+    flex: 0 0 @vo-h-toolbar;
+    height: @vo-h-toolbar;
+    min-height: @vo-h-toolbar;
+    box-sizing: border-box;
+    margin: @vo-tb-gap-top @vo-pad-x @vo-tb-gap;
+    padding: 0 6px;
+    background: rgba(255, 255, 255, .9);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    border-radius: @vo-r-md;
+    box-shadow: @vo-shadow-raised;
+}
+
+#vo-status {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: @vo-h-status;
+    box-sizing: border-box;
+    padding: 0 @vo-pad-x;
+    background: rgba(255, 255, 255, .95);
+    font-family: @vo-font;
+    font-size: @vo-fs-status;
+    color: @vo-text-3;
+}
+
+/* --- Early start ------------------------------------------------------------- */
+/* The early-start class is set from the moment the config arrives (Gateway init) until the shell is built
+   on app:ready: the stock chrome is hidden, in place of the rows there is a frame of their color, heights
+   are set on the areas by bootLayout. The class is removed by endBoot: after the build,
+   a failure or when the attempts run out; then the stock interface comes back whole. */
+body.vo-boot {
+    #app-title,
+    #left-menu,
+    #toolbar > *,
+    #statusbar > * {
+        display: none !important;
+    }
+
+    #toolbar {
+        min-height: 0;
+        background-color: @vo-canvas-bg;
+        background-image: linear-gradient(@vo-shell-bg, @vo-shell-bg);
+        background-repeat: no-repeat;
+        background-position: 0 0;
+        background-size: 100% (@vo-h-header + @vo-h-menu);
+        box-shadow: none;
+    }
+
+    #statusbar {
+        background: @vo-shell-bg;
+        border-top: 1px solid @vo-border;
+    }
+}
+
+/* --- "Stock interface" ------------------------------------------------------- */
+/* The modes are mutually exclusive: the shell nodes are hidden, except the back button. */
+body.vo-advanced [id^="vo-"]:not(#vo-back) {
+    display: none !important;
+}
+
+.vo-mode {
+    height: 28px;
+    margin: 0 6px;
+    padding: 0 12px;
+    border: 1.5px solid @vo-outline-stroke;
+    border-radius: @vo-r-sm;
+    background: @vo-surface;
+    color: @vo-text-2;
+    font-family: @vo-font;
+    font-size: @vo-fs-ctrl;
+    line-height: 25px;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover { background: @vo-outline-hover; }
+    &:active { background: @vo-outline-act; }
+    &:focus-visible { outline: 2px solid @vo-focus; outline-offset: 1px; }
+}
+
+.vo-back-float {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    z-index: @vo-z-float;
+}
+
+/* --- AIR icons --------------------------------------------------------------- */
+/* Icons.svg returns <span class="vo-air"> with a file in --vo-air-src and a size in
+   --vo-air-size. The AIR files are filled with one color, so an icon is a mask:
+   the currentColor fill takes the control text color, and hover, press and
+   muted look work without separate rules. The rule is shared by all
+   shell zones. */
+.vo-air {
+    display: inline-block;
+    width: var(--vo-air-size, 17px);
+    height: var(--vo-air-size, 17px);
+    flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask-image: var(--vo-air-src);
+            mask-image: var(--vo-air-src);
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
+    -webkit-mask-size: contain;
+            mask-size: contain;
+}
+
+/* --- Header ------------------------------------------------------------------ */
+/* The look is the presentations prototype, which is also the final look of the documents compact shell (their
+   "Header" block at the end of compact-shell.less): the title and the save state on the left;
+   on the right the place of the show button, version history (flat), "Download ▾" (a bare
+   icon 24), share (tinted) and the mode switch (filled) the rightmost.
+   The numbers are those of the documents and spreadsheets header: padding 10 on top and 6 below, title 18
+   on the line of the first menu bar item, the cluster on the same center 25, between
+   its elements @vo-hd-gap. */
+body.vo-compact {
+    /* The row paddings are carried by the header itself (.vo-hd), as in documents. */
+    #vo-header {
+        padding: 0;
+        background: @vo-shell-bg;
+    }
+
+    .vo-hd {
+        display: flex;
+        align-items: center;
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 8px;
+        box-sizing: border-box;
+        height: @vo-h-header;
+        min-height: @vo-h-header;
+        padding: 10px @vo-pad-x 6px @vo-hd-pad-l;
+        background: @vo-shell-bg;
+        font-family: @vo-font;
+        font-size: @vo-fs-header;
+
+        /* Title. The field is edited in place: a hover backing and a ring on
+           focus; the width follows the text (field-sizing), the ceiling is 40 % of the header.
+           A negative margin cancels the left padding: the title text sits on
+           one line with the first menu bar item. */
+        .vo-hd-title {
+            box-sizing: content-box;
+            field-sizing: content;
+            max-width: 40%;
+            min-width: 0;
+            margin-left: -6px;
+            padding: 2px 6px;
+            border: none;
+            border-radius: @vo-r-sm;
+            background: transparent;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: @vo-font;
+            font-size: @vo-fs-header;
+            font-weight: 600;
+            line-height: @vo-lh-header;
+            color: @vo-text;
+            letter-spacing: @vo-track-title;
+        }
+
+        /* Without renaming the title is text, the cursor is not a text one. */
+        span.vo-hd-title { cursor: default; }
+
+        input.vo-hd-title {
+            cursor: text;
+
+            &:hover { background: @vo-hover; }
+            &:focus {
+                outline: none;
+                background: @vo-shell-bg;
+                box-shadow: 0 0 0 @vo-focus-w @vo-focus;
+            }
+
+            /* Renaming is unavailable: the field is just text. */
+            &[readonly] {
+                cursor: default;
+
+                &:hover { background: transparent; }
+                &:focus { box-shadow: none; }
+            }
+        }
+
+        /* Save state. "Saving…" and "Not saved" are an AIR badge
+           (label md, tintedNoAccent), "Saved" is an accent check mark 18 without
+           a pill: the badge height, as in documents and spreadsheets. */
+        .vo-hd-state {
+            margin-left: -6px;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            flex: 0 0 auto;
+            height: 18px;
+            padding: 0 8px;
+            border-radius: 18px;
+            background: @vo-badge-na-bg;
+            color: @vo-badge-na-fg;
+            font-family: @vo-font;
+            font-size: @vo-fs-ctrl;
+            font-weight: 500;
+            line-height: 18px;
+            white-space: nowrap;
+
+            &.saved {
+                padding: 0;
+                background: transparent;
+                color: @vo-accent;
+
+                .vo-air { width: 18px; height: 18px; }   /* --ui-system-label-size md */
+            }
+        }
+
+        .vo-hd-right {
+            display: flex;
+            align-items: center;
+            gap: @vo-hd-gap;
+            margin-left: auto;
+            flex: 0 0 auto;
+        }
+
+        /* The place of the show button: when empty it takes no space and gives no extra
+           gap; the button inside joins the cluster row. */
+        #vo-hdr-show { display: contents; }
+    }
+
+    /* Icon button. */
+    .vo-hd .vo-ib {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        height: @vo-h-ctrl;
+        min-width: @vo-h-ctrl;
+        padding: 0 4px;
+        border: none;
+        border-radius: @vo-r-sm;
+        background: transparent;
+        color: @vo-icon;
+        font-family: @vo-font;
+        font-size: @vo-fs-ctrl;
+        line-height: 1;
+        cursor: pointer;
+        transition: background-color @vo-dur-state ease-out, color @vo-dur-state ease-out,
+                    box-shadow @vo-dur-state ease-out;
+
+        &:hover { background: @vo-hover; color: @vo-text; }
+        &:active { background: @vo-active; }
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+        /* Document access is tinted: a command for the people around the presentation. */
+        &.vo-tinted {
+            background: @vo-tinted-bg;
+            color: @vo-tinted-fg;
+
+            &:hover { background: @vo-tinted-hover; color: @vo-tinted-fg; }
+            &:active { background: @vo-tinted-act; }
+        }
+
+        /* "Download ▾" is a bare icon 24: without a border and backing at rest, on
+           hover, press and with the list open. The class is the same as in
+           documents (where it was outline), the look is their final one. The focus ring
+           stays: Esc from the list returns focus to the button. */
+        &.vo-outlined,
+        &.vo-outlined:hover,
+        &.vo-outlined:active {
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            padding: 0;
+            border: none;
+            box-shadow: none;
+            background: transparent;
+            color: @vo-text-2;
+        }
+
+        &.vo-outlined:focus-visible { box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+        /* Stock lock: a class, not disabled: the second end of the gate on
+           press stays. */
+        &.vo-locked,
+        &.vo-locked:hover,
+        &.vo-locked:active {
+            background: transparent;
+            color: @vo-text-off;
+            cursor: default;
+        }
+    }
+
+    /* The mode switch is AIR filled primary with the height of a cluster button,
+       label 15, chevron 20. */
+    .vo-hd .vo-mode {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        box-sizing: border-box;
+        height: @vo-h-ctrl;
+        margin: 0;
+        padding: 0 6px 0 12px;
+        border-width: @vo-outline-w;
+        border-radius: @vo-r-sm;
+        font-size: 15px;
+        font-weight: 400;
+        line-height: @vo-lh-header;
+        letter-spacing: @vo-track-ctrl;              /* at 15px without letter spacing, like the documents mode button */
+        transition: background-color @vo-dur-state ease-out, color @vo-dur-state ease-out,
+                    box-shadow @vo-dur-state ease-out;
+
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+        &.accent {
+            background: @vo-selected-fg;
+            border-color: @vo-selected-fg;
+            color: #fff;
+            font-weight: 500;
+
+            &:hover { background: @vo-accent-hover; border-color: @vo-accent-hover; color: #fff; }
+            .vo-heading-caret { color: rgba(255, 255, 255, .7); }
+        }
+
+        /* Stock editing ban and lost co-authoring: the look of the disabled
+           documents mode button. A class, not disabled: the second end of the gate on
+           press stays. The accent is removed: a filled button would call for an
+           action that does not exist. */
+        &.vo-locked,
+        &.vo-locked.accent {
+            background: @vo-surface;
+            border-color: @vo-outline-stroke;
+            color: @vo-text-off;
+            font-weight: 400;
+            cursor: default;
+
+            &:hover, &:active { background: @vo-surface; border-color: @vo-outline-stroke; color: @vo-text-off; }
+            .vo-heading-caret { color: @vo-text-off; }
+        }
+
+        .vo-heading-caret {
+            display: inline-flex;
+            align-items: center;
+            flex: 0 0 auto;
+            color: inherit;
+
+            .vo-air { width: 20px; height: 20px; }
+        }
+    }
+
+    /* Lists at the header buttons are the paddings of all prototype menus: width from 266, row
+       38 full width, icon from 14, a mark column on the right. They expand
+       into the window: the list right edge is at the button right edge. */
+    .vo-hd .vo-pop-wrap {
+        position: relative;
+        display: inline-flex;
+
+        .vo-pop {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            left: auto;
+            z-index: @vo-z-drop;
+            box-sizing: border-box;
+            min-width: @vo-pop-min-w;
+            padding: @vo-pop-pad;
+            overflow: hidden;
+            border: none;
+            border-radius: @vo-r-pop;
+            background: @vo-surface;
+            box-shadow: @vo-shadow;
+            transform-origin: 100% 0;
+            animation: vo-hd-pop @vo-dur-pop @vo-ease;
+        }
+
+        &.open .vo-pop { display: block; }
+
+        .vo-pop-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: @vo-pop-row-gap;
+            box-sizing: border-box;
+            width: 100%;
+            min-height: @vo-pop-row-h;
+            padding: 0 @vo-pop-row-r 0 @vo-pop-row-l;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+            color: @vo-text;
+            font-family: @vo-font;
+            font-size: @vo-fs-row;
+            letter-spacing: @vo-track-ctrl;
+            text-align: left;
+            white-space: nowrap;
+            cursor: pointer;
+
+            &:hover { background: @vo-hover; }
+            &:active { background: @vo-active; }
+            &:focus-visible { background: @vo-hover; outline: none; }
+        }
+
+        .vo-pop-i {
+            display: inline-flex;
+            flex: 0 0 auto;
+            color: var(--vo-fig-row-icon);
+        }
+
+        .vo-pop-sep {
+            height: 1px;
+            margin: @vo-pop-sep-m;
+            background: @vo-pop-sep-bg;
+        }
+
+        /* The current mode mark is a check mark 18 in the center of the right column:
+           the row padding keeps the room for it, the row width does not change. */
+        .vo-pop-check {
+            position: absolute;
+            top: 50%;
+            right: 21px;
+            display: inline-flex;
+            color: @vo-accent;
+            visibility: hidden;
+            transform: translateY(-50%);
+        }
+
+        .vo-pop-item.on .vo-pop-check { visibility: visible; }
+    }
+
+    /* A row with an explanation: the mode label and the line under it. */
+    .vo-hd .vo-pop-rich {
+        .vo-pop-text {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            min-width: 0;
+        }
+
+        .vo-pop-t { font-weight: 500; }
+        .vo-pop-d { color: @vo-text-off; font-size: 11px; }
+    }
+}
+
+@keyframes vo-hd-pop {
+    from { opacity: 0; transform: scale(.96); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* --- "Slideshow ▾" ---------------------------------------------------------- */
+/* A two-part button in an outline border, as in the prototype: on the left the icon and
+   label (show from the current slide), on the right ▾ behind a thin line. It is one node and
+   moves between the right edge of the panel (#vo-tb-end) and the header (#vo-hdr-show),
+   so the classes are its own: the panel and header rules for .vo-ib and .vo-pop do not
+   affect it. The list expands into the window, its right edge at the button. */
+body.vo-compact .vo-show {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    height: @vo-h-ctrl;
+    border-radius: @vo-r-sm;
+    background: @vo-surface;
+    box-shadow: inset 0 0 0 @vo-outline-w @vo-outline-stroke;
+    font-family: @vo-font;
+
+    .vo-show-main,
+    .vo-show-arrow {
+        display: inline-flex;
+        align-items: center;
+        box-sizing: border-box;
+        margin: 0;
+        border: none;
+        background: transparent;
+        color: @vo-text;
+        font-family: @vo-font;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color @vo-dur-state ease-out, color @vo-dur-state ease-out;
+
+        &:hover { background: @vo-outline-hover; }
+        &:active { background: @vo-outline-act; }
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+
+        /* Stock lock of the twin: a class, not disabled, as in the header. */
+        &.vo-locked,
+        &.vo-locked:hover,
+        &.vo-locked:active {
+            background: transparent;
+            color: @vo-text-off;
+            cursor: default;
+        }
+    }
+
+    .vo-show-main {
+        gap: 6px;
+        padding: 0 10px 0 8px;
+        border-radius: @vo-r-sm 0 0 @vo-r-sm;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: normal;
+    }
+
+    /* The icon and ▾ take the label color, as in the prototype. */
+    .vo-show-i {
+        display: inline-flex;
+        color: inherit;
+    }
+
+    .vo-show-arrow {
+        padding: 0 6px;
+        border-radius: 0 @vo-r-sm @vo-r-sm 0;
+        box-shadow: inset @vo-outline-w 0 0 @vo-outline-stroke;
+        color: @vo-text;
+
+        &:focus-visible { box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-air { display: block; }
+
+    .vo-show-pop {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        left: auto;
+        z-index: @vo-z-drop;
+        box-sizing: border-box;
+        min-width: @vo-pop-min-w;
+        padding: @vo-pop-pad;
+        border-radius: @vo-r-pop;
+        background: @vo-surface;
+        box-shadow: @vo-shadow;
+        transform-origin: 100% 0;
+        animation: vo-hd-pop @vo-dur-pop @vo-ease;
+    }
+
+    &.open .vo-show-pop { display: block; }
+
+    /* Rows are as in the header lists; they have no icons, the label starts at padding 18. */
+    .vo-show-item {
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        width: 100%;
+        min-height: @vo-pop-row-h;
+        padding: 0 @vo-pop-row-r 0 @vo-pop-row-l-text;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-fs-row;
+        letter-spacing: @vo-track-ctrl;
+        text-align: left;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover { background: @vo-hover; }
+        &:active { background: @vo-active; }
+        &:focus-visible { background: @vo-hover; outline: none; }
+
+        /* Disabled row: the reason is in the row tooltip. */
+        &.vo-locked,
+        &.vo-locked:hover,
+        &.vo-locked:active {
+            background: transparent;
+            color: @vo-text-off;
+            cursor: default;
+        }
+    }
+
+    .vo-show-sep {
+        height: 1px;
+        margin: @vo-pop-sep-m;
+        background: @vo-pop-sep-bg;
+    }
+}
+
+/* --- "File" screen ----------------------------------------------------------- */
+/* "Access rights" lead to the portal rights window; the compact menu bar has none, and
+   the item also goes away from the shell "File" screen. In the "Stock interface" it is
+   stock. The stock settings remove "Protect" and "Suggest a feature"
+   (CompactShell.tuneConfig, tunePermissions). The stock applyMode shows the
+   item inline: overridden only this way. */
+body.vo-compact #file-menu-panel #fm-btn-rights {
+    display: none !important;
+}
+
+/* Top of the screen. The stock sets it inline under its tab row with
+   the title: 28 + 28 = 56 (Viewport.onAppShowed and onThemeChanged), while the shell
+   header is 46 + 30 = 76, and the screen cut the menu bar in half, and on scrolling
+   the text went over the labels. The screen starts under the visible header rows; it covers the toolbar
+   card, as the stock covers the ribbon. The stock inline value is overridden
+   only this way. In the "Stock interface" there is no class, and the stock computes the top again. */
+body.vo-compact .toolbar-fullview-panel {
+    top: @vo-h-header + @vo-h-menu !important;
+}
+body.vo-compact:has(#vo-header[hidden]) .toolbar-fullview-panel {
+    top: @vo-h-menu !important;
+}
+body.vo-compact:has(#vo-menubar[hidden]) .toolbar-fullview-panel {
+    top: @vo-h-header !important;
+}
+body.vo-compact:has(#vo-header[hidden]):has(#vo-menubar[hidden]) .toolbar-fullview-panel {
+    top: 0 !important;
+}
+
+/* --- Zones ------------------------------------------------------------------- */
+
+@import "compact-menu.less";
+@import "compact-toolbar.less";
+@import "compact-panel.less";
+@import "compact-areas.less";
+@import "compact-galleries.less";
+
+/* Windows go last: the window template rules come after the shell rules. */
+@import "compact-windows.less";

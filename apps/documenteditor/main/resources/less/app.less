@@ -287,3 +287,12 @@
         }
     }
 }
+
+
+// Compact shell: the shared layer first (defaults and rules), then the
+// document-specific file with its values: for a LESS variable the last
+// definition wins.
+@import "../../../../common/main/resources/less/compact/tokens.less";
+@import "../../../../common/main/resources/less/compact/menu.less";
+@import "../../../../common/main/resources/less/compact/about.less";
+@import "compact-shell.less";

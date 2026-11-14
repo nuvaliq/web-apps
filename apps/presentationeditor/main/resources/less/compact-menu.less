@@ -1,0 +1,381 @@
+/*
+ * Compact shell of the presentation editor: the menu bar, its submenus and the look of the stock context menus.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Imported only from compact-shell.less: the tokens and row geometry come from there.
+ * The rules are under body.vo-compact.
+ *
+ * The look follows the compact menu of documents (documenteditor/main/resources/less/compact-shell.less,
+ * its final values): the menu bar in the white #vo-menubar row, dropdown windows are a card
+ * with radius 12 and a shadow, rows 38, icon 24, font size 13. Own values carry the prefix
+ * @vo-mn- so as not to override the tokens of neighboring zones (LESS variables are global).
+ */
+
+@vo-mn-fs-item:     13px;      // section label
+@vo-mn-fs-row:      13px;      // dropdown menu row label
+@vo-mn-row-h:       38px;      // row: icon 24 + step 14
+@vo-mn-r-pop:       12px;      // popup window rounding
+@vo-mn-min-w:       266px;
+@vo-mn-track:       normal;    // no letter spacing: --ui-text-letter-spacing-auto, as in documents and spreadsheets
+@vo-mn-dur:         .12s;
+@vo-mn-pad:         13px 0 17px;   // dropdown window vertical padding
+@vo-mn-row-l:       14px;      // row left padding
+@vo-mn-row-r:       42px;      // row right padding: the mark and ▸ column
+@vo-mn-ico:         24px;      // icon column
+@vo-mn-ico-gap:     11px;      // icon → label
+@vo-mn-sep-m:       7px 23px 7px 14px;
+@vo-mn-sep-bg:      #f0f0f0;   // divider-default
+
+/* --- Menu bar ---------------------------------------------------------------- */
+
+.vo-mn {
+    display: flex;
+    align-items: center;
+    /* 30 between labels = 12 + 6 + 12; the hover backing is wider than the label by 4
+       on each side, negative margins keep the step. */
+    gap: 14px;
+    position: relative;
+    height: 100%;
+    font-family: @vo-font;
+
+    .vo-mn-wrap { position: relative; }
+
+    .vo-mn-item {
+        height: 28px;
+        margin: -4px;
+        padding: 4px 12px;
+        border: none;
+        border-radius: @vo-r-sm;     /* like the AIR sm button of the same height (28): --ui-border-radius-sm */
+        background: transparent;
+        color: var(--vo-fig-menu-fg);
+        font-family: @vo-font;
+        font-size: @vo-mn-fs-item;
+        letter-spacing: @vo-mn-track;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color @vo-mn-dur ease-out;
+
+        &:hover, &.vo-open { background: @vo-hover; }
+        &:active { background: @vo-active; }
+        &:focus-visible { outline: 2px solid @vo-focus; outline-offset: 1px; }
+    }
+
+    /* Dropdown window of a section and the submenu. The ceiling comes from the window height: a long
+       section scrolls instead of going past the bottom edge. */
+    .vo-mn-drop {
+        display: none;
+        position: absolute;
+        top: calc(100% + 5px);
+        left: -4px;
+        z-index: @vo-z-drop;
+        box-sizing: border-box;
+        min-width: @vo-mn-min-w;
+        max-height: calc(100vh - @vo-h-header - @vo-h-menu - 8px);
+        padding: @vo-mn-pad;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, .22) transparent;
+        background: @vo-surface;
+        border: none;
+        border-radius: @vo-mn-r-pop;
+        box-shadow: @vo-shadow;
+    }
+
+    .vo-mn-drop.open { display: block; }
+
+    /* The submenu is in the menu bar itself; SlideActions.placeFly writes its position. */
+    .vo-mn-fly {
+        top: 0;
+        left: 0;
+        max-height: calc(100vh - 8px);
+        z-index: @vo-z-drop + 1;
+    }
+
+    /* List row: the hover backing is full width; on the right is a column for the
+       mark, so that a long label does not reach the edge. */
+    .vo-mn-sub {
+        display: flex;
+        align-items: center;
+        gap: @vo-mn-ico-gap;
+        position: relative;
+        box-sizing: border-box;
+        width: 100%;
+        min-height: @vo-mn-row-h;
+        padding: 0 @vo-mn-row-r 0 @vo-mn-row-l;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: var(--vo-fig-row-fg);
+        font-family: @vo-font;
+        font-size: @vo-mn-fs-row;
+        letter-spacing: @vo-mn-track;
+        text-align: left;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color @vo-mn-dur ease-out, color @vo-mn-dur ease-out;
+
+        &:hover, &.vo-sub-open { background: @vo-hover; }
+        &:active { background: @vo-active; }
+        &:focus-visible { outline: 2px solid @vo-focus; outline-offset: -2px; }
+    }
+
+    .vo-mn-i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: @vo-mn-ico;
+        height: @vo-mn-ico;
+        color: var(--vo-fig-row-icon);
+
+        svg, .vo-air { width: @vo-mn-ico; height: @vo-mn-ico; }
+    }
+
+    /* An item without an icon has no empty column, the label starts from padding 18. */
+    .vo-mn-i.vo-mn-i-none { display: none; }
+    .vo-mn-i-none + .vo-mn-t { margin-left: 4px; }
+
+    .vo-mn-t { flex: 1 1 auto; }
+
+    .vo-mn-h {
+        margin-left: 12px;
+        color: @vo-text-off;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* The mark is in the right column, ▸ is in the same place for items with a submenu. */
+    .vo-mn-chk,
+    .vo-mn-arrow {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        width: 18px;
+        height: 18px;
+        transform: translateY(-50%);
+        color: var(--vo-fig-row-fg);
+
+        svg, .vo-air { width: 18px; height: 18px; }
+    }
+
+    .vo-mn-arrow { color: var(--vo-fig-row-icon); }
+
+    /* A disabled item: a class, not the disabled attribute: availability is rechecked
+       on click; the reason is given by the row tooltip. */
+    .vo-mn-sub.vo-locked {
+        color: @vo-text-off;
+        cursor: default;
+
+        &:hover, &:active { background: transparent; }
+        .vo-mn-i, .vo-mn-h, .vo-mn-chk, .vo-mn-arrow { color: @vo-text-off; }
+    }
+
+    .vo-mn-sep {
+        height: 1px;
+        margin: @vo-mn-sep-m;
+        background: @vo-mn-sep-bg;
+    }
+}
+
+/* AIR icon set glyph in the menu: a file mask in the row text color (as in documents). */
+.vo-mn .vo-air {
+    display: inline-block;
+    width: var(--vo-air-size, 24px);
+    height: var(--vo-air-size, 24px);
+    flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask-image: var(--vo-air-src);
+            mask-image: var(--vo-air-src);
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
+    -webkit-mask-size: contain;
+            mask-size: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vo-mn .vo-mn-item,
+    .vo-mn .vo-mn-sub { transition: none; }
+}
+
+/* --- Stock galleries by the menu bar and the panel --------------------------- */
+/* The stock gallery menu sits in the hidden ribbon, and it can be shown only together with
+   its ancestors. While it is shown, StockBridge.gallery reveals the path from the menu to #toolbar
+   with classes: vo-gallery-path: the path node is in the layout but invisible; vo-gallery-root:
+   the outer path node is taken out of flow and has no size, so the shell rows do not shift;
+   the path's siblings are hidden; vo-gallery-target: the menu itself, visible and catching the mouse. The menu's
+   position is given by the stock alignment to the bridge's invisible anchor; the layer is stock (the menu's
+   z-index). Nodes are not moved; the classes are removed on close. The rule that hides the ribbon
+   (compact-shell.less, #toolbar > *:not(#vo-shell)) is overridden by the same id in the selector. */
+body.vo-compact.vo-gallery {
+    #toolbar > .vo-gallery-root:not(#vo-shell),
+    .vo-gallery-root {
+        display: block !important;
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: visible !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    .vo-gallery-path {
+        display: block !important;
+        visibility: hidden !important;
+    }
+
+    .vo-gallery-path > :not(.vo-gallery-path):not(.vo-gallery-target) {
+        display: none !important;
+    }
+
+    /* Material of our popups: no border, rounding and a shadow; the content and
+       the menu paddings are stock (the stock code computes the gallery width from them). */
+    .vo-gallery-target {
+        display: block !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        border: none;
+        border-radius: @vo-mn-r-pop;
+        box-shadow: @vo-shadow;
+        animation: vo-mn-fade @vo-mn-dur ease-out;
+        /* Text smoothing as in the shell (#vo-shell): the menu sits in the stock ribbon outside
+           it, and without this the labels on macOS are bolder than in our own panel lists. */
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* White background in the light theme; in the dark one the gallery content is stock and light,
+       the background is the theme's stock menu background. */
+    &.theme-type-light .vo-gallery-target {
+        background: @vo-surface;
+    }
+}
+
+/* Appearance only by opacity: the stock alignment measures the menu in the same
+   frame, and scaling would shift its position. */
+@keyframes vo-mn-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.vo-compact.vo-gallery .vo-gallery-target { animation: none; }
+}
+
+/* --- Stock context menus ----------------------------------------------------- */
+/* The right click is handled by the stock DocumentHolder: the menus (slideMenu, textMenu,
+   pictureMenu, tableMenu, viewModeMenuSlide, viewModeMenu and their submenus) are drawn in
+   #menu-container-<id> inside #editor_sdk. Here only their look, as in the dropdown windows of
+   the menu bar: a card with radius 12 and a shadow, row 38, icon in a 24 column,
+   font size 13. The set, order and visibility of items are stock: the rules neither hide nor
+   reorder items, the position of the menu and submenus is computed by the stock code. The "Change
+   layout ▸" and "Change theme ▸" galleries stay tiles of the stock DataView.
+   Paddings use logical properties: the stock .rtl rules have a mirrored pair of them.
+   Colors apply only in the light theme: in the dark one the menu background, labels and icons are stock,
+   and the shell backing would make them unreadable. */
+
+@vo-cm-lh:          16px;      // stock item text line height
+@vo-cm-pad-y:       ((@vo-mn-row-h - @vo-cm-lh) / 2);
+@vo-cm-text-l:      (@vo-mn-row-l + @vo-mn-ico + @vo-mn-ico-gap);
+@vo-cm-check:       16px;      // the stock mark is a 16 sprite tile
+@vo-cm-arrow:       6px;       // ▸ is a 6 × 6 corner with a 1.5 stroke
+
+body.vo-compact #editor_sdk > [id^="menu-container-"] {
+    .dropdown-menu {
+        min-width: @vo-mn-min-w;
+        padding: @vo-mn-pad;
+        border: none;
+        border-radius: @vo-mn-r-pop;
+        box-shadow: @vo-shadow;
+        font-family: @vo-font;
+        font-size: @vo-mn-fs-row;
+        animation: vo-mn-fade @vo-mn-dur ease-out;
+    }
+
+    // Submenu: the first row is level with the parent row.
+    .dropdown-submenu > .dropdown-menu {
+        margin-top: -(extract(@vo-mn-pad, 1));
+    }
+
+    .dropdown-menu li > a {
+        position: relative;
+        padding-block: @vo-cm-pad-y;
+        padding-inline: @vo-cm-text-l @vo-mn-row-r;
+        line-height: @vo-cm-lh;
+        font-family: @vo-font;
+        font-size: @vo-mn-fs-row;
+        letter-spacing: @vo-mn-track;
+        transition: background-color @vo-mn-dur ease-out;
+    }
+
+    // Icon is centered in the 24 column from padding 14; the sprite size is stock.
+    .dropdown-menu li .menu-item-icon {
+        margin-inline-start: calc((@vo-mn-ico - var(--x-small-btn-icon-size, 20px)) / 2 - @vo-mn-ico - @vo-mn-ico-gap);
+        margin-inline-end: 0;
+    }
+
+    .dropdown-menu li .menu-item-icon.custom-icon {
+        margin-inline-start: calc((@vo-mn-ico - 20px) / 2 - @vo-mn-ico - @vo-mn-ico-gap);
+    }
+
+    // Mark is in the same column as the icon.
+    .dropdown-menu li .checked:not(.no-checkmark)::before {
+        margin-inline-start: ((@vo-mn-ico - @vo-cm-check) / 2 - @vo-mn-ico - @vo-mn-ico-gap);
+    }
+
+    // ▸ is a corner centered in the right column (padding 14 + half of 18), as in the menu bar submenu.
+    .dropdown-submenu > a::after {
+        width: @vo-cm-arrow;
+        height: @vo-cm-arrow;
+        margin-top: ((@vo-cm-lh - @vo-cm-arrow) / 2);
+        margin-inline-end: -(@vo-mn-row-r - @vo-mn-row-l - 9px + (@vo-cm-arrow / 2));
+        border-style: solid;
+        border-color: var(--vo-fig-row-icon);
+        border-width: 0 1.5px 1.5px 0;
+        transform: rotate(-45deg);
+    }
+
+    .dropdown-menu .divider {
+        margin: @vo-mn-sep-m;
+    }
+}
+
+body.vo-compact.rtl #editor_sdk > [id^="menu-container-"] .dropdown-submenu > a::after {
+    transform: rotate(135deg);
+}
+
+body.vo-compact.theme-type-light #editor_sdk > [id^="menu-container-"] {
+    .dropdown-menu {
+        background: @vo-surface;
+    }
+
+    .dropdown-menu li > a {
+        color: var(--vo-fig-row-fg);
+
+        &:hover, &:focus, &.focus { color: var(--vo-fig-row-fg); background: @vo-hover; }
+        &:active { background: @vo-active; }
+    }
+
+    .dropdown-menu li.over > a { background: @vo-hover; }
+
+    // Disabled item without a hover backing, as in the menu bar.
+    .dropdown-menu li.disabled > a {
+        &:hover, &:focus, &.focus, &:active { background: transparent; }
+    }
+
+    .dropdown-menu .divider { background: @vo-mn-sep-bg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.vo-compact #editor_sdk > [id^="menu-container-"] .dropdown-menu { animation: none; }
+    body.vo-compact #editor_sdk > [id^="menu-container-"] .dropdown-menu li > a { transition: none; }
+}

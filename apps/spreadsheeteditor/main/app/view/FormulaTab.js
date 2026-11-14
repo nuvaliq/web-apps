@@ -705,7 +705,7 @@ define([
                     this.setButtonMenu(this.btnRecent, 'Last10');
 
                     var formulas = this.btnAutosum.menu.getItems(true);
-                    for (var i=0; i<Math.min(4,formulas.length); i++) {
+                    for (var i=0; i<Math.min(5,formulas.length); i++) {
                         this.api && formulas[i].setCaption(this.api.asc_getFormulaLocaleName(formulas[i].value));
                     }
 

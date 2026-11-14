@@ -38,6 +38,7 @@ import { useTranslation } from 'react-i18next';
 import { f7 } from 'framework7-react';
 import { observer, inject } from "mobx-react";
 import { Device } from '../../../../../common/mobile/utils/device';
+import About from '../../../../../common/mobile/lib/view/About';
 import SettingsView from "../../view/settings/Settings";
 import { LocalStorage } from "../../../../../common/mobile/utils/LocalStorage.mjs";
 
@@ -66,36 +67,15 @@ const SettingsController = props => {
         }, 400);
     };
 
+    // Product helpdesk of the interface language, the same for every device
     const showHelp = () => {
-        let url = __HELP_URL__;
-
-        if (url.charAt(url.length-1) !== '/') {
-            url += '/';
-        }
-
-        if (Device.sailfish || Device.android) {
-            url+='mobile-applications/documents/mobile-web-editors/android/index.aspx';
-        }
-        else {
-            url+='mobile-applications/documents/mobile-web-editors/ios/index.aspx';
-        }
+        const url = About.helpUrl(Common.Locale.currentLang);
 
         closeModal();
         setTimeout(() => {
             window.open(url, "_blank");
         }, 400);
     };
-
-    const showFeedback = () => {
-        let config = appOptions.config;
-
-        closeModal();
-        setTimeout(() => {
-            if(!!config?.customization?.feedback?.url) {
-                window.open(config.customization.feedback.url, "_blank");
-            } else window.open(__SUPPORT_URL__, "_blank");
-        }, 400);
-    }
 
     const onOrthographyCheck = () => {
         closeModal();
@@ -259,7 +239,6 @@ const SettingsController = props => {
         <SettingsContext.Provider value={{
             onPrint,
             showHelp,
-            showFeedback,
             onOrthographyCheck,
             onDownloadOrigin,
             onChangeMobileView,

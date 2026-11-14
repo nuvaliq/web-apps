@@ -1,0 +1,198 @@
+/*
+ * "Bookmarks" window in the compact shell.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Its own CompactBookmarksDialog window (view/CompactBookmarks.js), a subclass
+ * of the stock BookmarksDialog with its own markup: a "Bookmark name" +
+ * "Add" row, below it the bookmark list with a trash button in each row, a footer with "Go to" and
+ * "Get link". The box, header, body, footer, field and footer buttons
+ * are drawn by the template (compact-windows.less) via the vo-win mark; here only
+ * what this window has of its own: width 520, the field row with a button, the list and
+ * the fallback link field. Every selector starts with body.vo-compact and
+ * the window mark; Advanced opens the stock class, and it has no such marks.
+ *
+ * Color comes from the "Tokens: color" block in compact-shell.less, geometry from
+ * the template constants and the literals below, with the AIR token name on the right. Anything of our own that
+ * the design system lacks is marked "not in the DS".
+ */
+
+/* --- Geometry ------------------------------------------------------------ */
+
+@vo-bm-w:           520px;    // window with a row of buttons; the DS has no such window width
+@vo-bm-rows:        5;        // list rows visible, scrolling inside beyond that
+@vo-bm-del:         24px;     // trash button in a row
+@vo-bm-del-out:     6px;      // the trash button extends into the row padding (margin-right: -6px)
+@vo-bm-empty-pad-y: 10px;     // "No bookmarks": top and bottom padding
+
+/* --- Window -------------------------------------------------------------- */
+
+body.vo-compact .asc-window.vo-win.vo-win--bookmarks {
+    /* AdvancedSettingsWindow writes the window width inline from the content,
+       on render and on every browser window resize: content-panel + 2
+       (AdvancedSettingsWindow.js:114, :130). Centering takes the width from the
+       window config (Window.js:274), the same 520 there. An inline value is overridden
+       only this way. */
+    width: @vo-bm-w !important;
+
+    /* content_panel.width(contentWidth) is inline too (AdvancedSettingsWindow.js:113).
+       The panel follows the template's window body, not the number from JS. */
+    > .body > .box > .content-panel { width: auto !important; }
+
+    .vo-bm {
+        display: flex;
+        flex-direction: column;
+        gap: @vo-win-gap;                      // --ui-space-stack-md: between body blocks
+    }
+
+    /* --- "Bookmark name" + "Add" row: grid 1fr auto --------------------- */
+    .vo-bm-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0 @vo-win-row-gap;                // --ui-space-inline-sm
+        align-items: end;
+    }
+
+    .vo-bm-field { min-width: 0; }
+
+    /* A button inside the window is outlined (outline, md), centered in the field
+       box rather than on the bottom edge: field 38, button 34. */
+    .vo-bm-add {
+        margin-bottom: ((@vo-win-f-h - @vo-win-btn-h) / 2);
+
+        > .btn {
+            .vo-win-btn();
+            .vo-win-btn-outline();
+
+            &.disabled,
+            &[disabled] { .vo-win-btn-off(); }
+        }
+    }
+
+    /* --- List ------------------------------------------------------------ */
+    /* Field border, radius sm, five rows of 36 and scrolling inside.
+       Scrolling is the stock Common.UI.Scroller on the list node. */
+    .vo-bm-list > .listview {
+        box-sizing: border-box;
+        height: auto;
+        max-height: (@vo-bm-rows * @vo-row-h);  // 180
+        border: 1px solid @vo-win-stroke;      // field --border-color: base-7
+        border-radius: @vo-r-sm;               // --ui-border-radius-sm
+        background: @vo-surface;               // bg-content-primary
+        box-shadow: none;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-win-fs;
+        line-height: @vo-win-lh;
+        outline: none;
+
+        /* The stock border and focus shadow are removed. Keyboard focus is a blue
+           border, like a field being typed in; the row under it (the selected one) is marked by the
+           ring below. */
+        &:focus,
+        &.focused {
+            border-color: @vo-win-stroke;
+            box-shadow: none;
+        }
+
+        &:focus-visible { border-color: @vo-accent; }   // --border-color-active
+
+        /* --- Row -------------------------------------------------------- */
+        /* The stock paints the row border in the hover and selection color; here the top
+           edge is a separator (except for the first row), the others have none. */
+        > .item {
+            display: flex;
+            align-items: center;
+            gap: @vo-win-f-gap;                // --ui-space-inline-xs
+            box-sizing: border-box;
+            min-height: @vo-row-h;             // menu-popup-item height
+            padding: 0 @vo-win-f-pad;          // --ui-space-inline-sm
+            border-style: solid;
+            border-width: 1px 0 0;
+            border-color: transparent;
+            background: transparent;
+            color: @vo-text;                   // base-1
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+            outline: none;
+
+            &:hover  { background: @vo-hover; }    // bg-state-hover-default
+            &:active { background: @vo-active; }   // bg-state-click-default
+
+            /* Selected: by highlight, without a check mark. */
+            &.selected {
+                background: @vo-selected;          // design-selection-bg
+                color: @vo-text;
+            }
+
+            /* Row focus is an inset ring: an outer one would be clipped by the list. */
+            &:focus-visible { box-shadow: inset 0 0 0 @vo-focus-w @vo-accent; }
+        }
+
+        > .item + .item { border-top-color: @vo-win-divider; }   // divider-default
+
+        &:focus-visible > .item.selected { box-shadow: inset 0 0 0 @vo-focus-w @vo-accent; }
+
+        .vo-bm-name {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* --- Trash button ----------------------------------------------- */
+        /* Visible on hover, on the focused row and on the selected one. The icon is an
+           AIR glyph via a mask (.vo-air), the color is currentColor. */
+        .vo-bm-del {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: @vo-bm-del;
+            height: @vo-bm-del;
+            margin: 0;
+            margin-right: -@vo-bm-del-out;
+            padding: 0;
+            border: none;
+            border-radius: @vo-r-xs;               // --ui-border-radius-xs
+            background: transparent;
+            color: @vo-text-off;                   // base-4
+            cursor: pointer;
+            visibility: hidden;
+            outline: none;
+
+            &:hover {
+                background: @vo-hover;             // bg-state-hover-default
+                color: @vo-text;                   // base-1
+            }
+        }
+
+        /* A focused row: its own (focus-within: focus on the row or on its
+           trash button) or the selected one when focus is on the list: the stock moves the selection
+           along the list, not the focus of rows. The selected one is covered by .selected. */
+        > .item:hover .vo-bm-del,
+        > .item:focus-within .vo-bm-del,
+        > .item.selected .vo-bm-del { visibility: visible; }
+
+        /* --- Empty ------------------------------------------------------ */
+        /* The stock puts the "No bookmarks" row as a table, centered. */
+        > .empty-text {
+            width: 100%;
+            height: auto;
+            text-align: left;
+            color: @vo-text-off;                   // base-4
+
+            td { padding: @vo-bm-empty-pad-y @vo-win-f-pad; }
+        }
+    }
+
+    /* --- Fallback link field --------------------------------------------- */
+    /* The stock link field with "Copy" opens when the clipboard
+       refused. The look is stock; its dropdown box is anchored to the footer and
+       starts from the left edge of the buttons, so in a 520 window it does not stick out
+       sideways. Without the anchor it would sit at the window edge under the whole window. */
+    > .body > .footer { position: relative; }
+
+    .bookmark-copy-dropdown { max-width: 100%; }
+}

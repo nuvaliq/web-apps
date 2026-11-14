@@ -2,12 +2,23 @@
   "About": {
     "textAbout": "О программе",
     "textAddress": "Адрес",
+    "textAscensio": "© 2009–2026 Ascensio System SIA.",
     "textBack": "Назад",
+    "textBasedOn": "Основано на программном обеспечении ONLYOFFICE Docs, разработанном Ascensio System SIA.",
+    "textCopyright": "© 2026 ООО «Битрикс», в части внесенных изменений.",
     "textEditor": "Редактор презентаций",
     "textEmail": "Еmail",
+    "textLicense": "Лицензия: %1",
+    "textLicenseLink": "GNU Affero General Public License версии 3 (AGPLv3) + дополнительные условия",
+    "textModified": "ВайбОфис – модифицированная версия, изменения с 27.08.2026.",
+    "textNonCode": "Отдельные элементы оригинального некодового контента ONLYOFFICE Docs, сохраняемые в программе или поставляемые вместе с ней, включая, помимо прочего, иллюстрации, наборы иконок, технические и документационные материалы, предоставляются на условиях Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0): %1.",
     "textPoweredBy": "Разработано",
+    "textProductName": "ВайбОфис",
+    "textSource": "Исходный код: %1",
     "textTel": "Телефон",
-    "textVersion": "Версия"
+    "textTrademark": "ONLYOFFICE – товарный знак Ascensio System SIA.",
+    "textVersion": "Версия",
+    "textVersionLine": "Версия %1"
   },
   "Common": {
     "Collaboration": {

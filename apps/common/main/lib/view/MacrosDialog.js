@@ -55,7 +55,7 @@ define([], function () {
                 id: 'macros-dialog',
                 title: this.textTitle,
                 header: true,
-                help: true,
+                help: false,
                 width: Math.min(810, innerWidth),
                 height: Math.min(512, innerHeight),
                 minwidth: 750,
@@ -129,7 +129,6 @@ define([], function () {
             });
 
             this.on({
-                'help': this.onHelp,
                 'drag': function(args){
                     args[0].codeEditor && args[0].codeEditor.enablePointerEvents(args[1]!=='start');
                 },
@@ -227,21 +226,7 @@ define([], function () {
                 labelText: this.textAutostart
             }).on('change', _.bind(this.onChangeAutostart, this));
 
-            var isPresentAI = this.api.checkAI();
-            this.btnAiMacrosAdd = new Common.UI.Button({
-                parentEl    : $('#btn-ai-macros-add'),
-                cls         : 'btn-toolbar',
-                iconCls     : 'toolbar__icon btn-general-ai',
-                menu        : new Common.UI.Menu({
-                    additionalAlign: this.menuAddAlign,
-                    items:[
-                        {caption: this.textCreateFromDesc,  value: 'create',    disabled: !isPresentAI},
-                        {caption: this.textConvertFromVBA,  value: 'convert',   disabled: !isPresentAI}
-                    ]
-                }),
-                hint        : this.tipAi
-            });
-            this.btnAiMacrosAdd.menu.on('item:click', _.bind(this.onAiMenu, this));
+            this.renderAiButton();
 
             this.btnMacrosAdd = new Common.UI.Button({
                 parentEl: $('#btn-macros-add'),
@@ -291,6 +276,28 @@ define([], function () {
             }
 
             this.makeDragable();
+        },
+
+        renderAiButton: function() {
+            if (!this.api.checkAI()) {
+                $('#btn-ai-macros-add').remove();
+                return;
+            }
+
+            this.btnAiMacrosAdd = new Common.UI.Button({
+                parentEl    : $('#btn-ai-macros-add'),
+                cls         : 'btn-toolbar',
+                iconCls     : 'toolbar__icon btn-general-ai',
+                menu        : new Common.UI.Menu({
+                    additionalAlign: this.menuAddAlign,
+                    items:[
+                        {caption: this.textCreateFromDesc,  value: 'create'},
+                        {caption: this.textConvertFromVBA,  value: 'convert'}
+                    ]
+                }),
+                hint        : this.tipAi
+            });
+            this.btnAiMacrosAdd.menu.on('item:click', _.bind(this.onAiMenu, this));
         },
 
         createCodeEditor: function() {
@@ -881,10 +888,7 @@ define([], function () {
             this.collapseHeaderItems();
             Common.UI.Window.prototype.onThemeChanged.call(this);
         },
-        
-        onHelp: function() {
-            window.open('https://api.onlyoffice.com/docs/plugin-and-macros/macros/getting-started/', '_blank')
-        },
+
         onBtnClick: function(event) {
             this._handleInput(event.currentTarget.attributes['result'].value);
         },

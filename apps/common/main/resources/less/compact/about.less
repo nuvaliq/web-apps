@@ -1,0 +1,175 @@
+/*
+ * "About" window of the "Compact" shell: shared rules.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * The window is built by Common.UI.Compact.AboutWindow (lib/view/compact/AboutWindow.js) on
+ * the mechanics of the stock window (Common.UI.Window), so only the look of its nodes is here:
+ * the .asc-window box, the .header with the .tools tools and the .title heading,
+ * the .body. The mechanics are left alone: modality, focus, Esc, dragging by the header
+ * and the dimming (black, 20 %) stay stock.
+ *
+ * Everything sits under the window class and the compact class on body: other editor windows and
+ * the "About" panel of the advanced interface (less/about.less) do not change.
+ *
+ * Color, font, surface, shadow and radius are editor variables: their defaults
+ * are in tokens.less, the values in the editor's compact-shell.less, which is imported
+ * after this file. The window metrics are the same for AIR components and for the editors:
+ * literals with the token name in a comment; box, header and body are ui.system.dialog,
+ * the content follows the AIR font and spacing scale.
+ */
+
+body.vo-compact .asc-window.vo-about-dlg {
+    /* Surface of the editor's popup windows: background, no border, radius and popup
+       shadow. The layer does not know the editor mixins, so the declarations are here. */
+    background: @vo-surface;
+    border: none;
+    border-radius: @vo-r-pop;
+    box-shadow: @vo-shadow;
+    font-family: @vo-font;
+    color: @vo-text;
+    text-align: left;
+
+    /* Header: ui-system-dialog__header. In stock the header and body are absolute, and
+       the body sits at top: 34px, under its header. Here both are in flow: the window
+       height is computed by the stock _autoSize as the sum of header and body heights
+       anyway, and this header is taller than the stock one. */
+    > .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        position: static;
+        height: auto;
+        padding: 14px 24px 0;                /* sides: --ui-system-dialog-padding-x */
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+    }
+
+    /* Headline md: 19/26, letter spacing −0.01em (−0.2px on the AIR scale),
+       medium. padding overrides the inline one: the stock render gives
+       the heading 20 on each side for every header tool, hence
+       !important. */
+    > .header .title {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 0 !important;
+        color: @vo-text;
+        font-size: 19px;
+        line-height: 26px;
+        letter-spacing: -.01em;
+        font-weight: 500;                    /* --ui-font-weight-medium */
+    }
+
+    /* In the window markup the tools come before the heading (Window.js template);
+       order puts the close button at the end of the row. The outward shift of 4 is like the close button of
+       ui.system.dialog (right: -4px). */
+    > .header .tools {
+        display: flex;
+        order: 1;
+        position: static;
+        padding: 0;
+        margin-inline-end: -4px;
+    }
+
+    /* Close button: header-close-btn: 24 wide, the height of the heading line,
+       base-4, base-2 on hover. The stock cross made of two pseudo-elements
+       is switched off: an AIR icon takes its place (AboutWindow.render). */
+    .tool.close {
+        float: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 26px;
+        opacity: 1;
+        color: @vo-text-off;                 /* base-4 */
+
+        &:hover { color: @vo-text-2; }       /* base-2 */
+        &:before, &:after { display: none; }
+
+        /* The icon is not a mouse target: the stock _dragstart skips the drag only
+           when .close itself is the target, and a press on the icon inside it would start
+           a drag. */
+        .vo-air { pointer-events: none; }
+    }
+
+    /* Body: ui-system-dialog__content. There is no footer,
+       so top and bottom padding is 24 rather than the template's 12 and 18, like the sides. */
+    > .body {
+        position: static;
+        padding: 24px;                       /* top and bottom: --ui-space-stack-xl, sides: --ui-system-dialog-padding-x */
+        border-radius: 0;
+        background: transparent;
+    }
+
+    /* Content: left-aligned in the window, centered in the
+       advanced panel. Text is selectable, as in the panel: the stock
+       modal window forbids selection. */
+    .about-content {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;                           /* --ui-space-stack-md */
+        color: @vo-text;                     /* base-1 */
+        font-size: 14px;                     /* --ui-font-size-md */
+        line-height: 1.4;                    /* --ui-font-line-height-md */
+        text-align: left;
+        overflow-wrap: anywhere;
+        user-select: text;
+    }
+
+    /* Name and version form one group, the version right under the name. */
+    .about-head {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;                            /* --ui-space-stack-3xs */
+    }
+
+    /* The h2 heading has its own font from the stock scaffolding: restore the window font. */
+    .about-name {
+        margin: 0;
+        color: @vo-text;                     /* base-1 */
+        font-family: inherit;
+        font-size: 16px;                     /* --ui-font-size-xl */
+        line-height: 1.35;                   /* --ui-font-line-height-sm */
+        font-weight: 600;                    /* --ui-font-weight-semi-bold */
+    }
+
+    .about-version {
+        color: @vo-text-3;                   /* base-3 */
+        font-size: 13px;                     /* --ui-font-size-sm */
+    }
+
+    /* Legal text goes in lines, each in its own block. */
+    .about-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;                            /* --ui-space-stack-3xs */
+    }
+
+    .about-line { margin: 0; }
+
+    /* CC BY-SA paragraph: smaller and quieter than the lines. */
+    .about-cc {
+        margin: 0;
+        color: @vo-text-2;                   /* base-2 */
+        font-size: 13px;                     /* --ui-font-size-sm */
+        line-height: 1.4;                    /* --ui-font-line-height-md */
+        font-weight: 400;                    /* --ui-font-weight-normal */
+    }
+
+    /* AIR link: accent-main-link and its semi-transparent underline, under
+       hover the underline is denser. The focus ring is a shadow, like in the whole
+       shell; the stock link outline on :focus is removed. */
+    .about-content a {
+        border-radius: 2px;                  /* --ui-border-radius-3xs */
+        color: @vo-link;
+        outline: none;
+        text-decoration: underline;
+        text-decoration-color: @vo-link-underline;
+        text-underline-offset: 2px;          /* --ui-space-stack-3xs */
+
+        &:hover { text-decoration-color: currentColor; }
+        &:focus-visible { box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+}

@@ -62,8 +62,6 @@ import IconHelp from '@common-icons/icon-help.svg';
 import IconAbout from '@common-icons/icon-about.svg';
 import IconSave from '@common-icons/icon-save.svg';
 import IconAutosave from '@common-icons/icon-autosave.svg';
-import IconFeedbackForIos from '@common-ios-icons/icon-feedback.svg?ios';
-import IconFeedbackForAndroid from '@common-android-icons/icon-feedback.svg';
 import IconReturnIos from '@common-ios-icons/icon-return.svg?ios';
 import IconReturnAndroid from '@common-android-icons/icon-return.svg';
 import IconDraw from '../../../../../common/mobile/resources/icons/draw.svg' 
@@ -118,7 +116,6 @@ const SettingsPage = inject("storeAppOptions", "storeReview", "storeDocumentInfo
         _canAbout = true,
         _canHelp = true,
         _canPrint = false,
-        _canFeedback = true,
         _canDisplayInfo = true;
 
     if (appOptions.isDisconnected) {
@@ -137,10 +134,6 @@ const SettingsPage = inject("storeAppOptions", "storeReview", "storeDocumentInfo
 
         if (appOptions.customization) {
             _canHelp = appOptions.customization.help !== false;
-            _canFeedback = (
-                appOptions.customization.feedback !== false && 
-                appOptions.customization.feedback.visible !== false
-            );
             _canDisplayInfo = appOptions.customization.mobile?.info !== false;
         }
     }
@@ -286,14 +279,6 @@ const SettingsPage = inject("storeAppOptions", "storeReview", "storeDocumentInfo
                     {_canAbout &&
                         <ListItem title={_t.textAbout} link="/about/">
                             <SvgIcon slot="media" symbolId={IconAbout.id} className={'icon icon-svg'} />
-                        </ListItem>
-                    }
-                    {_canFeedback &&
-                        <ListItem title={t('Settings.textFeedback')} link="#" className='no-indicator' onClick={settingsContext.showFeedback}>
-                            {Device.ios ? 
-                                <SvgIcon slot="media" symbolId={IconFeedbackForIos.id} className={'icon icon-svg'} /> :
-                                <SvgIcon slot="media" symbolId={IconFeedbackForAndroid.id} className={'icon icon-svg'} />
-                            }
                         </ListItem>
                     }
                     {canCloseEditor &&

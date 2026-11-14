@@ -147,6 +147,7 @@
   "DE.Controllers.ApplicationController.textNoLicenseTitle": "Лицензионное ограничение",
   "DE.Controllers.ApplicationController.textNoResourcesTitle": "Недостаточно ресурсов",
   "DE.Controllers.ApplicationController.textOf": "из",
+  "DE.Controllers.ApplicationController.textProductName": "ВайбОфис",
   "DE.Controllers.ApplicationController.textRequired": "Чтобы отправить форму, заполните все обязательные поля",
   "DE.Controllers.ApplicationController.textSaveAs": "Сохранить как PDF",
   "DE.Controllers.ApplicationController.textSaveAsDesktop": "Сохранить как...",

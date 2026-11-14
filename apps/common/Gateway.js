@@ -442,6 +442,17 @@ if (window.Common === undefined) {
                 _postMessage({ event: 'onUserActionRequired' });
             },
 
+            userActionStateChanged: function(data) {
+                _postMessage({
+                    event: 'onUserActionStateChanged',
+                    data: {
+                        version: 1,
+                        state: data.state,
+                        requestId: data.requestId
+                    }
+                });
+            },
+
             saveDocument: function(data) {
                 data && _postMessage({
                     event: 'onSaveDocument',

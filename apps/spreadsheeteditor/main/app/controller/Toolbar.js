@@ -4708,7 +4708,7 @@ define([
         applyFormulaSettings: function() {
             if (this.toolbar.btnInsertFormula && this.toolbar.btnInsertFormula.rendered) {
                 var formulas = this.toolbar.btnInsertFormula.menu.getItems(true);
-                for (var i=0; i<Math.min(4,formulas.length); i++) {
+                for (var i=0; i<Math.min(5,formulas.length); i++) {
                     formulas[i].setCaption(this.api.asc_getFormulaLocaleName(formulas[i].value));
                 }
             }

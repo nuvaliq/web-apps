@@ -748,11 +748,12 @@ class MainController extends Component {
     applyLicense () {
         const { t } = this.props;
         const _t = t('Main', {returnObjects:true});
+        const productName = About.text(t).textProductName;
 
-        const warnNoResources  = _t.warnNoResources.replace(/%1/g, __COMPANY_NAME__);
-        const warnNoLicenseUsers = _t.warnNoLicenseUsers.replace(/%1/g, __COMPANY_NAME__);
-        const textNoLicenseTitle = _t.textNoLicenseTitle.replace(/%1/g, __COMPANY_NAME__);
-        const textNoResourcesTitle = _t.textNoResourcesTitle.replace(/%1/g, __COMPANY_NAME__);
+        const warnNoResources  = _t.warnNoResources.replace(/%1/g, productName);
+        const warnNoLicenseUsers = _t.warnNoLicenseUsers.replace(/%1/g, productName);
+        const textNoLicenseTitle = _t.textNoLicenseTitle.replace(/%1/g, productName);
+        const textNoResourcesTitle = _t.textNoResourcesTitle.replace(/%1/g, productName);
 
         const appOptions = this.props.storeAppOptions;
         const isForm = appOptions.isForm;
@@ -807,19 +808,6 @@ class MainController extends Component {
                 if (license === Asc.c_oLicenseResult.ConnectionsOS)
                     title = textNoResourcesTitle;
                 license = (license === Asc.c_oLicenseResult.ConnectionsOS) ? warnNoResources : warnNoLicenseUsers;
-                buttons = [{
-                    text: _t.textBuyNow,
-                    bold: true,
-                    onClick: function() {
-                        window.open(`${__PUBLISHER_URL__}`, "_blank");
-                    }
-                },
-                    {
-                        text: _t.textContactUs,
-                        onClick: function() {
-                            window.open(`mailto:${__SALES_EMAIL__}`, "_blank");
-                        }
-                    }];
             }
             if (this._state.licenseType === Asc.c_oLicenseResult.SuccessLimit) {
                 Common.Notifications.trigger('toolbar:activatecontrols');
@@ -841,14 +829,7 @@ class MainController extends Component {
                 f7.dialog.create({
                     title: _t.textPaidFeature,
                     text  : _t.textCustomLoader,
-                    buttons: [{
-                        text: _t.textContactUs,
-                        bold: true,
-                        onClick: () => {
-                            window.open(`mailto:${__SALES_EMAIL__}`, "_blank");
-                        }
-                    },
-                        { text: _t.textClose }]
+                    buttons: [{ text: _t.textClose }]
                 }).open();
             }
             Common.Notifications.trigger('toolbar:activatecontrols');

@@ -88,11 +88,7 @@ define([
                 enableToggle: true,
                 toggleGroup: 'leftMenuGroup'
             });
-            this.btnSearchBar.on('click', _.bind(function () {
-                this.onBtnMenuClick(this.btnSearchBar);
-                if (this.btnSearchBar.pressed)
-                    this.fireEvent('search:aftershow');
-            }, this));
+            this.btnSearchBar.on('click', _.bind(this.onSearchButtonClick, this));
 
             this.btnAbout = new Common.UI.Button({
                 action: 'about',
@@ -104,21 +100,6 @@ define([
                 toggleGroup: 'leftMenuGroup'
             });
             this.btnAbout.on('toggle',          this.onBtnMenuToggle.bind(this));
-
-            this.btnSupport = new Common.UI.Button({
-                action: 'support',
-                el: $markup.elementById('#left-btn-support'),
-                hint: this.tipSupport,
-                iconCls: 'btn-menu-support',
-                disabled: true
-            });
-            this.btnSupport.on('click', _.bind(function() {
-                var config = this.mode.customization;
-                config && !!config.feedback && !!config.feedback.url ?
-                    window.open(config.feedback.url) :
-                    window.open('{{SUPPORT_URL}}');
-                Common.NotificationCenter.trigger('edit:complete', this);
-            }, this));
 
             /** coauthoring begin **/
             this.btnComments = new Common.UI.Button({
@@ -203,13 +184,25 @@ define([
                 this.fireEvent('comments:hide', this);
         },
 
+        onSearchButtonClick: function() {
+            this.onBtnMenuClick(this.btnSearchBar);
+            if (this.btnSearchBar.pressed) {
+                var request = this._findReplaceRequest;
+                if (request) request.shown = true;
+                this.fireEvent('search:aftershow', request ? [request.findText] : undefined);
+            }
+        },
+
         onBtnMenuClick: function(btn, e) {
             this.supressEvents = true;
             this.btnAbout.toggle(false);
 
             if (btn.pressed) {
-                if (!(this.$el.width() > SCALE_MIN)) {
-                    this.$el.width(parseInt(Common.localStorage.getItem('de-mainmenu-width')) || MENU_SCALE_PART);
+                var searchPanel = btn === this.btnSearchBar;
+                if (!(this.$el.width() > SCALE_MIN) || (searchPanel && this.$el.outerWidth() < MENU_SCALE_PART)) {
+                    var width = parseInt(Common.localStorage.getItem('de-mainmenu-width')) || MENU_SCALE_PART;
+                    // A collapsed/fractional width must not become the search panel width.
+                    this.$el.width(searchPanel ? Math.max(width, MENU_SCALE_PART) : width);
                 }
             } else if (!this._state.pluginIsRunning) {
                 var width = this.$el.width();
@@ -360,7 +353,6 @@ define([
         disableMenu: function(menu, disable) {
             this.btnSearchBar.setDisabled(false);
             this.btnAbout.setDisabled(false);
-            this.btnSupport.setDisabled(false);
             /** coauthoring begin **/
             this.btnComments.setDisabled(false);
             this.btnChat.setDisabled(false);
@@ -401,12 +393,21 @@ define([
                         this.onBtnMenuClick(this.btnNavigation);
                     }
                 } else if (menu == 'advancedsearch') {
-                    if ((this.btnSearchBar.isVisible() || this.isButtonInMoreMenu(this.btnSearchBar)) &&
-                        !this.btnSearchBar.isDisabled() && !this.btnSearchBar.pressed) {
-                        this.btnSearchBar.toggle(true);
-                        this.onBtnMenuClick(this.btnSearchBar);
-                        this.panelSearch.focus();
-                        !suspendAfter && this.fireEvent('search:aftershow');
+                    // Compact chrome hides the stock button, not the search panel.
+                    if ((this.btnSearchBar.isVisible() || this.isButtonInMoreMenu(this.btnSearchBar) ||
+                        $('body').hasClass('vo-compact')) && !this.btnSearchBar.isDisabled()) {
+                        if (!this.btnSearchBar.pressed) {
+                            // Reveal before the stock handler measures the menu, as CompactShell does.
+                            $('body').hasClass('vo-compact') && $('body').addClass('vo-left-open');
+                            this.btnSearchBar.toggle(true);
+                            this.onBtnMenuClick(this.btnSearchBar);
+                        } else if (this.$el.outerWidth() < MENU_SCALE_PART) {
+                            this.onBtnMenuClick(this.btnSearchBar);
+                        }
+                        if (this.panelSearch.isVisible()) {
+                            this.panelSearch.focus();
+                            !suspendAfter && this.fireEvent('search:aftershow');
+                        }
                     }
                 }
                 /** coauthoring end **/
@@ -514,7 +515,7 @@ define([
         },
 
         setButtons: function () {
-            var allButtons = [this.btnSearchBar, this.btnComments, this.btnChat, this.btnNavigation, this.btnThumbnails, this.btnSupport, this.btnAbout];
+            var allButtons = [this.btnSearchBar, this.btnComments, this.btnChat, this.btnNavigation, this.btnThumbnails, this.btnAbout];
             Common.UI.SideMenu.prototype.setButtons.apply(this, [allButtons]);
         },
 
@@ -523,7 +524,6 @@ define([
         tipChat     : 'Chat',
         /** coauthoring end **/
         tipAbout    : 'About',
-        tipSupport  : 'Feedback & Support',
         tipSearch   : 'Search',
         tipPlugins  : 'Plugins',
         tipPageThumbnails: 'Page Thumbnails',

@@ -1969,6 +1969,7 @@ define([
             } else if (item.value == 'convert') {
                 (new DE.Views.TextToTableDialog({
                     props: this.api.asc_PreConvertTextToTable(),
+                    defaultAutoFitType: Asc.c_oAscTextToTableAutoFitType.Content,
                     handler: function(result, value) {
                         if (result == 'ok' && me.api) {
                             me.api.asc_ConvertTextToTable(value);

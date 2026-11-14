@@ -48,7 +48,7 @@ define([
     'use strict';
 
     SSE.Views.ChartTab = Common.UI.BaseView.extend(_.extend((function(){
-        var template = '<section id="chart-design-panel" class="panel" data-tab="charttab" role="tabpanel" aria-labelledby="view">' +
+        var template = '<section id="chart-design-panel" class="panel" data-tab="charttab" role="tabpanel" aria-labelledby="charttab">' +
             '<div class="group">' +
                 '<span class="btn-slot text x-huge" id="slot-btn-chart-elements"></span>' +
             '</div>' +

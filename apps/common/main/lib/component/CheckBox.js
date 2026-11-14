@@ -171,8 +171,12 @@ define([
                 this.$label.toggleClass('disabled', disabled);
                 (disabled) ? this.$chk.attr({disabled: disabled}) : this.$chk.removeAttr('disabled');
                 if (this.tabindex!==undefined) {
-                    disabled && (this.tabindex = this.$label.attr('tabindex'));
-                    this.$label.attr('tabindex', disabled ? "-1" : this.tabindex);
+                    if (this.$focusTarget) {
+                        this.$focusTarget.attr({tabindex: disabled ? '-1' : this.tabindex, 'aria-disabled': String(disabled)});
+                    } else {
+                        disabled && (this.tabindex = this.$label.attr('tabindex'));
+                        this.$label.attr('tabindex', disabled ? "-1" : this.tabindex);
+                    }
                 }
             }
 
@@ -239,15 +243,27 @@ define([
         },
 
         focus: function() {
-            this.$label && this.$label.focus();
+            var target = this.$focusTarget || this.$label;
+            target && target.focus();
         },
 
-        setTabIndex: function(tabindex) {
+        setTabIndex: function(tabindex, focusShape) {
             if (!this.rendered)
                 return;
 
+            if (focusShape && !this.$focusTarget) {
+                this.$focusTarget = this.$label.find('.checkbox__shape');
+                this.$label.removeAttr('tabindex');
+            }
             this.tabindex = tabindex.toString();
-            !this.disabled && this.$label.attr('tabindex', this.tabindex);
+            if (this.$focusTarget) {
+                this.$focusTarget.attr({
+                    tabindex: this.disabled ? '-1' : this.tabindex,
+                    'aria-disabled': this.disabled ? 'true' : 'false'
+                });
+            } else if (!this.disabled) {
+                this.$label.attr('tabindex', this.tabindex);
+            }
         }
     });
 });

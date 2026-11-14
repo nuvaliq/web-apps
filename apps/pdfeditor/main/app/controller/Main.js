@@ -1222,7 +1222,9 @@ define([
             },
 
             applyLicense: function() {
+                var licenseEditingAvailable = true;
                 if (this.editorConfig.mode === 'view') {
+                    licenseEditingAvailable = false;
                     if (this.appOptions.canLiveView && (this._state.licenseType===Asc.c_oLicenseResult.ConnectionsLive || this._state.licenseType===Asc.c_oLicenseResult.ConnectionsLiveOS ||
                         this._state.licenseType===Asc.c_oLicenseResult.UsersViewCount || this._state.licenseType===Asc.c_oLicenseResult.UsersViewCountOS ||
                         !this.appOptions.isAnonymousSupport && !!this.appOptions.user.anonymous)) {
@@ -1230,6 +1232,7 @@ define([
                         this.disableLiveViewing(true);
                     }
                 } else if (!this.appOptions.isAnonymousSupport && !!this.appOptions.user.anonymous) {
+                    licenseEditingAvailable = false;
                     this.disableEditing(true);
                     this.api.asc_coAuthoringDisconnect();
                     Common.NotificationCenter.trigger('api:disconnect');
@@ -1239,6 +1242,7 @@ define([
                         buttons: ['ok']
                     });
                 } else if (this._state.licenseType) {
+                    licenseEditingAvailable = this._state.licenseType===Asc.c_oLicenseResult.SuccessLimit;
                     var license = this._state.licenseType,
                         title = this.textNoLicenseTitle,
                         buttons = ['ok'],
@@ -1263,6 +1267,12 @@ define([
                         this.disableEditing(true);
                         this.api.asc_coAuthoringDisconnect();
                         Common.NotificationCenter.trigger('api:disconnect');
+                    }
+
+                    // b24: the host shows the capacity warning
+                    if (this._state.licenseType===Asc.c_oLicenseResult.ConnectionsOS || this._state.licenseType===Asc.c_oLicenseResult.UsersCountOS) {
+                        Common.Gateway.reportWarning('b24_no_capacity', 'editing disabled by document server capacity guard');
+                        return;
                     }
 
                     !modal ? Common.UI.TooltipManager.showTip({ step: 'licenseError', text: license, header: title, target: '#toolbar', maxwidth: 430,
@@ -1293,6 +1303,11 @@ define([
                                 window.open('mailto:{{SALES_EMAIL}}', "_blank");
                         }
                     });
+                }
+
+                if (licenseEditingAvailable && (this.appOptions.isPDFFill || this.appOptions.isPDFAnnotate || this.appOptions.isPDFEdit || this.appOptions.isRestrictedEdit) &&
+                    !this._state.isDisconnected && this.stackDisableActions.length()===0) {
+                    Common.Gateway.sendInfo({mode:this.appOptions.isEdit?'edit':'view', b24EditingAvailable:true});
                 }
             },
 

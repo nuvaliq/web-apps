@@ -100,6 +100,9 @@ define([
                                     '<div class="btn-slot" id="slot-hbtn-print-quick"></div>' +
                                     '<div class="btn-slot" id="slot-hbtn-download"></div>' +
                                 '</div>' +
+                                '<div class="hedset">' +
+                                    '<div class="btn-slot" id="slot-btn-share"></div>' +
+                                '</div>' +
                                 '<div class="hedset" data-layout-name="header-editMode">' +
                                     '<div class="btn-slot" id="slot-btn-edit-mode"></div>' +
                                 '</div>' +
@@ -117,9 +120,6 @@ define([
                                             '<div class="cousers-list"></div>' +
                                         '</div>' +
                                     '</section>'+
-                                '</div>' +
-                                '<div class="hedset">' +
-                                    '<div class="btn-slot" id="slot-btn-share"></div>' +
                                 '</div>' +
                                 '<div class="hedset">' +
                                     '<div class="btn-slot" id="slot-btn-mode"></div>' +
@@ -141,9 +141,7 @@ define([
                             '</section>' +
                         '</section>';
 
-        var templateLeftBox = '<section class="logo">' +
-                                '<div id="header-logo"><i></i></div>' +
-                            '</section>';
+        var templateLeftBox = '<section class="logo"></section>';
 
             var templateTitleBox = '<section id="box-document-title">' +
                                 '<div class="extra"></div>' +
@@ -419,16 +417,6 @@ define([
                     Common.Gateway.requestFillingStatus(appConfig.user.roles && appConfig.user.roles.length>0 ? appConfig.user.roles[0] : undefined);
                 });
             }
-
-            if ( me.logo )
-                me.logo.children(0).on('click', function (e) {
-                    var _url = !!me.branding && !!me.branding.logo && (me.branding.logo.url!==undefined) ?
-                        me.branding.logo.url : '{{PUBLISHER_URL}}';
-                    if (_url) {
-                        var newDocumentPage = window.open(_url);
-                        newDocumentPage && newDocumentPage.focus();
-                    }
-                });
 
             if ( $panelUsers ) {
                 onResetUsers(storeUsers);

@@ -32,7 +32,7 @@
  *
  * SPDX-License-Identifier: AGPL-3.0-only
  */
-define([], function () {
+define(['common/main/lib/component/BaseView'], function () {
     'use strict';
 
     !SSE.Views.FileMenuPanels && (SSE.Views.FileMenuPanels = {});

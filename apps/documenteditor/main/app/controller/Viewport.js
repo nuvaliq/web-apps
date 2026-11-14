@@ -47,7 +47,8 @@ define([
     'common/main/lib/view/Header',
     'common/main/lib/view/SearchBar',
     'documenteditor/main/app/view/Viewport',
-    'documenteditor/main/app/view/LeftMenu'
+    'documenteditor/main/app/view/LeftMenu',
+    'documenteditor/main/app/view/CompactShell'
 ], function (Viewport) {
     'use strict';
 
@@ -170,6 +171,29 @@ define([
 
             Common.NotificationCenter.on('app:face', this.onAppShowed.bind(this));
             Common.NotificationCenter.on('app:ready', this.onAppReady.bind(this));
+
+            // Compact shell: its own compact panel. The stock ribbon stays
+            // in the DOM and is hidden by styles; the panel's controls are its own, while commands and
+            // state are taken from the stock api.
+            /* Enabling gate: without it the shell would start for EVERYONE who
+               opened a document in this editor. The decision is made by the
+               platform through the ui.shell field — what is read and why not the
+               customization flags, see wanted() in view/CompactShell.js.
+
+               Two points, both its own. On Gateway `init`, as soon as the
+               config arrives, a claim: a class on body hides the stock chrome until the
+               shell is built (the stock code removes the loading mask already on
+               app:face, earlier than app:ready). On app:ready — the launch itself with
+               retries and a fail-safe; the loop and the protection breakdown are in start() and
+               `guarded` in view/CompactShell.js. The init handler is wrapped in
+               guarded: an exception from it would break the stock loadConfig. */
+            Common.Gateway.on('init', DE.Views.CompactShell.guarded('оболочка: заявка', function (data) {
+                DE.Views.CompactShell.announce(data && data.config);
+            }));
+            Common.NotificationCenter.on('app:ready', function () {
+                var shell = DE.Views.CompactShell;
+                shell.start();
+            });
             Common.NotificationCenter.on('search:show', _.bind(this.onSearchShow, this));
             Common.NotificationCenter.on('uitheme:changed', this.onThemeChanged.bind(this));
         },

@@ -1,0 +1,369 @@
+/*
+ * Compact shell of the presentation editor: the look of the contents of the stock galleries and lists:
+ * at the panel buttons, the menu bar and the right panel sections (the StockBridge.gallery bridge, the
+ * .vo-gallery-target node; the card is in compact-menu.less) and in the context menus ("Change
+ * layout ▸", "Change theme ▸").
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Imported only from compact-shell.less: the tokens come from there, the menu scale (@vo-mn-*, @vo-cm-*)
+ * from compact-menu.less. The rules are under body.vo-compact.
+ *
+ * The model is the galleries and lists of the shell prototype: a tile is an image with radius 6 and a thin
+ * border, a caption under it 12, the selected one has a 2 accent border; shapes are buttons without a border with
+ * radius 4, hover is a fill (chart types use the same scale); a group heading is
+ * 12, the second text color; lists are a shell menu row. Tile hover is a 2 border in light accent, like the
+ * tab tiles of the right panel (compact-panel.less): the prototype's hover fill does not show with a 2 border
+ * on white. The set, order, captions and selection are stock: the rules change only the look,
+ * hide and reorder nothing. Paddings use logical properties: the stock .rtl rules have a
+ * mirrored pair of them. Colors apply only in the light theme, as in neighboring zones: in the dark one the
+ * content has stock colors.
+ */
+
+@vo-gal-gap:        8px;       // tile gap; the context menu gallery padding
+@vo-gal-pad:        18px;      // gallery and list padding at the button, like all shell popups
+@vo-gal-rail:       12px;      // right padding of the context menu gallery: room for the scrollbar
+@vo-gal-r:          6px;       // tile image radius
+@vo-gal-cap-fs:     12px;      // tile caption, group heading
+@vo-gal-cap-lh:     15px;
+@vo-gal-cap-gap:    4px;       // image → caption
+@vo-gal-lay-w:      120px;     // layout thumbnail: the stock entry width
+@vo-gal-lay-cols:   3;
+@vo-gal-btn:        28px;      // shape button
+@vo-gal-btn-r:      4px;
+@vo-gal-btn-gap:    2px;
+@vo-gal-btn-cols:   10;
+@vo-gal-btn-ico:    20px;      // stock shape icon
+@vo-gal-thumb-w:    4px;       // scrollbar thumb
+@vo-gal-thumb:      rgba(0, 0, 0, .22);   // like the scrollbar of the menu bar windows
+
+/* List at the button: padding 18 top and bottom (the menu bar has 13/17), the separator has 7 above and below
+   it, 18 padding at the sides. */
+@vo-gal-list-pad:   @vo-gal-pad 0;
+@vo-gal-sep-m:      7px @vo-gal-pad;
+
+/* Width of the layout and shape grid. */
+@vo-gal-lay-grid:   (@vo-gal-lay-w * @vo-gal-lay-cols + @vo-gal-gap * (@vo-gal-lay-cols - 1));
+@vo-gal-btn-grid:   ((@vo-gal-btn + @vo-gal-btn-gap) * @vo-gal-btn-cols);
+
+/* --- Bricks ------------------------------------------------------------------ */
+
+/* Layout gallery (DataView .menu-layouts): a grid of three 120 columns with 8 gaps. The stock writes
+   the width inline for its two-column layout (restoreWidth 302,
+   onSlidePickerShowAfter), so it is overridden only this way. Rows are a grid, not float wrapping:
+   the stock aligns captions by height in pairs, and with three columns tiles with a two-line
+   caption would catch on each other. Arrow-key navigation is computed by the stock from tile positions,
+   the grid does not break it. The tile padding (4) is stock: the stock measures a tile once from it
+   and writes the width, and in the "Stock interface" after the shell it must stay its own; the gap 8
+   is the padding of two adjacent tiles, a grid column is a tile with its padding. @pad is the gallery padding up to the
+   image: at the button and in the menu bar row it is 18 on all sides (the scrollbar is inside the padding
+   on the right), in the context menu it is 8 plus room for the scrollbar on the right (@rail). */
+.vo-gal-layouts(@pad: @vo-gal-pad; @rail: @vo-gal-pad) {
+    width: (@pad + @vo-gal-lay-grid + @rail) !important;
+    margin: 0 !important;
+
+    .dataview.inner {
+        display: grid;
+        grid-template-columns: repeat(@vo-gal-lay-cols, (@vo-gal-lay-w + @vo-gal-gap));
+        align-items: start;
+        box-sizing: border-box;
+        padding-block: (@pad - @vo-gal-gap / 2);
+        padding-inline: (@pad - @vo-gal-gap / 2) (@rail - @vo-gal-gap / 2);
+    }
+
+    .dataview.inner > .item {
+        border-radius: @vo-gal-r;
+    }
+
+    .layout > div:first-child {
+        margin-bottom: @vo-gal-cap-gap;
+        border-radius: @vo-gal-r;
+    }
+
+    .layout .title {
+        font-family: @vo-font;
+        font-size: @vo-gal-cap-fs;
+        line-height: @vo-gal-cap-lh;
+    }
+}
+
+.vo-gal-layouts-colors() {
+    .layout > div:first-child { box-shadow: 0 0 0 1px @vo-border; }
+    .dataview.inner > .item:hover .layout > div:first-child { box-shadow: 0 0 0 2px @vo-win-seg-stroke; }
+    .dataview.inner > .item.selected .layout > div:first-child { box-shadow: 0 0 0 2px @vo-accent; }
+    .layout .title { color: @vo-text; }
+}
+
+/* Scrollbar thumb is thin, without the stock notch, like the scrolling of the menu bar windows. */
+.vo-gal-thumb() {
+    .ps-scrollbar-y-rail .ps-scrollbar-y.always-visible-y {
+        right: 2px;
+        width: @vo-gal-thumb-w;
+        border: none;
+        border-radius: (@vo-gal-thumb-w / 2);
+        background-color: @vo-gal-thumb;
+
+        > div { background-image: none; }
+    }
+}
+
+/* List at the button is a shell menu row, like the context menus (compact-menu.less):
+   window padding 18 top and bottom, row 38, font size 13, a mark and ▸ column on the right. The icon and mark are
+   in a 24 column from padding 14, the label starts at 49; a list without icons and marks has no column,
+   the label starts from padding 18, like a menu bar item without an icon. The width is from 266, like
+   the menu bar windows; the stock inline value (the panel button width) is overridden only this way. A menu
+   where a row sits under a stock gallery or grid ("Bullets", "Table") takes the width
+   of those. Color schemes: the stock sets a row of height 27 on the row itself, hides the mark
+   and shows the selection by a fill: the row by its paddings, without a mark column. */
+.vo-gal-list() {
+    min-width: @vo-mn-min-w !important;
+    padding: @vo-gal-list-pad;
+    font-family: @vo-font;
+    font-size: @vo-mn-fs-row;
+
+    &:has(> li > div) { min-width: 0 !important; }
+
+    > li > a {
+        position: relative;
+        padding-block: @vo-cm-pad-y;
+        padding-inline: (@vo-mn-row-l + 4px) @vo-mn-row-r;
+        line-height: @vo-cm-lh;
+        font-family: @vo-font;
+        font-size: @vo-mn-fs-row;
+        letter-spacing: @vo-mn-track;
+        transition: background-color @vo-mn-dur ease-out;
+    }
+
+    > li > a.color-schemas-menu { height: auto; }
+
+    &:has(> li > a > .menu-item-icon, > li > a.checked) > li > a {
+        padding-inline-start: @vo-cm-text-l;
+    }
+
+    &:has(> li > a.color-schemas-menu) > li > a {
+        padding-inline-start: (@vo-mn-row-l + 4px);
+    }
+
+    > li .menu-item-icon {
+        margin-inline-start: calc((@vo-mn-ico - var(--x-small-btn-icon-size, 20px)) / 2 - @vo-mn-ico - @vo-mn-ico-gap);
+        margin-inline-end: 0;
+    }
+
+    > li .menu-item-icon.custom-icon {
+        margin-inline-start: calc((@vo-mn-ico - 20px) / 2 - @vo-mn-ico - @vo-mn-ico-gap);
+    }
+
+    > li .checked:not(.no-checkmark)::before {
+        margin-inline-start: ((@vo-mn-ico - @vo-cm-check) / 2 - @vo-mn-ico - @vo-mn-ico-gap);
+    }
+
+    > .dropdown-submenu > a::after {
+        width: @vo-cm-arrow;
+        height: @vo-cm-arrow;
+        margin-top: ((@vo-cm-lh - @vo-cm-arrow) / 2);
+        margin-inline-end: -(@vo-mn-row-r - @vo-mn-row-l - 9px + (@vo-cm-arrow / 2));
+        border-style: solid;
+        border-color: currentColor;
+        border-width: 0 1.5px 1.5px 0;
+        transform: rotate(-45deg);
+    }
+
+    > .divider {
+        margin: @vo-gal-sep-m;
+    }
+}
+
+.vo-gal-list-colors() {
+    background: @vo-surface;
+
+    > li > a {
+        color: var(--vo-fig-row-fg);
+
+        &:hover, &:focus, &.focus { color: var(--vo-fig-row-fg); background: @vo-hover; }
+        &:active { background: @vo-active; }
+    }
+
+    > li.over > a { background: @vo-hover; }
+
+    > .dropdown-submenu > a::after { border-color: var(--vo-fig-row-icon); }
+
+    /* The selected color scheme is a selection fill, like a selected row of panel lists. */
+    > li > a.color-schemas-menu.checked {
+        &, &:hover, &:focus { color: var(--vo-fig-row-fg); background: @vo-selected; }
+    }
+
+    /* A disabled item has the disabled color and no hover backing, as in the menu bar. */
+    > li.disabled > a {
+        &, &:hover, &:focus, &.focus, &:active { color: @vo-text-off; background: transparent; }
+    }
+
+    > .divider { background: @vo-mn-sep-bg; }
+}
+
+/* --- Galleries and lists at buttons and the menu bar ------------------------- */
+
+body.vo-compact.vo-gallery {
+    .vo-gallery-target:has(> li > a),
+    .vo-gallery-target .dropdown-menu:has(> li > a) {
+        .vo-gal-list();
+    }
+
+    /* Layouts: "Layout ▾", "Slide → Change layout ▸", "Change layout ▾" of the
+       "Slide settings" section. Gallery padding is at the grid itself, the card has none of its own. */
+    .vo-gallery-target:has(.menu-layouts) { padding: 0; }
+    .vo-gallery-target .menu-layouts { .vo-gal-layouts(); }
+
+    /* Shapes: "Shape ▾", "Insert → Shape ▸", "Crop to shape ▾". Ten columns
+       of 28 buttons with 2 between; the gallery padding up to a button and a group heading is 18 on all sides
+       (a button has padding 1, the scrollbar is inside the padding on the right), 12 between
+       groups. The stock sets padding and width with !important and the menu class: overridden the same way. */
+    .vo-gallery-target.menu-insert-shape,
+    .vo-gallery-target.menu-change-shape {
+        width: (@vo-gal-pad * 2 - @vo-gal-btn-gap + @vo-gal-btn-grid);
+        padding-block: 0 !important;
+        padding-inline: (@vo-gal-pad - @vo-gal-btn-gap / 2) 0 !important;
+
+        /* Top and bottom padding is inside the scroll window: the stock writes its height (652 for "Shape ▾")
+           inline, and padding on the menu itself would add on top of it: the gallery bottom went
+           past the window edge. */
+        .dataview.inner {
+            box-sizing: border-box;
+            padding-block: @vo-gal-pad (@vo-gal-pad - @vo-gal-btn-gap / 2);
+            padding-inline-end: (@vo-gal-pad - @vo-gal-btn-gap / 2);
+        }
+
+        .grouped-data .group-description {
+            padding: 0 (@vo-gal-btn-gap / 2) 2px;
+            font-family: @vo-font;
+            font-size: @vo-gal-cap-fs;
+            line-height: 16px;
+        }
+
+        .grouped-data .group-items-container {
+            margin-bottom: 12px;
+        }
+
+        /* The last group is not the last node: the stock scrollbars follow it. */
+        .grouped-data:not(:has(~ .grouped-data)) .group-items-container { margin-bottom: 0; }
+
+        .dataview .grouped-data .group-items-container .item {
+            width: @vo-gal-btn;
+            height: @vo-gal-btn;
+            box-sizing: border-box;
+            margin: (@vo-gal-btn-gap / 2);
+            padding: ((@vo-gal-btn - @vo-gal-btn-ico) / 2);
+            border-radius: @vo-gal-btn-r;
+
+            &,
+            &:hover,
+            &.selected { box-shadow: none; }
+        }
+    }
+
+    /* Chart types: "Change chart type ▾", "Insert → Chart ▸". Stock 40
+       tiles, the same scale as shapes: no border, radius 4, hover is a fill,
+       the selected one has a 2 accent border. Padding up to tiles and group headings is 18 on all
+       sides: the window width (364) and the top padding (12) are written inline by the stock: top and bottom are
+       overridden the same way; a tile has padding 4, seven tiles with paddings are 336, and at
+       the stock width the right padding is 18 too. */
+    .vo-gallery-target:has(.menu-insertchart) {
+        padding-top: @vo-gal-pad !important;
+        padding-bottom: (@vo-gal-pad - 4px) !important;
+    }
+
+    .vo-gallery-target .menu-insertchart {
+        margin: 0 (@vo-gal-pad - 4px);
+
+        .grouped-data .group-description {
+            padding: 4px 4px 2px;
+            font-family: @vo-font;
+            font-size: @vo-gal-cap-fs;
+            line-height: 16px;
+        }
+
+        .grouped-data:first-child .group-description { padding-top: 0; }
+        /* The last group is not the last node: the stock scrollbars follow it. */
+        .grouped-data:not(:has(~ .grouped-data)) .group-items-container { margin-bottom: 0; }
+
+        .grouped-data .group-items-container > .item {
+            border-radius: @vo-gal-btn-r;
+        }
+    }
+}
+
+body.vo-compact.vo-gallery.theme-type-light {
+    .vo-gallery-target:has(> li > a),
+    .vo-gallery-target .dropdown-menu:has(> li > a) {
+        .vo-gal-list-colors();
+    }
+
+    .vo-gallery-target { .vo-gal-thumb(); }
+
+    .vo-gallery-target .menu-layouts { .vo-gal-layouts-colors(); }
+
+    .vo-gallery-target.menu-insert-shape,
+    .vo-gallery-target.menu-change-shape {
+        .grouped-data .group-description { color: @vo-text-2; }
+
+        .item-shape svg.icon { fill: @vo-text-2; }
+
+        .dataview .grouped-data .group-items-container .item:hover:not(.disabled) {
+            background: @vo-hover;
+
+            .item-shape svg.icon { fill: @vo-text; }
+        }
+    }
+
+    .vo-gallery-target .menu-insertchart {
+        .grouped-data .group-description { color: @vo-text-2; }
+
+        .item-chartlist svg.icon { fill: @vo-text-2; }
+
+        .grouped-data .group-items-container > .item {
+            box-shadow: none;
+
+            &:hover:not(.disabled) {
+                background: @vo-hover;
+                box-shadow: none;
+
+                .item-chartlist svg.icon { fill: @vo-text; }
+            }
+
+            &.selected:not(.disabled) { box-shadow: 0 0 0 2px @vo-accent; }
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.vo-compact.vo-gallery .vo-gallery-target li > a { transition: none; }
+}
+
+/* --- Context menu galleries -------------------------------------------------- */
+/* "Change layout ▸" and "Change theme ▸" of the right click use the same DataView: tiles on the same
+   scale as the gallery at the button. Gallery padding is at the grid itself: a submenu gallery has no
+   list window padding. Tiles stay tiles. */
+
+body.vo-compact #editor_sdk > [id^="menu-container-"] {
+    .dropdown-menu:has(> li > .menu-layouts) { padding: 0; }
+    .menu-layouts { .vo-gal-layouts(@vo-gal-gap; @vo-gal-rail); }
+
+    .dropdown-menu:has(> li > #id-docholder-menu-changetheme) { padding: (@vo-gal-gap / 2) 0; }
+
+    #id-docholder-menu-changetheme .dataview.inner > .item,
+    #id-docholder-menu-changetheme .item-theme {
+        border-radius: @vo-gal-r;
+    }
+}
+
+body.vo-compact.theme-type-light #editor_sdk > [id^="menu-container-"] {
+    .menu-layouts { .vo-gal-layouts-colors(); }
+
+    .menu-layouts,
+    #id-docholder-menu-changetheme { .vo-gal-thumb(); }
+
+    #id-docholder-menu-changetheme .dataview.inner > .item {
+        box-shadow: 0 0 0 1px @vo-border;
+
+        &:hover:not(.disabled) { box-shadow: 0 0 0 2px @vo-win-seg-stroke; }
+        &.selected:not(.disabled) { box-shadow: 0 0 0 2px @vo-accent; }
+    }
+}

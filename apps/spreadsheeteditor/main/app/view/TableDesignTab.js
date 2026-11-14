@@ -48,7 +48,7 @@ define([
     'use strict';
 
     SSE.Views.TableDesignTab = Common.UI.BaseView.extend(_.extend((function(){
-        var template = '<section id="table-styles-panel" class="panel" data-tab="tabledesign" role="tabpanel" aria-labelledby="view">' +
+        var template = '<section id="table-styles-panel" class="panel" data-tab="tabledesign" role="tabpanel" aria-labelledby="tabledesign">' +
             '<div class="group small">' +
                 '<div class="elset">' +
                     '<span class="btn-slot text" id="slot-btn-resize-table"></span>' +

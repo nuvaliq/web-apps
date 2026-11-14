@@ -363,7 +363,12 @@
             compact = params["compact"] == 'true',
             view = params["mode"] == 'view',
             tabBackground = params["tabBackground"],
-            visible = true;
+            visible = true,
+            // Compact shell: neutral skeleton, the same with and without the shell. The editor
+            // config (and with it ui.shell) is not known yet, so the stock ribbon and title
+            // silhouettes would flash before the compact shell. Only the loader (background
+            // and slide placeholder) is drawn.
+            neutral = true;
 
         if (compact || view || notoolbar) {
             let child = document.querySelector('.brendpanel > :nth-child(2)');
@@ -404,8 +409,8 @@
                 document.querySelector('.fat').style.left = '865px';
         }
 
-        visible && (document.querySelector('.brendpanel').style.display = 'block');
-        !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
+        visible && !neutral && (document.querySelector('.brendpanel').style.display = 'block');
+        !neutral && !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
         document.querySelector('.placeholder').style.display = 'flex';
 
          if (stopLoading) {

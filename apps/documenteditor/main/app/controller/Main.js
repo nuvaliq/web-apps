@@ -42,6 +42,7 @@
  */
 
 define([
+    'documenteditor/main/app/util/PrintAttempt',
     'core',
     'irregularstack',
     'common/main/lib/component/Window',
@@ -60,7 +61,7 @@ define([
     'common/main/lib/view/OpenDialog',
     'common/main/lib/view/UserNameDialog',
     'common/main/lib/component/RadioBox',
-], function () {
+], function (PrintAttempt) {
     'use strict';
 
     DE.Controllers.Main = Backbone.Controller.extend(_.extend((function() {
@@ -227,17 +228,6 @@ define([
                     Common.Utils.InternalSettings.set("app-settings-screen-reader", value);
                     this.api.setSpeechEnabled(value);
 
-
-                    if ( !Common.Utils.isIE ) {
-                        if ( /^https?:\/\//.test('{{HELP_CENTER_WEB_DE}}') ) {
-                            const _url_obj = new URL('{{HELP_CENTER_WEB_DE}}');
-                            if ( !!_url_obj.searchParams )
-                                _url_obj.searchParams.set('lang', Common.Locale.getCurrentLanguage());
-
-                            Common.Utils.InternalSettings.set("url-help-center", _url_obj.toString());
-                        }
-                    }
-
                     this.api.asc_registerCallback('asc_onError',                    _.bind(this.onError, this));
                     this.api.asc_registerCallback('asc_onDocumentContentReady',     _.bind(this.onDocumentContentReady, this));
                     this.api.asc_registerCallback('asc_onOpenDocumentProgress',     _.bind(this.onOpenDocument, this));
@@ -251,7 +241,6 @@ define([
 
                     Common.NotificationCenter.on('api:disconnect',                  _.bind(this.onCoAuthoringDisconnect, this));
                     Common.NotificationCenter.on('goback',                          _.bind(this.goBack, this));
-                    Common.NotificationCenter.on('suggest',                         _.bind(this.onSuggest, this));
                     Common.NotificationCenter.on('close',                           _.bind(this.closeEditor, this));
                     Common.NotificationCenter.on('markfavorite',                    _.bind(this.markFavorite, this));
                     Common.NotificationCenter.on('download:advanced',               _.bind(this.onAdvancedOptions, this));
@@ -399,10 +388,10 @@ define([
                 }
 
                 me.defaultTitleText = '{{APP_TITLE_TEXT}}';
-                me.warnNoResources  = (me.warnNoResources || '').replace(/%1/g, '{{COMPANY_NAME}}');
-                me.warnNoLicenseUsers = (me.warnNoLicenseUsers || '').replace(/%1/g, '{{COMPANY_NAME}}');
-                me.textNoLicenseTitle = (me.textNoLicenseTitle || '').replace(/%1/g, '{{COMPANY_NAME}}');
-                me.textNoResourcesTitle = (me.textNoResourcesTitle || '').replace(/%1/g, '{{COMPANY_NAME}}');
+                me.warnNoResources  = (me.warnNoResources || '').replace(/%1/g, me.textProductName);
+                me.warnNoLicenseUsers = (me.warnNoLicenseUsers || '').replace(/%1/g, me.textProductName);
+                me.textNoLicenseTitle = (me.textNoLicenseTitle || '').replace(/%1/g, me.textProductName);
+                me.textNoResourcesTitle = (me.textNoResourcesTitle || '').replace(/%1/g, me.textProductName);
             },
 
             loadConfig: function(data) {
@@ -538,6 +527,7 @@ define([
             },
 
             loadDocument: function(data) {
+                this.disposePrint();
                 this.permissions = {};
                 this.document = data.doc;
 
@@ -616,6 +606,11 @@ define([
 
             onProcessRightsChange: function(data) {
                 if (data && data.enabled === false) {
+                    // A refusal answers the open edit request of the compact menu: the session stays as it is.
+                    if (this.editRequest && this.editRequest.open) {
+                        this.answerEditRequest(data.message);
+                        return;
+                    }
                     var me = this,
                         old_rights = this._state.lostEditingRights;
                     this._state.lostEditingRights = !this._state.lostEditingRights;
@@ -628,6 +623,58 @@ define([
                             me._state.lostEditingRights = false;
                         }});
                 }
+            },
+
+            // Edit request from the compact menu. One request is open until the host answers it: the host refuses
+            // only a request to switch to editing and drops a repeat while switching, success reloads the page.
+            // The request is sent only when none is open; every choice shows the wait indicator and restarts
+            // the one five second timer. Without an answer by then the general text replaces the indicator,
+            // and the request stays open for a late answer.
+            markEditRequest: function() {
+                var me = this,
+                    req = this.editRequest || (this.editRequest = {open: false, timer: null});
+                if (!req.open) {
+                    req.open = true;
+                    Common.Gateway.requestEditRights();
+                }
+                if (!req.unload) {
+                    // A page that leaves for the editing session does not report the wait as failed.
+                    req.unload = function() { me.cancelEditRequestWait(); };
+                    window.addEventListener('beforeunload', req.unload);
+                }
+                clearTimeout(req.timer);
+                req.timer = setTimeout(function() {
+                    req.timer = null;
+                    me.editRequestStatus(me.textEditRequestFailed);
+                }, 5000);
+                var lm = this.getApplication().getController('LeftMenu');
+                this.editRequestStatus(lm && lm.requestEditRightsText || '');
+            },
+
+            // The indicator is shown and the item waits for the first five seconds of a choice.
+            isEditRequestWaiting: function() {
+                return !!(this.editRequest && this.editRequest.timer);
+            },
+
+            answerEditRequest: function(message) {
+                var req = this.editRequest;
+                clearTimeout(req.timer);
+                req.timer = null;
+                req.open = false;
+                // The host text is shown as is: the status place renders it as text.
+                this.editRequestStatus(_.isEmpty(message) ? this.textEditRequestFailed : String(message));
+            },
+
+            cancelEditRequestWait: function() {
+                var req = this.editRequest;
+                if (!req || !req.timer) return;
+                clearTimeout(req.timer);
+                req.timer = null;
+                this.editRequestStatus('');
+            },
+
+            editRequestStatus: function(text) {
+                Common.NotificationCenter.trigger('editrequest:status', text);
             },
 
             onDownloadAs: function(format) {
@@ -1018,10 +1065,6 @@ define([
                 }
             },
 
-            onSuggest: function() {
-                window.open('{{SUGGEST_URL}}', "_blank");
-            },
-
             closeEditor: function() {
                 this.appOptions.canRequestClose && this.onRequestClose();
             },
@@ -1082,6 +1125,8 @@ define([
             },
 
             onLongActionBegin: function(type, id) {
+                if (this._printController && type === Asc.c_oAscAsyncActionType.BlockInteraction &&
+                        id === Asc.c_oAscAsyncAction.Print) this._printController.observeStart();
                 var action = {id: id, type: type};
                 this.stackLongActions.push(action);
                 this.setLongActionView(action);
@@ -1589,7 +1634,9 @@ define([
             },
 
             applyLicense: function() {
+                var licenseEditingAvailable = true;
                 if (this.editorConfig.mode === 'view') {
+                    licenseEditingAvailable = false;
                     if (this.appOptions.canLiveView && (this._state.licenseType===Asc.c_oLicenseResult.ConnectionsLive || this._state.licenseType===Asc.c_oLicenseResult.ConnectionsLiveOS ||
                                                         this._state.licenseType===Asc.c_oLicenseResult.UsersViewCount || this._state.licenseType===Asc.c_oLicenseResult.UsersViewCountOS ||
                                                         !this.appOptions.isAnonymousSupport && !!this.appOptions.user.anonymous)) {
@@ -1597,6 +1644,7 @@ define([
                         this.disableLiveViewing(true);
                     }
                 } else if (!this.appOptions.isAnonymousSupport && !!this.appOptions.user.anonymous) {
+                    licenseEditingAvailable = false;
                     this.disableEditing(true);
                     this.api.asc_coAuthoringDisconnect();
                     Common.NotificationCenter.trigger('api:disconnect');
@@ -1606,6 +1654,7 @@ define([
                         buttons: ['ok']
                     });
                 } else if (this._state.licenseType) {
+                    licenseEditingAvailable = this._state.licenseType===Asc.c_oLicenseResult.SuccessLimit;
                     var license = this._state.licenseType,
                         title = this.textNoLicenseTitle,
                         buttons = ['ok'],
@@ -1621,8 +1670,6 @@ define([
                         if (license===Asc.c_oLicenseResult.ConnectionsOS)
                             title = this.textNoResourcesTitle;
                         license = (license===Asc.c_oLicenseResult.ConnectionsOS) ? this.warnNoResources : this.warnNoLicenseUsers;
-                        buttons = [{value: 'buynow', caption: this.textBuyNow}, {value: 'contact', caption: this.textContactUs}];
-                        primary = 'buynow';
                         modal = true;
                     }
 
@@ -1632,6 +1679,12 @@ define([
                         Common.NotificationCenter.trigger('api:disconnect');
                     }
 
+                    // b24: the host shows the capacity warning
+                    if (this._state.licenseType===Asc.c_oLicenseResult.ConnectionsOS || this._state.licenseType===Asc.c_oLicenseResult.UsersCountOS) {
+                        Common.Gateway.reportWarning('b24_no_capacity', 'editing disabled by document server capacity guard');
+                        return;
+                    }
+
                     !modal ? Common.UI.TooltipManager.showTip({ step: 'licenseError', text: license, header: title, target: '#toolbar', maxwidth: 430,
                                                                       automove: true, noHighlight: true, noArrow: true, textButton: this.textContinue}) :
                     Common.UI.info({
@@ -1639,13 +1692,7 @@ define([
                         title: title,
                         msg  : license,
                         buttons: buttons,
-                        primary: primary,
-                        callback: function(btn) {
-                            if (btn == 'buynow')
-                                window.open('{{PUBLISHER_URL}}', "_blank");
-                            else if (btn == 'contact')
-                                window.open('mailto:{{SALES_EMAIL}}', "_blank");
-                        }
+                        primary: primary
                     });
                 } else if (!this.appOptions.isDesktopApp && !this.appOptions.canBrandingExt &&
                             this.editorConfig && this.editorConfig.customization && (this.editorConfig.customization.loaderName || this.editorConfig.customization.loaderLogo ||
@@ -1653,13 +1700,14 @@ define([
                     Common.UI.warning({
                         title: this.textPaidFeature,
                         msg  : this.textCustomLoader,
-                        buttons: [{value: 'contact', caption: this.textContactUs}, {value: 'close', caption: this.textClose}],
-                        primary: 'contact',
-                        callback: function(btn) {
-                            if (btn == 'contact')
-                                window.open('mailto:{{SALES_EMAIL}}', "_blank");
-                        }
+                        buttons: [{value: 'close', caption: this.textClose}],
+                        primary: 'close'
                     });
+                }
+
+                if (licenseEditingAvailable && (this.appOptions.isEdit || this.appOptions.isRestrictedEdit) &&
+                    !this._state.isDisconnected && this.stackDisableActions.length()===0) {
+                    Common.Gateway.sendInfo({mode:this.appOptions.isEdit?'edit':'view', b24EditingAvailable:true});
                 }
             },
 
@@ -1763,7 +1811,7 @@ define([
                 this.appOptions.canDownloadOrigin = false;
                 this.appOptions.canDownload       = this.permissions.download !== false;
                 this.appOptions.showSaveButton = this.appOptions.isEdit || !this.appOptions.isRestrictedEdit && this.appOptions.isPDFForm && this.appOptions.canDownload; // save to file or save to file copy (for pdf-form viewer)
-                this.appOptions.canSuggest     = !((typeof (this.editorConfig.customization) == 'object') && this.editorConfig.customization.suggestFeature===false);
+                this.appOptions.canSuggest     = false; // no "Suggest a feature" item
                 this.appOptions.canCopy        = this.permissions.copy !== false;
 
                 if (this.appOptions.isPDFForm && !this.appOptions.isEdit && !this.appOptions.isRestrictedEdit) {
@@ -1840,6 +1888,10 @@ define([
                 this.appOptions.canChangeCoAuthoring = this.appOptions.isEdit && this.appOptions.canCoAuthoring && !(this.editorConfig.coEditing && typeof this.editorConfig.coEditing == 'object' && this.editorConfig.coEditing.change===false) ||
                                                        this.appOptions.canLiveView && !(this.editorConfig.coEditing && typeof this.editorConfig.coEditing == 'object' && this.editorConfig.coEditing.change===false);
                 this.appOptions.isAnonymousSupport = !!this.api.asc_isAnonymousSupport();
+
+                // view mode with an edit request handler and a non-empty ui.shell: offer the edit request entry points
+                if (this.editorConfig.canRequestEditRights && this.editorConfig.mode === 'view' && !!this.editorConfig.ui && typeof this.editorConfig.ui.shell === 'string' && this.editorConfig.ui.shell !== '')
+                    this.appOptions.canEdit = true;
 
                 this.loadCoAuthSettings();
                 this.applyModeCommonElements();
@@ -2974,7 +3026,21 @@ define([
             onAdvancedOptions: function(type, advOptions, mode, formatOptions) {
                 if (this._state.openDlg) return;
 
-                var me = this;
+                var me = this,
+                    dialog,
+                    userActionRequestId,
+                    reportUserAction = !me._isDocReady && me.document && (
+                        (type == Asc.c_oAscAdvancedOptionsID.DRM && me.document.fileType === 'docx') ||
+                        (type == Asc.c_oAscAdvancedOptionsID.TXT && me.document.fileType === 'txt' && mode != 2)
+                    );
+                var resumeUserAction = function() {
+                    if (userActionRequestId) {
+                        var requestId = userActionRequestId;
+                        userActionRequestId = null;
+                        if (me._state.openDlg === dialog) me._state.openDlg = null;
+                        Common.Gateway.userActionStateChanged({version: 1, state: 'resumed', requestId: requestId});
+                    }
+                };
                 if (type == Asc.c_oAscAdvancedOptionsID.TXT) {
                     me._state.openDlg = new Common.Views.OpenDialog({
                         title: Common.Views.OpenDialog.prototype.txtTitle.replace('%1', 'TXT'),
@@ -2986,6 +3052,7 @@ define([
                         api: me.api,
                         handler: function (result, settings) {
                             me.isShowOpenDialog = false;
+                            resumeUserAction();
                             if (result == 'ok') {
                                 if (me && me.api) {
                                     if (mode==2) {
@@ -2993,10 +3060,10 @@ define([
                                         me.api.asc_DownloadAs(formatOptions);
                                     } else
                                         me.api.asc_setAdvancedOptions(type, settings.textOptions);
-                                    me.loadMask && me.loadMask.show();
+                                    me.loadMask && (!me._state.openDlg || me._state.openDlg === dialog) && me.loadMask.show();
                                 }
                             }
-                            me._state.openDlg = null;
+                            if (me._state.openDlg === dialog) me._state.openDlg = null;
                         }
                     });
                 } else if (type == Asc.c_oAscAdvancedOptionsID.DRM) {
@@ -3010,16 +3077,17 @@ define([
                         autoPosOnResize : 'center',
                         handler: function (result, value) {
                             me.isShowOpenDialog = false;
+                            resumeUserAction();
                             if (result == 'ok') {
                                 if (me.api) {
                                     me.api.asc_setAdvancedOptions(type, value.drmOptions);
-                                    me.loadMask && me.loadMask.show();
+                                    me.loadMask && (!me._state.openDlg || me._state.openDlg === dialog) && me.loadMask.show();
                                 }
                             } else {
                                 Common.Gateway.requestClose();
                                 Common.Controllers.Desktop.requestClose();
                             }
-                            me._state.openDlg = null;
+                            if (me._state.openDlg === dialog) me._state.openDlg = null;
                         }
                     });
                     me._state.isDRM = true;
@@ -3028,7 +3096,15 @@ define([
                     this.isShowOpenDialog = true;
                     this.loadMask && this.loadMask.hide();
                     this.onLongActionEnd(Asc.c_oAscAsyncActionType.BlockInteraction, LoadingDocument);
-                    me._state.openDlg.show();
+                    dialog = me._state.openDlg;
+                    dialog.show();
+                    if (reportUserAction) {
+                        me._userActionRequestId = (me._userActionRequestId || 0) + 1;
+                        userActionRequestId = me._userActionRequestId;
+                        Common.Gateway.userActionStateChanged({
+                            version: 1, state: 'required', requestId: userActionRequestId
+                        });
+                    }
                 }
                 if (me._state.requireUserAction) {
                     Common.Gateway.userActionRequired();
@@ -3132,6 +3208,83 @@ define([
             },
 
             onPrintUrl: function(url) {
+                if (this.appOptions.isDesktopApp) return this.onDesktopPrintUrl(url);
+                if (this._printController) this._printController.acceptUrl(url);
+            },
+
+            requestPrint: function(options, api) {
+                if (!this.api || api && api !== this.api || !this.document ||
+                        !this.appOptions.canPrint || this.permissions && this.permissions.print === false ||
+                        Common.Utils.ModalWindow.isVisible()) return false;
+                var inline = Common.Utils.isChrome || Common.Utils.isOpera || Common.Utils.isGecko && Common.Utils.firefoxVersion > 86;
+                options = options || new Asc.asc_CDownloadOptions(null, inline);
+                if (this.appOptions.isDesktopApp) {
+                    this.api.asc_Print(options);
+                    return true;
+                }
+                // PrintUrl is needed to check bytes; the previous UA fork is applied
+                // after it. SDK Print sets inline/withoutPassword independently of options.
+                options.isDownloadEvent = true;
+                var owner = {api: this.api, document: this.document, key: this.document.key,
+                    download: !inline, filename: inline ? null :
+                        AscCommon.changeFileExtention(this.document.title || 'document', 'pdf', Asc.c_nMaxDownloadTitleLen)};
+                return this.getPrintController().request(owner, function () { owner.api.asc_Print(options); });
+            },
+
+            getPrintController: function() {
+                if (!this._printController) {
+                    var me = this;
+                    this._printController = new PrintAttempt({
+                        download: function(blob, filename) {
+                            // The public SDK helper owns the link/URL and the deferred revoke.
+                            AscCommon.DownloadFileFromBytes(blob, filename, 'application/pdf');
+                        },
+                        isCurrent: function(owner) {
+                            return me.api === owner.api && me.document === owner.document &&
+                                me.document.key === owner.key && me.appOptions.canPrint &&
+                                (!me.permissions || me.permissions.print !== false);
+                        },
+                        showWait: function() {
+                            // Own DOM nodes: LoadMask.hide changes the shared shortcut
+                            // state, while the SDK remains the owner of its own locks.
+                            var owner = document.getElementById('viewport') || document.body,
+                                mask = document.createElement('div'),
+                                loader = document.createElement('div'),
+                                spinner = document.createElement('i'),
+                                title = document.createElement('div');
+                            mask.className = 'asc-loadmask';
+                            loader.className = 'asc-loadmask-body';
+                            loader.setAttribute('role', 'presentation');
+                            spinner.className = 'asc-loadmask-image';
+                            spinner.style.animation = 'rotation .8s linear infinite';
+                            title.className = 'asc-loadmask-title';
+                            title.textContent = me.printTextText;
+                            loader.appendChild(spinner);
+                            loader.appendChild(title);
+                            mask.appendChild(loader);
+                            owner.appendChild(mask);
+                            return function() { if (mask.parentNode) mask.parentNode.removeChild(mask); };
+                        },
+                        onError: function(error) {
+                            Common.UI.alert({
+                                title: me.notcriticalErrorTitle,
+                                msg: (error.status === 401 || error.status === 403) && me.errorAccessDeny ?
+                                    me.errorAccessDeny : me.downloadErrorText,
+                                iconCls: 'warn',
+                                buttons: ['ok']
+                            });
+                        }
+                    });
+                }
+                return this._printController;
+            },
+
+            disposePrint: function() {
+                if (this._printController) this._printController.dispose();
+                this._printController = null;
+            },
+
+            onDesktopPrintUrl: function(url) {
                 if (this.iframePrint) {
                     this.iframePrint.parentNode.removeChild(this.iframePrint);
                     this.iframePrint = null;
@@ -3528,6 +3681,8 @@ define([
                 data && this.api.asc_openDocumentFromBytes(new Uint8Array(data));
             },
 
+            textProductName: 'VibeOffice',
+            textEditRequestFailed: 'Couldn\'t open the document for editing. Try again',
             errorLang: 'The interface language is not loaded.<br>Please contact your Document Server administrator.'
         }
     })(), DE.Controllers.Main || {}))

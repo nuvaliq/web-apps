@@ -1,98 +1,81 @@
+// "About" (Common.Views.About.contentHtml) in the panel of the extended interface: the legal notice as centered
+// text. Gaps and font sizes follow the accepted prototype (about.css, AIR scale), colors are the editor theme's.
 .about-dlg {
-    .asc-about-office {
-        background-repeat: no-repeat;
-        margin-bottom: 5px;
-
-        &:before {
-            content: ~"url('@{common-image-const-path}/about/logo_s.svg')";
-
-            .theme-type-dark & {
-                content: ~"url('@{common-image-const-path}/about/logo-white_s.svg')";
-            }
-
-            height: 45px;
-            width: auto;
-        }
-    }
-
-    .asc-about-header {
-        margin: 0 30px;
-        font: 12px Tahoma;
-        .font-size-medium();
-        letter-spacing: 1px;
+    .about-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        box-sizing: content-box;
+        max-width: 64ch;
+        margin: 0 auto;
+        padding: 64px 32px;
+        text-align: center;
+        font-size: 14px;
+        line-height: 1.4;
         color: @text-normal-ie;
         color: @text-normal;
-        .font-weight-bold();
-        white-space: nowrap;
+        overflow-wrap: anywhere;
+        user-select: text;
     }
 
-    .asc-about-version {
-        font: 15px Tahoma;
+    // product name and version as one group, the version right under the name
+    .about-head {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .about-name {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.35;
+        font-weight: 600;
+        color: @text-normal-ie;
+        color: @text-normal;
+    }
+
+    .about-version {
+        font-size: 13px;
         color: @text-tertiary-ie;
         color: @text-tertiary;
-        user-select: text;
     }
 
-    .asc-about-companyname {
-        font: bold 15px Tahoma;
-        letter-spacing: 0.01em;
-        color: @text-normal-ie;
-        color: @text-normal;
-        user-select: text;
+    // every line of the notice is a block of its own
+    .about-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
     }
 
-    label {
-        &.asc-about-desc,
-        &.asc-about-desc-name,
-        &.asc-about-lic {
-            font: 12px Tahoma;
-            .font-size-medium();
-            color: @text-normal-ie;
-            color: @text-normal;
-            user-select: text;
-        }
+    .about-line {
+        margin: 0;
+        text-wrap: balance;
+    }
 
-        &.asc-about-desc-name {
-            color: @text-normal-ie;
-            color: @text-normal;
-            white-space: pre;
-        }
-
-        &.asc-about-lic {
-            .font-weight-bold();
-        }
-
+    // non-code content paragraph: smaller and quieter than the lines
+    .about-cc {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.4;
+        font-weight: 400;
+        color: @text-secondary-ie;
+        color: @text-secondary;
+        text-wrap: pretty;
     }
 
     a {
-        font: 12px Tahoma;
-        .font-size-medium();
-        color: @text-normal-ie;
-        color: @text-normal;
-        user-select: text;
-    }
+        color: @text-link-ie;
+        color: @text-link;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        border-radius: 2px;
 
-    .separator.horizontal {
-        width: 100%;
-
-        &.short {
-            width: 220px;
-
-            &.left {
-                float: right;
-            }
+        &:focus-visible {
+            outline: 2px solid @text-link-ie;
+            outline: 2px solid @text-link;
+            outline-offset: 2px;
         }
-    }
-
-    .padding-small {
-        padding-bottom: 10px;
-    }
-
-    .padding-large {
-        padding-bottom: 40px;
-    }
-
-    .margin-bottom {
-        margin-bottom: 20px;
     }
 }

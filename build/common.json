@@ -109,7 +109,7 @@
                             "**/*.js",
                             "**/*.template"
                         ],
-                        "dest": "../deploy/web-apps/apps/common/main/lib"
+                        "dest": "../deploy/web-apps/apps/common/forms/lib"
                     },
                     {
                         "expand": true,
@@ -143,6 +143,10 @@
                 "src": "*.html.deploy",
                 "ext": ".html",
                 "dest": "../deploy/web-apps/apps/common"
+            },
+            "license": {
+                "src": "../LICENSE",
+                "dest": "../deploy/web-apps/apps/common/LICENSE.txt"
             }
         },
         "imagemin": {

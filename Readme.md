@@ -1,5 +1,7 @@
 [![License](https://img.shields.io/badge/License-GNU%20AGPL%20V3-green.svg?style=flat)](https://www.gnu.org/licenses/agpl-3.0.en.html)
 
+VibeOffice — modified version of ONLYOFFICE Docs web-apps v9.4.0.129, changes since 27.08.2026. See [NOTICE](NOTICE).
+
 <h1 > ONLYOFFICE web-apps</h1>
 
 ## 💡 Overview

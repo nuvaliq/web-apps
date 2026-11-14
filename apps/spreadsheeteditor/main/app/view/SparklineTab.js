@@ -50,7 +50,7 @@ define([
     'use strict';
 
     SSE.Views.SparklineTab = Common.UI.BaseView.extend(_.extend((function(){
-        var template = '<section id="sparkline-design-panel" class="panel" data-tab="sparklinetab" role="tabpanel" aria-labelledby="view">' +
+        var template = '<section id="sparkline-design-panel" class="panel" data-tab="sparklinetab" role="tabpanel" aria-labelledby="sparklinetab">' +
             '<div class="group">' +
                 '<span class="btn-slot text x-huge" id="slot-btn-sparkline-line"></span>' +
                 '<span class="btn-slot text x-huge" id="slot-btn-sparkline-column"></span>' +

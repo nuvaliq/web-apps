@@ -1,0 +1,297 @@
+/*
+ * Menu bar of the "Compact" shell and its lists: shared rules.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * The markup is built by Common.UI.Compact.MenuBar (lib/view/compact/MenuBar.js): the .vo-mn
+ * bar, .vo-mn-wrap sections with a .vo-mn-item button and a .vo-mn-drop list, .vo-mn-fly
+ * submenus in the bar itself, the .vo-mn-more "…" of a narrow window and a place for the status
+ * .vo-mn-status. An item group is a .vo-mn-grp container with a visible .vo-mn-grp-t title;
+ * an item description is .vo-mn-d on a second line under the label (the .vo-mn-tc column). Only tokens.less variables are used: heights, paddings and colors differ per
+ * editor and are declared in its compact-shell.less.
+ *
+ * Submenus live in the bar itself (position: relative), not inside the scrollable
+ * section list: its overflow would clip them. MenuBar places the submenu.
+ */
+
+.vo-mn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    /* Section labels have no borders or separators: whitespace keeps them apart. */
+    gap: @vo-menu-gap;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    height: @vo-h-menu;
+    min-height: @vo-h-menu;
+    background: @vo-shell-bg;
+    /* The first section's label is on the @vo-pad-x line: its own button padding is subtracted. The bottom
+       padding leaves room between the labels and whatever is below the bar. */
+    padding: 0 (@vo-pad-x - @vo-menu-item-pad-x) @vo-menu-pad-bottom;
+
+    /* A section does not shrink: when width runs out it goes into "…" instead of wrapping. */
+    .vo-mn-wrap {
+        position: relative;
+        flex: 0 0 auto;
+    }
+
+    .vo-mn-item {
+        height: @vo-menu-item-h;
+        padding: 0 @vo-menu-item-pad-x;
+        border: none;
+        border-radius: @vo-r-xs;
+        background: transparent;
+        color: @vo-menu-fg;
+        font-family: @vo-font;
+        font-size: @vo-fs-menu;
+        letter-spacing: @vo-track-ctrl;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+
+        /* Hover and press only: an open section has no fill of its own
+           (the vo-open class is for aria and tests). */
+        &:hover { background: @vo-hover; }
+        &:active { background: @vo-active; }
+        &:focus-visible { outline: none; box-shadow: 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    .vo-mn-drop {
+        display: none;
+        position: absolute;
+        /* Anchored to the button itself: the bar height differs between editors. */
+        top: calc(100% + @vo-menu-drop-gap);
+        left: -@vo-menu-drop-shift;
+        z-index: @vo-z-drop;
+        min-width: @vo-menu-drop-min-w;
+        padding: @vo-pop-pad-top 0 @vo-pop-pad-bottom;
+        border: none;
+        border-radius: @vo-r-pop;
+        background: @vo-surface;
+        box-shadow: @vo-shadow;
+        /* The list does not go past the bottom edge of the window: the ceiling is the window height minus
+           the header and the menu bar, the scroll axis is explicit, horizontally the row fill is clipped
+           by the rounding. */
+        max-height: calc(100vh - @vo-h-header - @vo-h-menu - @vo-menu-drop-margin);
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: @vo-menu-scroll transparent;
+
+        &.open { display: block; }
+    }
+
+    /* Submenu: position inline from MenuBar, ceiling is the window. */
+    .vo-mn-fly {
+        top: 0;
+        left: 0;
+        max-height: calc(100vh - @vo-menu-drop-margin);
+    }
+
+    /* The list row is full width: the hover fill runs edge to edge. */
+    .vo-mn-sub {
+        display: flex;
+        align-items: center;
+        gap: @vo-row-gap;
+        box-sizing: border-box;
+        width: 100%;
+        min-height: @vo-row-h;
+        padding: 0 @vo-row-pad-r 0 @vo-row-pad-l;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: @vo-menu-row-fg;
+        font-family: @vo-font;
+        font-size: @vo-fs-row;
+        letter-spacing: @vo-track-ctrl;
+        text-align: left;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover  { background: @vo-hover; }
+        &:active { background: @vo-active; }
+        /* An item whose submenu is open keeps the hover look. */
+        &.vo-sub-open { background: @vo-hover; }
+        &:focus-visible { outline: none; box-shadow: inset 0 0 0 @vo-focus-w @vo-focus; }
+    }
+
+    /* The glyph slot is always kept: otherwise item labels drift apart. */
+    .vo-mn-i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: @vo-menu-glyph;
+        height: @vo-menu-glyph;
+        flex: 0 0 auto;
+        color: @vo-menu-icon;
+    }
+
+    .vo-mn-sub:hover .vo-mn-i { color: @vo-menu-icon-hover; }
+
+    .vo-mn-t {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Label and the description under it form one column in the label's place. */
+    .vo-mn-tc {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .vo-mn-sub.vo-has-desc {
+        padding-top: @vo-sep-gap;
+        padding-bottom: @vo-sep-gap;
+    }
+
+    /* Description on a second line, muted. It does not set the list width: that comes from the other
+       rows, long text wraps (on the right it would stretch the list). */
+    .vo-mn-d {
+        width: 0;
+        min-width: 100%;
+        color: @vo-menu-off;
+        font-size: @vo-menu-hint-fs;
+        white-space: normal;
+    }
+
+    /* Item hint or keyboard shortcut on the right, muted. */
+    .vo-mn-h {
+        margin-left: @vo-menu-hint-gap;
+        color: @vo-menu-off;
+        font-size: @vo-menu-hint-fs;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Selected mark: ✓ for a checkbox, ● for a group option, in the accent, without a circle. */
+    .vo-mn-chk {
+        display: inline-flex;
+        flex: 0 0 auto;
+        margin-left: @vo-menu-hint-gap;
+        color: @vo-menu-mark;
+    }
+
+    /* The option dot is its own circle in the glyph's place: the icon set has none, and the ● symbol
+       differs in size between fonts. The color is the mark's, for a disabled one the disabled color. */
+    .vo-mn-dot {
+        align-items: center;
+        justify-content: center;
+        width: @vo-menu-glyph;
+        height: @vo-menu-glyph;
+
+        &::before {
+            content: '';
+            width: @vo-menu-dot;
+            height: @vo-menu-dot;
+            border-radius: 50%;
+            background: currentColor;
+        }
+    }
+
+    /* ▸ is the "left" glyph, mirrored: the set has no "right" one of its own. */
+    .vo-mn-arrow {
+        display: inline-flex;
+        flex: 0 0 auto;
+        margin-left: @vo-menu-hint-gap;
+        color: @vo-menu-off;
+        transform: scaleX(-1);
+    }
+
+    .vo-mn-h + .vo-mn-chk,
+    .vo-mn-h + .vo-mn-arrow { margin-left: @vo-menu-mark-gap; }
+
+    /* A disabled item is marked by a class and aria-disabled, not by the disabled attribute: on a
+       disabled button the browser does not send click, and the recheck on selection would stop
+       working. It differs not only by color: the cursor does not invite a press, hover and
+       press give no fill, and the reason is in the tooltip. */
+    .vo-mn-sub.vo-locked {
+        color: @vo-menu-off;
+        cursor: default;
+
+        &:hover, &:active { background: transparent; }
+        .vo-mn-i, &:hover .vo-mn-i, .vo-mn-h, .vo-mn-chk, .vo-mn-arrow { color: @vo-menu-off; }
+    }
+
+    /* The editor's own row (value, counter): the row itself is not clickable. */
+    .vo-mn-sub.vo-mn-widget {
+        cursor: default;
+
+        &:hover, &:active { background: transparent; }
+    }
+
+    /* A group is only a container of items: it has no look of its own, items in it are as outside it. */
+    .vo-mn-grp {
+        display: block;
+    }
+
+    /* Visible group title: not an item, not clickable and not highlighted. */
+    .vo-mn-grp-t {
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        min-height: @vo-menu-grp-h;
+        padding: 0 @vo-row-pad-r 0 @vo-row-pad-l;
+        color: @vo-menu-off;
+        font-family: @vo-font;
+        font-size: @vo-menu-hint-fs;
+        letter-spacing: @vo-track-ctrl;
+        white-space: nowrap;
+        cursor: default;
+    }
+
+    .vo-mn-sep {
+        height: @vo-menu-sep-w;
+        margin: @vo-sep-gap 0;
+        background: @vo-separator;
+    }
+
+    /* Place for the editor's indicator and hint: in the bar, outside the lists and "…". It takes
+       the rest of the bar and no wider: long text (a portal response) is cut with an ellipsis,
+       the full text is in the tooltip (MenuBar). With text the status is no narrower than @vo-menu-status-min-w: on
+       a narrow bar the sections go into "…" for this place; an empty one takes no space. */
+    .vo-mn-status {
+        display: block;
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        color: @vo-menu-off;
+        font-family: @vo-font;
+        font-size: @vo-fs-status;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+
+        &:not(:empty) { min-width: @vo-menu-status-min-w; }
+    }
+}
+
+.rtl .vo-mn {
+    .vo-mn-drop:not(.vo-mn-fly) { left: auto; right: -@vo-menu-drop-shift; }
+    .vo-mn-sub { text-align: right; }
+    .vo-mn-arrow { transform: none; }
+    .vo-mn-h, .vo-mn-chk, .vo-mn-arrow { margin-left: 0; margin-right: @vo-menu-hint-gap; }
+    .vo-mn-h + .vo-mn-chk, .vo-mn-h + .vo-mn-arrow { margin-right: @vo-menu-mark-gap; }
+}
+
+/* Appearance: from the anchor point. The keyframes are shared: other popup
+   surfaces of the editor shell use them too. */
+@keyframes vo-pop {
+    from { opacity: 0; transform: scale(.96); }
+    to   { opacity: 1; transform: none; }
+}
+
+.vo-mn .vo-mn-drop.open {
+    animation: vo-pop @vo-dur-pop @vo-ease;
+    transform-origin: 0 0;
+}
+
+.vo-mn-item, .vo-mn-sub {
+    transition: background-color @vo-dur-state ease-out,
+                color @vo-dur-state ease-out,
+                box-shadow @vo-dur-state ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vo-mn-item, .vo-mn-sub { transition: none; }
+    .vo-mn .vo-mn-drop.open { animation: none; }
+}
