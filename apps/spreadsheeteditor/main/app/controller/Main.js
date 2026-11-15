@@ -777,6 +777,9 @@ define([
             },
 
             onLongActionBegin: function(type, id) {
+                if (type === Asc.c_oAscAsyncActionType.Information && id === Asc.c_oAscAsyncAction.Disconnect) {
+                    Common.Gateway.reportTransportReconnecting();
+                }
                 var action = {id: id, type: type};
                 this.stackLongActions.push(action);
                 this.setLongActionView(action);
@@ -2633,6 +2636,7 @@ define([
                     }
                     return true;
                 }
+                Common.Gateway.reportTransportConnected();
                 return false;
             },
 

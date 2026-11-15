@@ -25,7 +25,7 @@ for (const types of [[T.Math], [T.Paragraph, T.Math], [T.Math, T.Paragraph]]) {
     });
 }
 
-check('leaving a formula restores chart insertion and keeps the data editor behavior', () => {
+check('leaving a formula restores chart insertion without opening the data editor', () => {
     let selected = elements([T.Paragraph, T.Math]);
     const ctx = docs.context({engine: {getSelectedElements: () => selected}});
     const adapter = docs.adapter(ctx);
@@ -33,7 +33,7 @@ check('leaving a formula restores chart insertion and keeps the data editor beha
     selected = elements([T.Paragraph]);
     assert.equal(adapter.itemState(chart()).disabled, false);
     assert.equal(adapter.exec(chart()), true);
-    assert.deepEqual(JSON.parse(JSON.stringify(chartCalls(ctx).map(entry => entry.args))), [[10, null, true]]);
+    assert.deepEqual(JSON.parse(JSON.stringify(chartCalls(ctx).map(entry => entry.args))), [[10, null, false]]);
 });
 
 check('insertion rechecks the selection after reading an enabled menu item', () => {

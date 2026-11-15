@@ -269,9 +269,9 @@ check('startup failure prevents selection-driven changes', () => {
     focus([element(T.Image)]);
     visible(false);
 });
-// Chart insertion opens the data editor right away; the inserted chart in focus
-// keeps the sidebar as it was.
-check('chart insertion keeps a closed sidebar closed', () => {
+// Chart insertion leaves data editing to the explicit Edit data action.
+// The inserted chart in focus keeps the sidebar as it was.
+check('chart insertion keeps the data editor and a closed sidebar closed', () => {
     vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,
         '../../../apps/documenteditor/main/app/view/DocumentActions.js'), 'utf8'), context);
     const actions = DE.Views.DocumentActions;
@@ -279,7 +279,7 @@ check('chart insertion keeps a closed sidebar closed', () => {
     let insertion;
     shell.api.asc_addChartDrawingObject = (...args) => {
         insertion = args;
-        // The engine selects the new chart and opens its data editor (sdkjs word/api.js).
+        // The engine selects the new chart (sdkjs word/api.js).
         focus([paragraph(), chart()]);
         focus([chartShape(), chart()]);
     };
@@ -292,7 +292,7 @@ check('chart insertion keeps a closed sidebar closed', () => {
     const action = insert.items.find(item => item && item.i === 'chart');
     assert.ok(action, 'chart insert menu action exists');
     action.run();
-    assert.deepEqual(insertion, [10, undefined, true], 'the data editor opens after the insertion');
+    assert.deepEqual(insertion, [10, undefined, false], 'data editing requires an explicit action');
     visible(false);
     assert.equal(layouts, 0);
 });

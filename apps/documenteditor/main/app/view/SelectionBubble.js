@@ -226,6 +226,14 @@ define([
                 me.dismissed = null;
                 me.suspend();
             });
+            on('asc_onSetSearchCurrent', function (current) {
+                // The SDK reports -1 when keyboard or mouse input clears the current match.
+                if (current < 0) return;
+                me.searchSelection = true;
+                me.selectionPointer = null;
+                me.invalidateRefresh();
+                if (me.kind === 'text') me.hide();
+            });
             on('asc_onZoomChange', function () { me.suspend(); });
             $('#editor_sdk').on('scroll.voBubble wheel.voBubble', function () { me.onScroll(); });
             /* The stock modal window. The panel sits on body in a separate
@@ -275,6 +283,63 @@ define([
             on('asc_onDocumentContentReady', function () { me.bindScrollbars(); });
             on('asc_onUpdateScrolls', function () { me.bindScrollbars(); });
             this.bindScrollbars();
+            this.bindSelectionInput();
+        },
+
+        bindSelectionInput: function () {
+            var me = this, generation = this.lifecycleGeneration, api = this.api;
+            this.searchSelection = false;
+            this.selectionPointer = null;
+            this.selectionListeners = [];
+            var listen = function (name, fn, capture) {
+                var wrapped = me.guarded(fn, generation, api);
+                window.addEventListener(name, wrapped, capture);
+                me.selectionListeners.push([name, wrapped, capture]);
+            };
+            var fromEditor = function (target) {
+                // The SDK input is a sibling of the canvas container.
+                return !!(target && target.closest && target.closest('#id_viewer, #id_viewer_overlay, #area_id'));
+            };
+            var allow = function (keepDismissed) {
+                me.searchSelection = false;
+                if (!keepDismissed) me.dismissed = null;
+                me.scheduleRefresh();
+            };
+            this.notify('selection:manual', function () { allow(); });
+            var cancel = function () {
+                if (me.selectionPointer === null) return;
+                me.selectionPointer = null;
+                me.invalidateRefresh();
+                me.hide();
+            };
+            // Capture before the SDK consumes pointer and keyboard events.
+            listen('pointerdown', function (e) {
+                if (e.button !== 0 || !fromEditor(e.target)) return;
+                me.selectionPointer = e.pointerId;
+                me.dismissed = null;
+                me.invalidateRefresh();
+                me.hide();
+            }, true);
+            listen('pointerup', function (e) {
+                if (me.selectionPointer === null || e.pointerId !== me.selectionPointer || e.button !== 0) return;
+                me.selectionPointer = null;
+                allow();
+            }, true);
+            listen('pointercancel', function (e) {
+                if (e.pointerId === me.selectionPointer) cancel();
+            }, true);
+            listen('blur', cancel, false);
+            listen('dblclick', function (e) {
+                if (e.button === 0 && fromEditor(e.target)) allow();
+            }, true);
+            listen('keydown', function (e) {
+                if (!fromEditor(e.target)) return;
+                var navigation = /^(Arrow(Left|Right|Up|Down)|Home|End|PageUp|PageDown)$/.test(e.key);
+                var selectAll = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey &&
+                    e.keyCode === 65;
+                if (selectAll) allow();
+                else if (e.shiftKey && navigation) allow(true);
+            }, true);
         },
 
         guarded: function (fn, generation, api) {
@@ -335,6 +400,9 @@ define([
             (this.notifications || []).forEach(function (entry) {
                 Common.NotificationCenter.off(entry[0], entry[1]);
             });
+            (this.selectionListeners || []).forEach(function (entry) {
+                window.removeEventListener(entry[0], entry[1], entry[2]);
+            });
             if (this.layout) this.layout.off('layout:resizedrag', this.layoutChanged);
             var api = this.boundApi;
             (this.sdkCallbacks || []).forEach(function (entry) {
@@ -346,7 +414,9 @@ define([
             if (bars.Ver) bars.Ver.unbind('scrollvertical.voBubble');
             if (bars.Hor) bars.Hor.unbind('scrollhorizontal.voBubble');
             this.scrollbars = {};
-            this.notifications = this.sdkCallbacks = [];
+            this.notifications = this.sdkCallbacks = this.selectionListeners = [];
+            this.searchSelection = false;
+            this.selectionPointer = null;
             this.positionObserver = this.menuLayerObserver = this.layout = this.boundApi = null;
             this.modalNodes = [];
         },
@@ -654,7 +724,14 @@ define([
             /* The text panel is needed only for a non-empty selection: at the caret there is
                nothing to format. For objects it is the opposite — selecting an object
                is itself a reason to show the panel. */
-            if (kind === 'text' && !this.hasSelection()) return this.hide();
+            if (kind === 'text') {
+                if (this.selectionPointer !== null) return this.hide();
+                if (!this.hasSelection()) {
+                    this.searchSelection = false;
+                    return this.hide();
+                }
+                if (this.searchSelection) return this.hide();
+            }
 
             var p = kind === 'image' ? null : this.bounds();
             if (kind === 'image' ? !anchor : !p) return this.hide();

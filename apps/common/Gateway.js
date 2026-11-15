@@ -171,6 +171,8 @@ if (window.Common === undefined) {
             }
         };
 
+        var transportReconnecting = false;
+
         var _postMessage = function(msg, buffer) {
             // TODO: specify explicit origin
             if (window.parent && window.JSON) {
@@ -289,6 +291,20 @@ if (window.Common === undefined) {
                     event: 'onInfo',
                     data: info
                 });
+            },
+
+            reportTransportReconnecting: function() {
+                if (!transportReconnecting) {
+                    transportReconnecting = true;
+                    this.sendInfo({b24TransportState: 'reconnecting'});
+                }
+            },
+
+            reportTransportConnected: function() {
+                if (transportReconnecting) {
+                    transportReconnecting = false;
+                    this.sendInfo({b24TransportState: 'connected'});
+                }
             },
 
             setDocumentModified: function(modified) {

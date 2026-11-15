@@ -234,7 +234,8 @@
                 "dest": "../deploy/web-apps/apps/presentationeditor/main/app.reporter.js"
             },
             "copy": {
-                "../deploy/web-apps/apps/presentationeditor/main/index.reporter.html": "../apps/presentationeditor/main/index.reporter.html.deploy"
+                "../deploy/web-apps/apps/presentationeditor/main/index.reporter.html": "../apps/presentationeditor/main/index.reporter.html.deploy",
+                "../deploy/web-apps/apps/presentationeditor/main/reporter-ready.js": "../apps/presentationeditor/main/reporter-ready.js"
             }
         }
     },

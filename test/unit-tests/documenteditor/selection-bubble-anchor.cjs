@@ -42,7 +42,8 @@ function fixture() {
         off() {return this;}
         toArray() {return [];}
     }
-    const win = {innerWidth: 1200, innerHeight: 900, pageXOffset: 0, pageYOffset: 0};
+    const win = {innerWidth: 1200, innerHeight: 900, pageXOffset: 0, pageYOffset: 0,
+        addEventListener() {}, removeEventListener() {}};
     const doc = {getElementById: id => nodes[id]};
     const DE = {Views: {CompactShell: {advanced: false, editingLocked: () => false}}};
     const context = {window: win, document: doc, DE, Asc: {c_oAscTypeSelectElement:

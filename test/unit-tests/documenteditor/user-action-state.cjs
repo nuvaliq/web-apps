@@ -5,7 +5,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const crypto = require('node:crypto');
 const {execFileSync} = require('node:child_process');
 const assert = require('node:assert/strict');
 
@@ -14,7 +13,6 @@ const GATEWAY = 'apps/common/Gateway.js';
 const API = 'apps/api/documents/api.js';
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 const plain = value => JSON.parse(JSON.stringify(value));
-const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const FRAME_ID = 'editor';
 const EDITOR_ORIGIN = 'https://editor.example.test';
 const HOST_ORIGIN = 'https://host.example.test';
@@ -52,8 +50,8 @@ function host(events, source = read(API)) {
     assert.equal(listeners.size, 1, 'real MessageDispatcher subscribes');
     return {
         window,
-        receive(data, origin = EDITOR_ORIGIN) {
-            for (const listener of listeners) listener({data, origin});
+        receive(data, origin = EDITOR_ORIGIN, source = frames[0].contentWindow) {
+            for (const listener of listeners) listener({data, origin, source});
         }
     };
 }
@@ -151,19 +149,24 @@ check('frameIdMismatchIgnored', () => {
 
 check('oldApiDeliversNewIframeEvent', () => {
     const original = execFileSync('git', ['show', 'v9.4.0.129:' + API], {cwd: ROOT, encoding: 'utf8'});
-    /* The only change of api.js against upstream: the editor frame also allows clipboard-read
-       (editor-frame-permissions.cjs). */
-    const FRAME_ALLOW = 'iframe.setAttribute("allow", "autoplay; camera; microphone; display-capture; clipboard-write;");';
-    const ownAllow = FRAME_ALLOW.replace('clipboard-write;', 'clipboard-write; clipboard-read;');
-    assert.equal(original.split(FRAME_ALLOW).length, 2, 'upstream api.js sets the frame permissions once');
-    assert.equal(sha256(read(API)), sha256(original.replace(FRAME_ALLOW, ownAllow)),
-        'api.js stays identical to the upstream source except the frame permissions');
     const calls = [];
     const h = host({onUserActionStateChanged: recordingCallback(calls)}, original);
     const g = gateway(h);
     g.api.userActionStateChanged(state());
     g.api.userActionStateChanged(state('resumed'));
     assert.deepEqual(calls.map(call => plain(call.event.data)), [state(), state('resumed')]);
+});
+
+check('readyCallbackDistinguishesCurrentFrameFromForeignAndLegacy', () => {
+    const original = execFileSync('git', ['show', 'v9.4.0.129:' + API], {cwd: ROOT, encoding: 'utf8'});
+    const calls = [];
+    const events = {onDocumentReady: recordingCallback(calls)};
+    const ready = JSON.stringify({event: 'onDocumentReady', frameEditorId: FRAME_ID});
+    const current = host(events);
+    current.receive(ready, EDITOR_ORIGIN, {});
+    current.receive(ready);
+    host(events, original).receive(ready);
+    assert.deepEqual(calls.map(call => call.event.sourceVerified), [false, true, undefined]);
 });
 
 check('unsubscribedHostIgnoresEvent', () => {

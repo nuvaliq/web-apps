@@ -288,7 +288,7 @@ define([
             
             if (print && print._isPreviewVisible) return;
             
-            var reporterObject = (presenter) ? PE.getController('Main').document : null;
+            var reporterObject = (presenter) ? Object.assign({}, PE.getController('Main').document) : null;
             if (reporterObject) {
                 reporterObject.translations = {
                     reset: me.previewPanel.txtReset,
@@ -307,7 +307,13 @@ define([
                     pointer: me.previewPanel.txtPointer,
                     draw: me.previewPanel.txtDraw,
                 };
-                reporterObject.token = me.api.asc_getSessionToken();
+                if (me.viewport.mode.isDesktopApp) {
+                    reporterObject.token = me.api.asc_getSessionToken();
+                } else {
+                    var reporterAuth = me.api.asc_getReporterAuth();
+                    reporterObject.token = reporterAuth.token;
+                    reporterObject.tokenType = reporterAuth.type;
+                }
                 reporterObject.customization = me.viewport.mode.customization;
             }
 

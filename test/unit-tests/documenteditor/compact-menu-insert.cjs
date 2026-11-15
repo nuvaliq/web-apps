@@ -1,6 +1,6 @@
 /* Run: node test/unit-tests/documenteditor/compact-menu-insert.cjs
  * Insert section of the compact menu of the document editor (DocumentActions.sections): the table
- * submenu with the size grid and the conversion of text, the chart with its data editor, the break
+ * submenu with the size grid and the conversion of text, the chart without its data editor, the break
  * submenu and the horizontal line.
  * The catalog and the adapter run in vm over the stand-ins of lib/documents-editor.cjs. The size grid
  * runs in headless Chrome through Playwright (NODE_PATH or PLAYWRIGHT_MODULE): the shared menu bar
@@ -63,14 +63,14 @@ check('convert is greyed without selection', () => {
     }
 });
 
-check('chart insertion opens the data editor', () => {
+check('chart insertion leaves the data editor closed', () => {
     const ctx = docs.context();
     const it = command('insert.chart');
     assert.equal(Model.kindOf(it), 'action');
     assert.equal(docs.adapter(ctx).exec(it), true);
-    /* The third argument asks the engine to open the chart data editor right after the insertion
+    /* The third argument leaves the chart data editor closed until Edit data is requested
        (sdkjs word/api.js asc_addChartDrawingObject). */
-    assert.deepEqual(plain(calls(ctx, 'asc_addChartDrawingObject')), [[10, null, true]]);
+    assert.deepEqual(plain(calls(ctx, 'asc_addChartDrawingObject')), [[10, null, false]]);
 });
 
 check('break submenu has three kinds', () => {

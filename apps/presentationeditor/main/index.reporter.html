@@ -146,7 +146,8 @@
             // document.getElementsByTagName('html')[0].setAttribute('style', 'zoom: ' + 1 / (window.devicePixelRatio < 2 ? window.devicePixelRatio : window.devicePixelRatio / 2) + ';');
 
         window.onbeforeunload = function() {
-            window.postMessage("{ \"reporter_command\" : \"end\" }", "*");
+            if (window.opener && !window.opener.closed)
+                window.opener.postMessage("{ \"reporter_command\" : \"end\" }", window.location.origin);
         };
 
         var userAgent = navigator.userAgent.toLowerCase(),

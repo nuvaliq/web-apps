@@ -467,7 +467,7 @@
             }
         };
 
-        var _onMessage = function(msg) {
+        var _onMessage = function(msg, sourceVerified) {
             if ( msg ) {
                 if ( msg.type === "onExternalPluginMessage" ) {
                     _sendCommand(msg);
@@ -496,7 +496,12 @@
                         }
 
                         if (handler && typeof handler == "function") {
-                            res = handler.call(_self, {target: _self, data: msg.data});
+                            var event = {target: _self, data: msg.data};
+                            if (msg.event === 'onInfo'
+                                || msg.event === 'onDocumentStateChange' || msg.event === 'onDocumentReady') {
+                                event.sourceVerified = sourceVerified === true;
+                            }
+                            res = handler.call(_self, event);
                         }
                     }
                 }
@@ -619,7 +624,9 @@
                 this.frameOrigin = pathArray[0] + '//' + pathArray[2];
             }
             target.parentNode && target.parentNode.replaceChild(iframe, target);
-            var _msgDispatcher = new MessageDispatcher(_onMessage, this);
+            var _msgDispatcher = new MessageDispatcher(_onMessage, this, function() {
+                return iframe && iframe.contentWindow;
+            });
         }
 
         /*
@@ -987,7 +994,7 @@
         }
     }
 
-    MessageDispatcher = function(fn, scope) {
+    MessageDispatcher = function(fn, scope, getFrameWindow) {
         var _fn     = fn,
             _scope  = scope || window,
             eventFn = function(msg) {
@@ -1023,9 +1030,14 @@
                 }
 
                 try {
-                    var msg = window.JSON.parse(msg.data);
+                    var sourceVerified = !!(msg.source && getFrameWindow && msg.source === getFrameWindow());
+                    var data = window.JSON.parse(msg.data);
+                    if (!sourceVerified && data && data.event === 'onInfo'
+                        && data.data && typeof data.data === 'object') {
+                        delete data.data.b24TransportState;
+                    }
                     if (_fn) {
-                        _fn.call(_scope, msg);
+                        _fn.call(_scope, data, sourceVerified);
                     }
                 } catch(e) {}
             }

@@ -1125,6 +1125,9 @@ define([
             },
 
             onLongActionBegin: function(type, id) {
+                if (type === Asc.c_oAscAsyncActionType.Information && id === Asc.c_oAscAsyncAction.Disconnect) {
+                    Common.Gateway.reportTransportReconnecting();
+                }
                 if (this._printController && type === Asc.c_oAscAsyncActionType.BlockInteraction &&
                         id === Asc.c_oAscAsyncAction.Print) this._printController.observeStart();
                 var action = {id: id, type: type};
@@ -2776,6 +2779,7 @@ define([
                     }
                     return true;
                 }
+                Common.Gateway.reportTransportConnected();
                 return false;
             },
 

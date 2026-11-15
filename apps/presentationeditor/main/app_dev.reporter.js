@@ -70,10 +70,17 @@ require([
     'underscore',
     'socketio',
     'xregexp',
-], function (_) {
+    'presentationeditor/main/reporter-ready'
+], function (_, socketio, xregexp, repeatPresenterReady) {
     window._ = _
 
+    var metadataAccepted = false;
+    var loadingCancelled = false;
+    var readyLoop;
+    var loadingEnd;
     var _msg_func = function(msg) {
+        if (loadingCancelled || metadataAccepted) return;
+        if (!window.AscDesktopEditor && (!window.opener || msg.source !== window.opener || msg.origin !== window.location.origin)) return;
         var data = msg.data, cmd;
 
         try {
@@ -81,7 +88,9 @@ require([
         } catch(e) {}
 
         if ( cmd ) {
-            if ( cmd.type == 'file:open' ) {
+            if ( cmd.type == 'file:open' && (window.AscDesktopEditor || (cmd.data && typeof cmd.data === 'object' && typeof cmd.data.key === 'string' && cmd.data.key.length > 0 && (cmd.data.tokenType === 'open' || cmd.data.tokenType === 'session')))) {
+                metadataAccepted = true;
+                if (readyLoop) readyLoop.stop();
                 load_document(cmd.data);
             }
         }
@@ -101,6 +110,25 @@ require([
         'isRtlInterface': lang && (lang.lastIndexOf('ar', 0) === 0 || lang.lastIndexOf('he', 0) === 0)
     });
 
+    if (!window.AscDesktopEditor) {
+        loadingEnd = document.createElement('button');
+        loadingEnd.id = 'reporter_loading_end';
+        loadingEnd.type = 'button';
+        loadingEnd.className = 'btn-text-default';
+        loadingEnd.style.position = 'fixed';
+        loadingEnd.style.right = '10px';
+        loadingEnd.style.bottom = '10px';
+        loadingEnd.style.zIndex = '10001';
+        loadingEnd.textContent = new URLSearchParams(window.location.search).get('reporterEndLabel');
+        loadingEnd.addEventListener('click', function() {
+            if (loadingCancelled) return;
+            loadingCancelled = true;
+            if (readyLoop) readyLoop.stop();
+            api.EndDemonstration();
+        });
+        document.body.appendChild(loadingEnd);
+    }
+
     var setDocumentTitle = function(title) {
         (title) && (window.document.title += (' - ' + title));
     };
@@ -118,6 +146,11 @@ require([
             docInfo.put_VKey(data.vkey);
             docInfo.put_Options(data.options);
             docInfo.put_Token(data.token);
+            if (!window.AscDesktopEditor) {
+                docInfo.put_TokenType(data.tokenType);
+                docInfo.put_Mode('view');
+                api.asc_setViewMode(true);
+            }
             docInfo.put_Permissions(data.permissions || {});
             setDocumentTitle(data.title);
         }
@@ -126,10 +159,15 @@ require([
         api.SetThemesPath("../../../../sdkjs/slide/themes/");
         api.asc_setDocInfo( docInfo );
         api.asc_getEditorPermissions();
-        api.asc_setViewMode(true);
+        if (window.AscDesktopEditor) api.asc_setViewMode(true);
     }
 
     var onDocumentContentReady = function() {
+        if (loadingCancelled) return;
+        if (loadingEnd) {
+            loadingEnd.parentNode.removeChild(loadingEnd);
+            loadingEnd = null;
+        }
         api.SetDrawingFreeze(false);
         $('#loading-mask').hide().remove();
     };
@@ -147,7 +185,15 @@ require([
     // api.asc_registerCallback('asc_onOpenDocumentProgress', onOpenDocument);
     api.asc_registerCallback('asc_onGetEditorPermissions', onEditorPermissions);
 
-    window.postMessage('i:am:ready', '*');
+    readyLoop = repeatPresenterReady({
+        send: function() { api.sendFromReporter('i:am:ready'); },
+        firstDelay: 0,
+        interval: 500
+    });
+    window.addEventListener('pagehide', function() {
+        loadingCancelled = true;
+        readyLoop.stop();
+    });
 
 }, function(err) {
     if (err.requireType == 'timeout' && !reqerr && window.requireTimeourError) {

@@ -749,7 +749,10 @@ define([
                     {k: 'edit.selectAll', t: me.textSelectAll, i: 'selectAll', sc: 'EditSelectAll',
                         needs: 'asc_EditSelectAll',
                         disabled: function (c) { return [c.net(), c.on('form') ? 'form' : null]; },
-                        run: function () { api().asc_EditSelectAll(); }},
+                        run: function () {
+                            Common.NotificationCenter.trigger('selection:manual');
+                            api().asc_EditSelectAll();
+                        }},
                     {sep: true},
                     /* Search is not disabled by the stock code under a prohibition: `leftMenu.previewMode`
                        switches the panel to a mode without replace
@@ -872,16 +875,15 @@ define([
                     {k: 'insert.textBox', t: me.textMenuTextBox, i: 'textbox', when: edit, needs: 'callCommand',
                         disabled: lockInsert, run: function () { me.insertShape(null); }},
                     /* The chart type is a numeric constant, as in the stock code
-                       (Toolbar.js:2611): a series set is not assembled by a string. The third
-                       argument — open the data window right after insertion (sdkjs
-                       word/api.js, asc_addChartDrawingObject). Insertion does not open the right
-                       panel: a chart in focus does not change its visibility
-                       (CompactShell, watchSelection). */
+                       (Toolbar.js:2611): a series set is not assembled by a string.
+                       A chart in focus does not change the visibility of the right
+                       panel (CompactShell, watchSelection). */
                     {k: 'insert.chart', t: me.textMenuChart, i: 'chart', when: edit, needs: 'asc_addChartDrawingObject',
                         disabled: function (c) {
                             return c.edit() || me.selected('Math') != null;
                         }, run: function () {
-                            api().asc_addChartDrawingObject(Asc.c_oAscChartTypeSettings.barNormal, undefined, true);
+                            // Data editing starts from the explicit Edit data action.
+                            api().asc_addChartDrawingObject(Asc.c_oAscChartTypeSettings.barNormal, undefined, false);
                         }},
                     {k: 'insert.equation', t: me.textMenuEquation, i: 'formula', when: edit, needs: 'asc_AddMath',
                         disabled: lockEdit, run: function () { api().asc_AddMath(); }},

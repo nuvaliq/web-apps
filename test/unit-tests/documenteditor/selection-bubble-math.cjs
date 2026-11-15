@@ -10,7 +10,7 @@ const element = (type, value = {}) => ({get_ObjectType: () => type, get_ObjectVa
 const text = () => [element(T.Paragraph)];
 const math = () => [element(T.Math)];
 function harness() {
-    const handlers = [], callbacks = {}, timers = new Map();
+    const handlers = [], nativeHandlers = [], notifications = [], callbacks = {}, timers = new Map();
     let next = 0, queries = 0, renders = 0, stack = text(), bounds = [[100, 100], [200, 120]], selection = true, locked = false;
     class Node {
         constructor() { this.classes = new Set(); this.nodes = []; }
@@ -36,8 +36,16 @@ function harness() {
     }
     const canvas = {getBoundingClientRect: () => ({left: 10, top: 20, right: 1000, bottom: 900})};
     const doc = {getElementById: id => id === 'id_main_view' || id === 'editor_sdk' ? canvas : null},
-        win = {innerWidth: 1000, innerHeight: 900}, documentNode = new Node(),
+        documentNode = new Node(),
         editorNode = new Node(), windowNode = new Node();
+    const remove = (listeners, match) => {
+        const index = listeners.findIndex(match);
+        if (index !== -1) listeners.splice(index, 1);
+    };
+    const win = {innerWidth: 1000, innerHeight: 900,
+        addEventListener: (name, fn, capture = false) => nativeHandlers.push({name, fn, capture}),
+        removeEventListener: (name, fn, capture = false) =>
+            remove(nativeHandlers, entry => entry.name === name && entry.fn === fn && entry.capture === capture)};
     const shell = {advanced: false, editingLocked: () => locked, canAddComment: () => true};
     const DE = {Views: {CompactShell: shell}};
     const graphics = {selection: {}, getSelectedArray: () => [{Get_Id: () => 'drawing', selectStartPage: 0}],
@@ -47,11 +55,15 @@ function harness() {
         getSelectedElements() { queries++; if (stack instanceof Error) throw stack; return stack; },
         asc_GetSelectionBounds: () => bounds, can_CopyCut: () => selection,
         asc_registerCallback: (n, fn) => {callbacks[n] = fn;},
+        asc_unregisterCallback: (n, fn) => {if (callbacks[n] === fn) delete callbacks[n];},
         ClearFormating() {}, asc_addComment() {}, addRowAbove() {}, addRowBelow() {}, addColumnLeft() {}, addColumnRight() {}, MergeCells() {}, remRow() {}, remColumn() {}};
     Object.assign(win, {DE, Asc: {c_oAscTypeSelectElement: T}});
     const context = {window: win, document: doc, DE, Asc: win.Asc, _: {extend: Object.assign},
         $: x => x === doc ? documentNode : x === win ? windowNode : x === '#editor_sdk' ? editorNode : new Node(),
-        Common: {NotificationCenter: {on: (events, fn) => handlers.push({events, fn})}},
+        Common: {NotificationCenter: {
+            on: (name, fn) => notifications.push({name, fn}),
+            off: (name, fn) => remove(notifications, entry => entry.name === name && entry.fn === fn)
+        }},
         setTimeout(fn, delay) { assert.equal(delay, 10); const id = ++next; timers.set(id, {fn, canceled: false}); return id; },
         clearTimeout(id) { if (timers.has(id)) timers.get(id).canceled = true; },
         define: (deps, factory) => factory({svg: name => name})};
@@ -61,7 +73,9 @@ function harness() {
     const render = b.renderSet;
     b.renderSet = function(kind) { renders++; return render.call(this, kind); };
     b.bind();
-    return {b, api, shell, win, context, callbacks, timers,
+    const keydown = {target: {closest: () => true}, key: 'ArrowRight', shiftKey: true};
+    const manual = () => nativeHandlers.filter(h => h.name === 'keydown').forEach(h => h.fn(keydown));
+    return {b, api, shell, win, context, callbacks, timers, manual, keydown, nativeHandlers, notifications,
         stack(v) { stack = v; }, bounds(v) { bounds = v; }, selection(v) { selection = v; }, lock(v) { locked = v; },
         queries: () => queries, renders: () => renders,
         fire(id) { timers.get(id).fn(); }, live: () => [...timers].filter(([, t]) => !t.canceled),
@@ -137,6 +151,32 @@ check('table_caret_and_cells_preserved', h => {
         h.bounds(bounds); h.b.refresh();
         assert.equal(h.b.kind, 'table'); assert.equal(h.b.isOpen(), true);
     }
+});
+check('manual input subscriptions are removed and stale callbacks are inert after rebind', h => {
+    const staleSearch = h.callbacks.asc_onSetSearchCurrent;
+    const staleManual = h.notifications.find(entry => entry.name === 'selection:manual').fn;
+    const staleKeydown = h.nativeHandlers.find(entry => entry.name === 'keydown').fn;
+    const nativeCount = h.nativeHandlers.length;
+
+    h.b.dispose();
+    assert.equal(h.nativeHandlers.length, 0);
+    assert.equal(h.notifications.length, 0);
+    assert.equal(h.callbacks.asc_onSetSearchCurrent, undefined);
+
+    h.b.bind();
+    assert.equal(h.nativeHandlers.length, nativeCount);
+    assert.equal(h.notifications.filter(entry => entry.name === 'selection:manual').length, 1);
+    h.callbacks.asc_onSetSearchCurrent(0);
+    staleManual();
+    staleKeydown(h.keydown);
+    h.b.refresh();
+    assert.equal(h.b.isOpen(), false);
+    h.manual();
+    staleSearch(0);
+    h.b.refresh();
+    assert.equal(h.b.isOpen(), true);
+    h.callbacks.asc_onSetSearchCurrent(0);
+    assert.equal(h.b.isOpen(), false);
 });
 console.log(`${passed} passed, ${failed} failed`);
 process.exitCode = failed ? 1 : 0;

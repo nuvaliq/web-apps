@@ -4,7 +4,8 @@
  * "Slide settings" is the stock "Slide" tab with the layout and slide size, "Theme" is the tiles of the
  * stock theme gallery and the color scheme from the stock menu, "Animation" is the effects of the stock
  * gallery by its groups and a hint without an object, for a chart it is the stock "Shape" tab;
- * styles are under body.vo-compact.
+ * styles are under body.vo-compact. The paragraph card (openParagraph) holds the paragraph tab
+ * and its label while the tab is available; refusing to open it leaves an open section unchanged.
  *
  * The environment is the workspace fixture (acceptance/area-harness.cjs). The optional argument is
  * a corrupted copy of the module for a negative control: a copy in which the object section is available
@@ -112,6 +113,114 @@ const decl = (list, prop) => {
     return {value: null, important: false};
 };
 const hidden = d => d.value === 'none' && d.important;
+
+/* Supply a custom selection: the fixture does not expose element, props or SELECTIONS.
+   Paragraphs differ by get_Spacing().get_Line(); env.select accepts only predefined names. */
+function element(type, value) {
+    return {get_ObjectType: () => type, get_ObjectValue: () => value};
+}
+function shapeValue() {
+    return {
+        get_Locked: () => false, asc_getTextArtProperties: () => null, get_FromChart: () => false,
+        get_FromImage: () => false, get_Type: () => null, asc_getType: () => null
+    };
+}
+function paragraphValue(line) {
+    return {get_Spacing: () => ({get_Line: () => line})};
+}
+function textSelection(env, props) {
+    return [element(env.SELECT.Slide, {}), element(env.SELECT.Shape, shapeValue()), element(env.SELECT.Paragraph, props)];
+}
+function tableSelection(env, props) {
+    return [element(env.SELECT.Slide, {}), element(env.SELECT.Table, {get_Locked: () => false}), element(env.SELECT.Paragraph, props)];
+}
+function imageSelection(env) {
+    return [element(env.SELECT.Slide, {}), element(env.SELECT.Image, {get_Locked: () => false})];
+}
+function noneSelection(env) {
+    return [element(env.SELECT.Slide, {})];
+}
+function focusSelection(env, selection) {
+    env.selection = selection;
+    env.fire('asc_onFocusObject', selection);
+    env.drain();
+}
+function cardLabel(env) {
+    const el = env.el('#view-right-menu');
+    return el && el.hasAttribute('aria-label') ? el.getAttribute('aria-label') : null;
+}
+function rightOpen(env) {
+    return env.document.body.classList.contains('vo-right-open');
+}
+function paraEntry(env) {
+    return env.rightCtl._settings[env.PANE.Paragraph];
+}
+function paragraphChanges(env) {
+    return env.stockCalls.filter(c => c.name === 'RightMenu.paragraphSettings.ChangeSettings');
+}
+function lastParagraphProps(env) {
+    const calls = paragraphChanges(env);
+    return calls.length ? calls[calls.length - 1].args[0] : null;
+}
+function logTail(env) {
+    return env.logs.length ? ' | ' + env.logs[env.logs.length - 1] : '';
+}
+const paraLabel = () => h.ru()['PE.Views.RightMenu.txtParagraphSettings'];
+const shapeLabel = () => h.ru()['PE.Views.RightMenu.txtShapeSettings'];
+const tableLabel = () => h.ru()['PE.Views.RightMenu.txtTableSettings'];
+const imageLabel = () => h.ru()['PE.Views.RightMenu.txtImageSettings'];
+const themeLabel = () => h.ru()['PE.Views.SlideSections.textTheme'];
+const slideLabel = () => h.ru()['PE.Views.SlideSections.textSlideSettings'];
+
+function assertHeld(env, why) {
+    const tail = why ? why + ': ' : '';
+    assert.equal(env.lastPane(), 'Paragraph', tail + 'показана не вкладка абзаца');
+    assert.equal(cardLabel(env), paraLabel(), tail + 'подпись не параметры абзаца');
+    assert.notEqual(cardLabel(env), shapeLabel(), tail + 'подпись осталась параметрами фигуры');
+    assert.equal(rightOpen(env), true, tail + 'нет vo-right-open');
+    assert.equal(env.el('#vo-rp-head'), null, tail + 'у карточки есть шапка');
+    assert.equal(env.apiCalls.some(c => c.name === 'put_PrLineSpacing'), false, tail + 'вызван put_PrLineSpacing');
+}
+function domCard(env) {
+    const theme = env.el('#vo-rp-theme');
+    return {
+        openClass: rightOpen(env), opened: !!env.SS.opened, label: cardLabel(env), current: env.SS.current(),
+        themeOn: !!(theme && theme.classList.contains('active')), themeText: theme ? theme.textContent : null
+    };
+}
+function themeStays(env, why) {
+    assert.equal(env.SS.current(), 'theme', why + ': карточка ушла с темы');
+    assert.equal(cardLabel(env), themeLabel(), why + ': подпись темы сменилась');
+    assert.equal(rightOpen(env), true, why + ': тема закрылась');
+    const theme = env.el('#vo-rp-theme');
+    assert.ok(theme && theme.classList.contains('active'), why + ': содержимое темы скрыто');
+}
+/* Refuse while the theme is open: capture its state after setup, then select a paragraph
+   (without a hold, the theme remains open) and open the current object's section. */
+function refusalKeepsTheme(prepare, restore) {
+    const env = started();
+    env.select('text');
+    env.run('slideSection', 'theme');
+    prepare(env);
+    const before = domCard(env);
+    assert.equal(env.SS.openParagraph(), false);
+    assert.deepEqual(domCard(env), before, 'отказ изменил открытую тему');
+    if (restore) restore(env);
+    env.select('table');
+    themeStays(env, 'после отказа');
+    env.run('objectProperties');
+    assert.equal(env.SS.current(), 'object', 'раздел объекта не открылся');
+    assert.equal(env.lastPane(), 'Table', 'раздел объекта выбрал не вкладку таблицы');
+    assert.equal(cardLabel(env), tableLabel(), 'раздел объекта подписан не таблицей');
+}
+function watchScroll(env) {
+    const proto = Object.getPrototypeOf(env.document.body);
+    const orig = proto.scrollIntoView;
+    const box = {n: 0};
+    proto.scrollIntoView = function () { box.n++; return orig.apply(this, arguments); };
+    box.restore = () => { proto.scrollIntoView = orig; };
+    return box;
+}
 
 h.run([
     {
@@ -422,6 +531,265 @@ h.run([
                 else if (STOCK.test(s) && !SCOPE.test(s) && !/\.vo-rp-/.test(s)) leaks.push(s);
             }));
             assert.deepEqual(leaks, [], 'правила штатных контролов вне правой панели компакта: ' + leaks.slice(0, 5).join(' | '));
+        }
+    },
+    {
+        /* Detect missing openParagraph, a hold lost on selection changes, an object label,
+           a repeat or active tab closing the card, or close/another section retaining the hold. */
+        name: 'paragraph_card_holds_paragraph_tab_and_names_it',
+        run() {
+            const env = started();
+            const scroll = watchScroll(env);
+            try {
+                env.select('text');
+                assert.equal(env.SS.openParagraph(), true);
+                assertHeld(env, 'надпись');
+
+                env.typing = true;
+                env.select('text');
+                assert.equal(env.module('SlideSelection').kind(), 'typing', 'курсор в тексте не typing');
+                assertHeld(env, 'курсор');
+
+                env.typing = false;
+                env.select('table');
+                assert.equal(env.module('SlideSelection').kind(), 'table');
+                assertHeld(env, 'таблица');
+                assert.notEqual(cardLabel(env), tableLabel(), 'у таблицы подпись таблицы, не абзаца');
+
+                env.run('slideSection', 'theme');
+                assert.equal(env.SS.current(), 'theme');
+                assert.equal(cardLabel(env), themeLabel(), 'тема подписана не темой');
+                assert.ok(env.el('#vo-rp-theme').classList.contains('active'), 'содержимое темы не показано');
+                assert.equal(env.SS.openParagraph(), true);
+                assertHeld(env, 'из темы');
+
+                env.run('slideSection', 'theme');
+                assert.equal(env.SS.current(), 'theme', 'выбор темы не снял удержание');
+                assert.equal(cardLabel(env), themeLabel(), 'после темы осталась подпись абзаца');
+                assert.notEqual(cardLabel(env), paraLabel(), 'после темы подпись абзаца');
+                assert.ok(env.el('#vo-rp-theme').classList.contains('active'), 'после темы показан не её раздел');
+
+                env.select('shape');
+                env.run('objectProperties');
+                assert.equal(env.SS.current(), 'object');
+                assert.equal(env.lastPane(), 'Shape', 'раздел объекта на фигуре показал не фигуру');
+                assert.equal(cardLabel(env), shapeLabel(), 'раздел объекта на фигуре подписан не фигурой');
+
+                const again = started();
+                again.select('text');
+                assert.equal(again.SS.openParagraph(), true);
+                assert.equal(again.SS.openParagraph(), true, 'повтор закрыл карточку');
+                assert.equal(again.SS.isOpen(), true, 'повтор закрыл карточку');
+                assertHeld(again, 'повтор');
+
+                /* The stock paragraph tab is already active while the shell card is closed. */
+                const stock = started();
+                stock.select('text');
+                stock.rm.SetActivePane(stock.PANE.Paragraph, true);
+                stock.drain();
+                assert.equal(stock.rm.minimizedMode, false, 'штатная панель осталась свёрнутой');
+                assert.equal(stock.rm.GetActivePane(), paraEntry(stock).panelId, 'активна не вкладка абзаца');
+                assert.equal(rightOpen(stock), false, 'карточка была открыта до вызова');
+                assert.equal(stock.SS.isOpen(), false);
+                assert.equal(stock.SS.openParagraph(), true, 'уже активная вкладка не открыла карточку');
+                assertHeld(stock, 'уже активная вкладка');
+
+                const closed = started();
+                closed.select('text');
+                assert.equal(closed.SS.openParagraph(), true);
+                closed.SS.close();
+                assert.equal(closed.SS.isOpen(), false, 'close не закрыл карточку');
+                assert.equal(rightOpen(closed), false);
+                closed.select('shape');
+                closed.run('objectProperties');
+                assert.equal(closed.SS.current(), 'object');
+                assert.equal(closed.lastPane(), 'Shape', 'после close раздел объекта не фигура');
+                assert.equal(cardLabel(closed), shapeLabel(), 'после close подпись не фигуры');
+
+                const shape = started();
+                shape.select('shape');
+                assert.equal(shape.SS.openParagraph(), false, 'без абзаца карточка открылась');
+                assert.equal(rightOpen(shape), false, 'без абзаца появился vo-right-open');
+                assert.equal(shape.SS.isOpen(), false);
+                assert.equal(cardLabel(shape), null, 'без абзаца у карточки есть подпись');
+
+                assert.equal(scroll.n, 0, 'вызван scrollIntoView');
+            } finally {
+                scroll.restore();
+            }
+        }
+    },
+    {
+        /* Detect selection changes that do not pass current paragraph properties to ChangeSettings. */
+        name: 'paragraph_card_updates_current_properties',
+        run() {
+            const env = started();
+            const propsA = paragraphValue(1.0);
+            const propsB = paragraphValue(2.0);
+            const propsT = paragraphValue(2.0);
+            focusSelection(env, textSelection(env, propsA));
+            assert.equal(env.module('SlideSelection').kind(), 'text');
+            assert.equal(env.SS.openParagraph(), true);
+            assertHeld(env, 'исходный текст');
+            assert.equal(lastParagraphProps(env), propsA, 'открытие не передало свойства абзаца с интервалом 1.0');
+            assert.equal(propsA.get_Spacing().get_Line(), 1.0);
+
+            /* Opening has already completed. A new paragraph on the same tab must not reset
+               scrolling, even when stock _priorityArr contains Shape (onInsertShape). */
+            env.rightCtl.onInsertShape();
+            const baseFocus = env.rightCtl.onFocusObject;
+            env.SS.unbind();
+            const rawFocus = env.rightCtl.onFocusObject;
+            env.rightCtl.onFocusObject = function (sel) {
+                const prev = env.rm.GetActivePane();
+                const r = rawFocus.apply(this, arguments);
+                const prio = (this._priorityArr || []).find(t => this._settings[t] && !this._settings[t].hidden);
+                if (prio !== undefined) {
+                    const next = this._settings[prio].panelId;
+                    env.rm.SetActivePane(prio, true);
+                    if (next !== prev) env.rm.updateScroller();
+                }
+                return r;
+            };
+            env.SS.bind();
+            const view = env.rm;
+            const origScroller = view.updateScroller;
+            let scrolls = 0;
+            view.updateScroller = function () {
+                scrolls++;
+                return origScroller.apply(this, arguments);
+            };
+            try {
+                focusSelection(env, textSelection(env, propsB));
+                assert.equal(env.module('SlideSelection').kind(), 'text');
+                assertHeld(env, 'новый текст');
+                assert.equal(lastParagraphProps(env), propsB, 'поля получили не абзац с интервалом 2.0');
+                assert.equal(propsB.get_Spacing().get_Line(), 2.0);
+                assert.notEqual(propsB, propsA);
+                assert.equal(scrolls, 0, 'обновление той же вкладки вызвало updateScroller');
+                assert.deepEqual(Array.from(env.rightCtl._priorityArr), [env.PANE.Shape], 'после обновления _priorityArr изменился');
+            } finally {
+                view.updateScroller = origScroller;
+                env.SS.unbind();
+                env.rightCtl.onFocusObject = rawFocus;
+                env.SS.bind();
+                void baseFocus;
+            }
+
+            focusSelection(env, tableSelection(env, propsT));
+            assert.equal(env.module('SlideSelection').kind(), 'table');
+            assertHeld(env, 'таблица');
+            assert.notEqual(cardLabel(env), tableLabel(), 'у таблицы подпись таблицы');
+            assert.equal(lastParagraphProps(env), propsT, 'поля получили не абзац таблицы');
+            assert.equal(propsT.get_Spacing().get_Line(), 2.0);
+            assert.notEqual(propsT, propsB);
+            assert.equal(env.apiCalls.some(c => c.name === 'put_PrLineSpacing'), false, 'вызван put_PrLineSpacing');
+        }
+    },
+    {
+        /* Detect a lost tab leaving the card open or passing stale props to ChangeSettings. */
+        name: 'paragraph_card_closes_without_paragraph',
+        run() {
+            for (const kind of ['image', 'none']) {
+                const env = started();
+                const props = paragraphValue(1.0);
+                focusSelection(env, textSelection(env, props));
+                assert.equal(env.SS.openParagraph(), true);
+                assertHeld(env, kind);
+                const tab = paraEntry(env);
+                const stale = tab.props;
+                assert.equal(stale, props, kind + ': у вкладки не свойства открытого абзаца');
+                /* Do not use env.select here: it clears props itself and immediately calls drain. */
+                const selection = kind === 'image' ? imageSelection(env) : noneSelection(env);
+                env.selection = selection;
+                env.fire('asc_onFocusObject', selection);
+                tab.props = stale;
+                tab.hidden = 1;
+                tab.btn.setDisabled(true);
+                const before = paragraphChanges(env).length;
+                env.drain();
+                assert.deepEqual(paragraphChanges(env).slice(before).map(c => c.args[0]), [],
+                    kind + ': старые свойства абзаца переданы в ChangeSettings' + logTail(env));
+                assert.equal(env.SS.isOpen(), false, kind + ': карточка не закрылась' + logTail(env));
+                assert.equal(rightOpen(env), false, kind + ': vo-right-open остался');
+                assert.equal(cardLabel(env), null, kind + ': подпись осталась');
+
+                env.run('objectProperties');
+                assert.equal(rightOpen(env), true, kind + ': раздел объекта не открылся');
+                if (kind === 'image') {
+                    assert.equal(env.SS.current(), 'object');
+                    assert.equal(env.lastPane(), 'Image', 'после изображения не вкладка изображения');
+                    assert.equal(cardLabel(env), imageLabel(), 'после изображения подпись не изображения');
+                } else {
+                    assert.equal(env.SS.current(), 'slide', 'без объекта открыт не слайд');
+                    assert.equal(env.lastPane(), 'Slide', 'без объекта не вкладка слайда');
+                    assert.equal(cardLabel(env), slideLabel(), 'без объекта подпись не слайда');
+                }
+            }
+        }
+    },
+    {
+        /* Detect refusal changing the theme, retaining a hold, or ignoring visibility, button state, rights, locks or compact mode. */
+        name: 'paragraph_card_unavailable_keeps_existing_section',
+        run() {
+            refusalKeepsTheme(env => {
+                const tab = paraEntry(env);
+                tab.hidden = 1;
+                assert.equal(tab.btn.isDisabled(), false, 'кнопка абзаца погашена: это не проверка hidden');
+            });
+            refusalKeepsTheme(env => {
+                const tab = paraEntry(env);
+                tab.hidden = 0;
+                tab.btn.setDisabled(true);
+                assert.equal(tab.hidden === 1 || tab.hidden === true, false, 'вкладка скрыта: это не проверка кнопки');
+            });
+            /* Set the rights snapshot without the revocation event, which closes the card itself. The paragraph tab is available. */
+            refusalKeepsTheme(env => {
+                assert.equal(paraEntry(env).btn.isDisabled(), false);
+                env.shell.rightSnapshot = false;
+                assert.equal(env.SS.allowed(), false, 'без права правки панель ещё разрешена');
+            }, env => { env.shell.rightSnapshot = true; });
+            refusalKeepsTheme(env => {
+                const modes = env.module('CompactModes');
+                modes.reason = it => (it && it.section === 'object' ? 'Недоступно в режиме просмотра' : null);
+                env.nc.trigger('vo:mode', {mode: 'view'});
+                env.drain();
+                assert.equal(env.SS.current(), 'theme', 'причина объекта закрыла тему');
+                assert.equal(env.SS.sectionOff('object'), true, 'раздел объекта не запрещён');
+            }, env => {
+                env.module('CompactModes').reason = () => null;
+                env.nc.trigger('vo:mode', {mode: 'edit'});
+                env.drain();
+                assert.equal(env.SS.sectionOff('object'), false, 'запрет раздела не снялся');
+            });
+            {
+                const env = started();
+                let lock = {on: false, options: {}};
+                env.shell.lockState = () => lock;
+                env.select('text');
+                env.run('slideSection', 'theme');
+                const tab = paraEntry(env);
+                assert.equal(tab.hidden === 1 || tab.hidden === true, false, 'у текста нет вкладки абзаца');
+                assert.equal(tab.btn.isDisabled(), false, 'кнопка абзаца погашена до запрета');
+                lock = {on: true, options: {viewMode: true, toolbar: true, rightMenu: {clear: true, disable: true}}};
+                env.nc.trigger('editing:disable', true, lock.options, 'disconnect');
+                env.drain();
+                assert.equal(env.SS.sectionOff('object'), true, 'штатный запрет не запер раздел');
+                assert.equal(env.SS.isOpen(), false, 'штатный запрет не закрыл карточку');
+                assert.equal(tab.btn.isDisabled(), false, 'штатный запрет погасил кнопку абзаца');
+                const before = domCard(env);
+                assert.equal(env.SS.openParagraph(), false, 'под штатным запретом карточка открылась');
+                assert.deepEqual(domCard(env), before, 'отказ под штатным запретом изменил карточку');
+            }
+            refusalKeepsTheme(env => {
+                env.shell.advanced = true;
+                env.document.body.classList.remove('vo-compact');
+                assert.equal(env.SS.active(), false, 'некомпактная оболочка ещё активна');
+            }, env => {
+                env.shell.advanced = false;
+                env.document.body.classList.add('vo-compact');
+                assert.equal(env.SS.active(), true, 'компакт не вернулся');
+            });
         }
     }
 ]);

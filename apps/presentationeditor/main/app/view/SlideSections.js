@@ -40,6 +40,16 @@
  * Shell commands: objectProperties(opts) — the object section, without an object —
  * "Slide Settings"; slideSection(name, opts) — a section ('slide' | 'theme' |
  * 'transition' | 'animation' | 'object'); a repeat of the same section closes it.
+ * openParagraph() opens the same card on the paragraph tab. A single hold flag
+ * selects both the tab and its RightMenu.txtParagraphSettings label.
+ * While the tab is available, selection changes keep it open and pass the current
+ * properties to its fields. If it disappears, the card closes. close and another
+ * section clear the hold flag. Without compact mode, rights, the section or the tab,
+ * it returns false and leaves an open card unchanged. In compact mode, bind()
+ * intercepts RightMenu.onRightMenuOpen(Paragraph): the request goes to openParagraph
+ * without calling the stock method, even when the result is false. Other types and
+ * the "Stock interface" use the original method. unbind() removes the override;
+ * repeated bind() does not nest it.
  * opts.anchor — the button under which the card stands. Without edit rights, in
  * "Viewing" and under the stock editing lock the panel does not open (an open one
  * is closed), as in the stock editor. The sections reread
@@ -212,6 +222,7 @@ define([], function () {
 
         shell: null,
         opened: false,       // the section is open (the card is visible)
+        holdParagraph: false, // holds the paragraph tab; its label is derived, not stored
         want: 'slide',       // chosen section; 'object' without an object shows "Slide Settings"
         anchor: null,        // the button under which the card stands; null — at the right canvas edge
         returnTo: null,      // where to return focus on closing; null — to the canvas
@@ -318,6 +329,7 @@ define([], function () {
             if (!this.active() || !this.allowed() || this.sectionOff(name)) return false;
             var was = this.isOpen() && this.entered;
             var anchor = opts && opts.nodeType === 1 ? opts : (opts && opts.anchor && opts.anchor.nodeType === 1 ? opts.anchor : null);
+            this.holdParagraph = !!(opts && opts.holdParagraph);
             this.want = name;
             this.opened = true;
             this.anchor = anchor;
@@ -327,6 +339,14 @@ define([], function () {
             if (!was) this.enter();
             else this.focusIn();
             return true;
+        },
+
+        /* Open the paragraph tab through the existing card path. All refusals happen
+           before state changes, keeping an open section unchanged without leaving
+           a hold flag behind. A repeat does not close the open card. */
+        openParagraph: function () {
+            if (!this.active() || !this.allowed() || this.sectionOff('object') || !this.paragraphTab()) return false;
+            return this.open('object', {holdParagraph: true});
         },
 
         /* Section button and item: a repeat of an open section closes the card. */
@@ -348,6 +368,7 @@ define([], function () {
            'outside' (a click outside), other — an editor state (mode,
            lock, right revoked, show, "Stock interface"). */
         close: function (how) {
+            this.holdParagraph = false;
             var was = this.opened;
             var card = this.card(), act = document.activeElement;
             var had = !!(card && act && act !== card.ownerDocument.body && card.contains(act));
@@ -399,12 +420,16 @@ define([], function () {
            (opening); otherwise — only if the stock code switched it itself.
            There is no column in the layout: the canvas is not recomputed. */
         apply: function (fresh) {
+            if (this.holdParagraph && !this.paragraphTab()) {
+                this.close('selection');
+                return;
+            }
             if (!this.isOpen()) { this.sync(); return; }
             document.body.classList.add(OPEN_CLASS);
             var sec = this.current();
-            if (OWN_PANES.indexOf(sec) >= 0) {
-                this.showOwn(sec);
-            } else {
+            if (this.holdParagraph) this.showHeldParagraph(fresh);
+            else if (OWN_PANES.indexOf(sec) >= 0) this.showOwn(sec);
+            else {
                 var type = sec === 'object' ? this.objectPane() : paneTypes().Slide;
                 if (type === null || type === undefined) type = paneTypes().Slide;
                 this.showStock(type, fresh);
@@ -455,6 +480,19 @@ define([], function () {
             return null;
         },
 
+        /* The current selection has a paragraph tab when its entry exists, is visible,
+           and has an enabled button. Cached props do not establish availability:
+           the stock controller retains the previous selection's props for a hidden tab. */
+        paragraphTab: function () {
+            var type = paneTypes().Paragraph;
+            if (type === undefined || type === null) return false;
+            var c = rightCtl(), s = c && c._settings && c._settings[type];
+            if (!s || s.hidden === 1 || s.hidden === true) return false;
+            var btn = s.btn;
+            if (!btn || typeof btn.isDisabled !== 'function' || btn.isDisabled()) return false;
+            return true;
+        },
+
         objectTitle: function () {
             var T = paneTypes(), type = this.isOpen() || this.hasObject() ? this.objectPane() : null;
             var name = _.findKey(T, function (v) { return v === type; });
@@ -476,6 +514,26 @@ define([], function () {
             if (!minimized && panel && panel.panel && fn(panel.panel, 'ChangeSettings') && panel.props) {
                 panel.panel.ChangeSettings(panel.props);
                 fn(v, 'updateScroller') && v.updateScroller();
+            }
+        },
+
+        /* showStock(type, false) returns before ChangeSettings if this tab is already
+           active. The held card still needs the current paragraph properties.
+           Do not call updateScroller on refresh (fresh === false): it sets
+           scrollTop(0), while the stock path does this only when changing tabs. */
+        showHeldParagraph: function (fresh) {
+            var type = paneTypes().Paragraph;
+            if (fresh) { this.showStock(type, true); return; }
+            var v = rightView(), c = rightCtl();
+            if (!v) return;
+            this.deactivateOwn();
+            var minimized = v.minimizedMode === true;
+            var panel = c && c._settings && c._settings[type];
+            if (minimized || !fn(v, 'GetActivePane') || !panel || !panel.panelId || v.GetActivePane() !== panel.panelId) {
+                this.expand(function () { v.SetActivePane(type, true); });
+            }
+            if (!minimized && panel && panel.panel && fn(panel.panel, 'ChangeSettings') && panel.props) {
+                panel.panel.ChangeSettings(panel.props);
             }
         },
 
@@ -583,14 +641,15 @@ define([], function () {
             }
         },
 
-        /* There is no header: the section is named by the calling button or item, the card name
-           for the screen reader is the name of the open section. A closed card and
-           outside the shell ("Stock interface", startup failure) has no name — the stock
-           panel lives its own life. */
+        /* There is no header: the calling button or item names the section. The card's
+           screen reader name is the section title or the held paragraph tab label.
+           Only the hold flag is stored, not the label text. A closed card and a card
+           outside the shell ("Stock interface", startup failure) have no name:
+           the stock panel manages its own state. */
         renderLabel: function () {
             var card = this.card(), sec = this.active() && this.isOpen() ? this.current() : null;
             if (!card) return;
-            if (sec) card.setAttribute('aria-label', this.title(sec));
+            if (sec) card.setAttribute('aria-label', this.holdParagraph ? stock('RightMenu.txtParagraphSettings') : this.title(sec));
             else card.removeAttribute('aria-label');
         },
 
@@ -893,17 +952,36 @@ define([], function () {
                     if (own) obj[name] = orig; else delete obj[name];
                 });
             };
-            /* The stock panel chooses a tab itself on a selection; the open section
-               returns after it in the same step as for vo:selection. It is called by
-               Main.onFocusObject, _onChangeObjectLock and SetDisabled — by name,
-               so the override is visible to all paths. */
+            /* The stock panel chooses its tab on selection; the open section is restored
+               in the same step as for vo:selection. While the paragraph tab is held,
+               put it first in _priorityArr during the stock call so shape or table
+               priority cannot switch the tab or reset scrolling. Main.onFocusObject,
+               _onChangeObjectLock and SetDisabled call this method by name, so all
+               paths see the replacement. */
             replace(rightCtl(), 'onFocusObject', function (orig) {
                 return function () {
-                    var r = orig.apply(this, arguments);
+                    var hold = me.isOpen() && me.holdParagraph && Array.isArray(this._priorityArr) &&
+                        paneTypes().Paragraph !== undefined;
+                    if (hold) this._priorityArr.unshift(paneTypes().Paragraph);
+                    try {
+                        var r = orig.apply(this, arguments);
+                    } finally {
+                        if (hold) this._priorityArr.shift();
+                    }
                     try {
                         if (me.isOpen()) me.soon();
                     } catch (e) { /* the stock panel choice matters more than the section */ }
                     return r;
+                };
+            });
+            /* A paragraph request in compact mode opens the card. The stock onRightMenuOpen
+               returns early for an active, hidden or disabled tab and would not open
+               a closed card. A refusal from openParagraph must not fall back to it.
+               The paragraph type is 0, so a truthiness check would treat it as absent. */
+            replace(rightCtl(), 'onRightMenuOpen', function (orig) {
+                return function (type) {
+                    if (me.active() && type === paneTypes().Paragraph) return me.openParagraph();
+                    return orig.apply(this, arguments);
                 };
             });
             this.undo = undo;
