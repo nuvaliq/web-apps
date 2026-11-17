@@ -362,6 +362,8 @@ test('labels_changed_only_as_listed', () => {
    keys): Russian is the item name verbatim, English is the original ONLYOFFICE name (German is not changed).
    The table is appended together with CHANGED. The negative control is the locale directory of the branch base (argument 1). */
 const NEW = {
+    /* Header "Edit" button in a view session with the edit request right. */
+    'SSE.Views.CompactShell.textEdit': {ru: 'Редактировать', en: 'Edit'},
     /* "Collaboration" - the same as in the document editor (DE.Views.DocumentActions.textCollaboration). */
     'SSE.Views.SheetActions.textCollaboration': {ru: 'Совместная работа', en: 'Collaboration'},
     /* "Collaboration → Protection ▸". */
@@ -425,6 +427,7 @@ test('new_names_as_listed', () => {
    keys is standard (en_unchanged_names_as_stock). The negative control is the locale directory without the English edits (argument 1): Download, Views, Alignment, Keyboard
    shortcuts, Goal seek, Text wrapping. */
 const ENGLISH_NAMES = [
+    ['header', 'SSE.Views.CompactShell.textEdit', 'Edit'],
     ['menu row', 'SSE.Views.SheetActions.textCollaboration', 'Collaboration'],
     ['File', 'SSE.Views.SheetActions.textDownload', 'Download as'],
     ['File', 'SSE.Views.SheetActions.textImport', 'Import'],

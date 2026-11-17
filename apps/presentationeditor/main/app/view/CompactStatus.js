@@ -2,12 +2,12 @@
  * CompactStatus — the shell status bar.
  * Part of the web-apps fork, AGPL-3.0.
  *
- *     Slide N of M · language          Spell checking · Fit width · Fit slide   [icons]
+ *     Slide N of M · language          Spell checking · Fit width · Fit slide
  *
  * The #vo-status row is as in documents: it lies over the bottom of the work area,
- * on the left the slide counter and the text language, on the right the text toggles and
- * the edge icons (only drawn so far, with no action). There is no zoom or slide
- * show here: there is a single zoom, on the panel.
+ * on the left the slide counter and the text language, on the right the text toggles.
+ * There are no edge icons (view, edit, close) while they have no action.
+ * There is no zoom or slide show here: there is a single zoom, on the panel.
  *
  * All of it are counterparts of the stock status bar (view/Statusbar.js): the counter is
  * the pageIndexText format driven by engine events, the language is btnLanguage and its menu,
@@ -31,14 +31,6 @@ define([], function () {
         FIT_SLIDE = 'Statusbar:btnZoomToPage';
 
     var POP_ID = 'vo-st-lang-pop';
-
-    /* Icons of the right edge — the same as in the documents row: cursor, pencil,
-       dash, cross. */
-    var GLYPHS = {
-        view:  '<svg width="20" height="20" viewBox="0 0 20 20"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M4.78516 6.09049C4.50307 5.00396 5.53686 4.03648 6.60238 4.38965L14.4442 6.99056C15.6179 7.38006 15.7641 8.9813 14.6802 9.57682L13.1787 10.4012L15.5387 12.7604C16.0806 13.3025 16.0927 14.1774 15.5664 14.7347L14.6672 15.6877C14.0987 16.2894 13.1374 16.2771 12.5838 15.6616L10.223 13.0355L9.36523 14.3278C8.68751 15.3478 7.12208 15.0857 6.81397 13.9006L4.78516 6.09049ZM6.23535 5.49723C6.04729 5.43486 5.86491 5.60576 5.91471 5.79753L7.94271 13.6068C7.99709 13.8159 8.27396 13.8625 8.39355 13.6825L9.66797 11.7635C9.76776 11.6133 9.93167 11.5179 10.1115 11.5047C10.2913 11.4916 10.467 11.5627 10.5876 11.6968L13.4513 14.882C13.5491 14.9903 13.719 14.9922 13.8192 14.8861L14.7184 13.9339C14.8112 13.8356 14.8089 13.6813 14.7135 13.5856L11.8042 10.6771C11.6745 10.5474 11.614 10.3639 11.6398 10.1823C11.6657 10.0007 11.7753 9.84181 11.936 9.75342L14.1187 8.55387C14.3096 8.4487 14.284 8.16618 14.0771 8.09733L6.23535 5.49723Z"/></svg>',
-        edit:  '<svg width="20" height="20" viewBox="0 0 20 20"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M12.8884 4.03497C13.5721 3.35281 14.6791 3.35344 15.362 4.03638L16.3247 4.99922C17.007 5.68156 17.0082 6.78742 16.3275 7.47126L8.30436 15.5305C8.11791 15.7178 7.88279 15.8492 7.62557 15.9099L4.33122 16.6868C3.83251 16.8044 3.39306 16.3389 3.53922 15.8478L4.48832 12.6589C4.55564 12.4327 4.67842 12.2269 4.84549 12.0602L12.8884 4.03497ZM14.537 4.8613C14.3094 4.63366 13.9403 4.63345 13.7125 4.86083L12.7221 5.84899L14.5132 7.64006L15.5007 6.64816C15.7276 6.42021 15.7272 6.05159 15.4997 5.82414L14.537 4.8613ZM13.6901 8.46687L11.8963 6.67304L6.03835 12.5181L7.85177 14.3315L13.6901 8.46687ZM4.90369 15.3531L5.43577 13.5654L6.78078 14.9104L4.90369 15.3531Z"/></svg>',
-        close: '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M9.42378 8.57515C9.18947 8.34084 8.80957 8.34084 8.57525 8.57515C8.34094 8.80946 8.34094 9.18936 8.57525 9.42368L11.151 11.9994L8.57515 14.5753C8.34084 14.8096 8.34084 15.1895 8.57515 15.4238C8.80946 15.6581 9.18936 15.6581 9.42368 15.4238L11.9995 12.8479L14.575 15.4234C14.8093 15.6577 15.1892 15.6577 15.4235 15.4234C15.6578 15.1891 15.6578 14.8092 15.4235 14.5749L12.848 11.9994L15.4234 9.42403C15.6577 9.18971 15.6577 8.80981 15.4234 8.5755C15.1891 8.34118 14.8092 8.34119 14.5749 8.5755L11.9995 11.1509L9.42378 8.57515Z"/></svg>'
-    };
 
     function ctl(name) {
         try { return (PE.getController && PE.getController(name)) || null; } catch (e) { return null; }
@@ -144,14 +136,6 @@ define([], function () {
                 n[f[0]] = me.button(stockText(f[2]), guarded('status: ' + f[0], function () { bridge().run(f[1]); }));
                 host.appendChild(n[f[0]]);
             });
-
-            var tools = el('span', 'vo-st-tools', {'aria-hidden': 'true'});
-            ['view', 'edit', 'sep', 'close'].forEach(function (v) {
-                var t = el('span', v === 'sep' ? 'vo-st-sep' : 'vo-st-ico vo-st-' + v);
-                if (GLYPHS[v]) t.innerHTML = GLYPHS[v];
-                tools.appendChild(t);
-            });
-            host.appendChild(tools);
         },
 
         button: function (caption, fn) {

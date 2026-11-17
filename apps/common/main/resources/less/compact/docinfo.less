@@ -1,0 +1,199 @@
+/*
+ * "Document Info" window of the "Compact" shell on the window template: shared rules.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * The window is built by Common.UI.Compact.DocInfoWindow (lib/view/compact/DocInfoWindow.js),
+ * the template label vo-win--docinfo is put on it by the module recipe (DocInfoWindow.recipe)
+ * that the editor takes into the registry of its windows. The rules rely on the template
+ * (windows.less) and on the set for stock windows (windows-stock.less): the editor imports
+ * this file after both of them. An editor without the recipe shows the window as stock.
+ * Color comes from the editor variables, as for the template.
+ */
+
+/* --- Document info: DocInfoWindow ---------------------------------------- */
+/* A shared shell window on the template: the header and the cross are the template's, there is no
+   footer. Inside is the editor's stock info panel of the File screen
+   (#panel-info, FileMenuPanels.DocumentInfo); the window takes its node for the time
+   it is shown. The stock sets its look only inside #file-menu-panel
+   (leftmenu.less), here it comes from the set: a "label on the left" row is a label
+   in the field label color in a 160 column, the value in body text; "Common" and
+   "Properties" are group headings, as in the advanced settings windows;
+   properties are template fields across the whole value column; "Add property" is
+   an outline button. The panel's own heading row is hidden: it is the window title.
+   The window is no taller than the screen: a long list of custom properties is scrolled by
+   the panel's stock Scroller (the panel has no dropdown lists, nothing
+   to clip). */
+body.vo-compact .asc-window.vo-win.vo-win--docinfo {
+    @left: 160px;                              // not in the DS: the column fits "Last modified by" in two lines
+    @close: 20px;                              // row cross (author, custom property); not in the DS
+
+    > .body { padding: @vo-win-body-pad-t @vo-win-pad-x @vo-win-pad-x; }   // bottom is like the sides: there is no footer
+
+    #panel-info {
+        position: relative;
+        display: block;
+        max-height: calc(100vh - 160px);       // window header, body paddings and air above and below the window
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        color: @vo-text;
+        font-size: @vo-win-fs;
+        line-height: @vo-win-lh;
+    }
+
+    table.main {
+        display: flex;
+        flex-direction: column;
+        gap: @vo-win-gap-lg;                   // between groups: stack-lg
+        width: 100%;
+        margin: 0;
+
+        /* The panel heading is the window title. */
+        > tbody:first-child { display: none; }
+    }
+
+    tbody {
+        display: flex;
+        flex-direction: column;
+        gap: @vo-win-adv-check;                // between rows: stack-xs
+    }
+
+    /* The stock empty separator row. */
+    tr:empty { display: none; }
+
+    tr {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }
+
+    td {
+        display: block;
+        min-width: 0;
+        padding: 0;
+    }
+
+    label {
+        margin: 0;
+        font-weight: 400;
+    }
+
+    /* Group heading is Text md medium, as in the advanced
+       settings windows. */
+    td.title label {
+        color: @vo-text;
+        font-size: @vo-win-fs;
+        font-weight: 500;                      // --ui-font-weight-medium
+        line-height: @vo-win-lh;
+    }
+
+    td.left {
+        flex: 0 0 @left;
+        width: @left;
+        padding-right: @vo-win-row-gap;
+
+        label {
+            display: block;
+            color: @vo-win-label;              // base-3
+            font-size: @vo-win-lbl-fs;
+            line-height: @vo-win-lbl-lh;
+            overflow-wrap: break-word;
+        }
+    }
+
+    td.right {
+        flex: 1 1 auto;
+        color: @vo-text;
+        font-size: @vo-win-fs;
+    }
+
+    /* Property fields are across the whole value column (stock: inline 200). */
+    td.right .input-field,
+    td.right #id-info-author,
+    td.right #id-info-author table,
+    td.right #id-info-author td,
+    td.right #id-info-author td > div { width: 100% !important; }
+
+    #id-info-author table {
+        display: flex;
+        flex-direction: column;
+        gap: @vo-win-adv-check;
+
+        tbody { gap: @vo-win-adv-check; }
+    }
+
+    /* Author is a list of fields: the label is on the axis of the first. */
+    tr.author-info {
+        align-items: flex-start;
+
+        > td.left {
+            display: flex;
+            align-items: center;
+            min-height: @vo-win-f-h;
+        }
+    }
+
+    /* Ready-made authors and custom properties are a read-only field with a cross
+       on the right. */
+    #id-info-author td,
+    .custom-property-wrapper {
+        display: flex;
+        align-items: center;
+        gap: @vo-win-f-gap;
+    }
+
+    #id-info-author input.form-control,
+    .custom-property-wrapper input.form-control {
+        .vo-win-field();
+        flex: 1 1 auto;
+        width: auto !important;                // stock: inline 200
+        min-width: 0;
+    }
+
+    #id-info-author .input-field input.form-control { width: 100% !important; }
+
+    .tool.close {
+        position: relative;
+        flex: 0 0 @close;
+        width: @close;
+        height: @close;
+        margin: 0;
+        border-radius: @vo-win-r-2xs;
+        background: none;
+        color: @vo-text-off;                   // base-4
+        opacity: 1;
+        cursor: pointer;
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: @close;
+            height: @close;
+            margin: 0;
+            transform: none;
+            .vo-win-mask();
+            -webkit-mask-image: var(--vo-win-ico-close, @vo-win-no-ico);
+                    mask-image: var(--vo-win-ico-close, @vo-win-no-ico);
+        }
+
+        &::after { content: none; }
+
+        &:not(.disabled):hover { color: @vo-text-2; }   // base-2
+        &.disabled { cursor: default; }
+    }
+
+    #fminfo-btn-add-property {
+        .vo-win-btn();
+        .vo-win-btn-outline();
+
+        span {
+            padding: 0;
+            border: none;
+        }
+
+        &.disabled,
+        &[disabled] { .vo-win-btn-off(); }
+    }
+}

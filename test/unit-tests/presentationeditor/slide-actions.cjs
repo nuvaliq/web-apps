@@ -39,6 +39,7 @@ const DIR = viewDir();
 const RU = {
     textEdit: 'Правка', textSlide: 'Слайд', textArrange: 'Упорядочить', textFormat: 'Формат',
     textNoEditRight: 'Нет права на редактирование',
+    textNoEditRightRequest: 'Только просмотр — чтобы править, выберите «Файл → Редактировать»',
     textSelectObject: 'Выделите объект на слайде', textSelectText: 'Выделите текст',
     textSelectTable: 'Выделите таблицу', textSelectImage: 'Выделите изображение',
     textSelectTwoObjects: 'Выделите два объекта и больше', textSelectTwoShapes: 'Выделите две фигуры и больше',
@@ -262,8 +263,42 @@ const tests = [
         assert.ok(!st.disabled, 'the edit request is grey for a reader: ' + JSON.stringify(st));
         const m = h.mark(w);
         assert.equal(w.SA.exec(file[0], w.shell), true, 'the edit request does not run');
-        assert.deepEqual(h.since(w, m).calls.filter(c => c.name === 'clickMenuFileItem').map(c => c.args[1]), ['edit'],
-            'LeftMenu.clickMenuFileItem(edit) once');
+        /* The request is handled by Main.markEditRequest: one request to the host, the stock "File" item handler is not called. */
+        const sent = h.since(w, m).calls;
+        assert.equal(sent.filter(c => c.target === 'Gateway' && c.name === 'requestEditRights').length, 1, 'Gateway.requestEditRights once');
+        assert.deepEqual(sent.filter(c => c.name === 'clickMenuFileItem').map(c => c.args[1]), [], 'the stock File handler runs too');
+    }},
+
+    /* A reader who can request editing sees, on disabled editing items, how to start it
+       rather than "no permission". "Edit" is disabled without a connection with the connection reason, and after
+       the choice — while the request is on its way (5 s): a second request is not sent. */
+    {name: 'reader_who_can_request_edit_is_told_how_to_start_editing', fn() {
+        const w = world({edit: false, requestEdit: true});
+        for (const k of ['cut', 'paste', 'normal'])
+            assert.equal(w.SA.itemState(find(w, k)).reason, RU.textNoEditRightRequest, k + ': not the edit request hint');
+        const plain = world({edit: false});
+        assert.equal(plain.SA.itemState(find(plain, 'cut')).reason, RU.textNoEditRight, 'a reader without a request handler');
+        assert.ok(w.modules.CompactMenuAdapter.REASONS.includes('rightsRequest'), 'the adapter does not order rightsRequest');
+
+        const item = find(w, 'requestEdit');
+        const main = w.controllers.Main;
+        main._state.isDisconnected = true;
+        const off = w.SA.itemState(item);
+        /* The reason text comes from the editor locale, not the English default of the shared menu bar. */
+        assert.deepEqual([off.disabled, off.reason], [true, h.ruText('Common.UI.Compact.MenuBar.textReasonOffline')], 'offline: ' + JSON.stringify(off));
+        assert.equal(w.SA.exec(item, w.shell), false, 'the request runs offline');
+        main._state.isDisconnected = false;
+
+        const m = h.mark(w);
+        assert.equal(w.SA.exec(item, w.shell), true, 'the request does not run');
+        const wait = w.SA.itemState(item);
+        assert.deepEqual([wait.disabled, wait.reason], [true, null], 'while the request is on its way: ' + JSON.stringify(wait));
+        assert.equal(w.SA.exec(item, w.shell), false, 'a second request runs while the first is on its way');
+        assert.equal(h.since(w, m).calls.filter(c => c.target === 'Gateway' && c.name === 'requestEditRights').length, 1, 'one request');
+        const timer = w.timers.find(t => t.ms === 5000 && !t.cancelled);
+        assert.ok(timer, 'no five second wait');
+        w.flush();
+        assert.equal(w.SA.itemState(item).disabled, false, 'the item is back after the wait');
     }},
 
     {name: 'reason_order_mode_right_selection', fn() {

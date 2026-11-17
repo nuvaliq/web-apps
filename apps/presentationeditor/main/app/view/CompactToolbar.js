@@ -1255,6 +1255,20 @@ define([], function () {
            and controls changed: then "⋯" closes, a panel that vanished from the row too, and
            the measurement goes to a frame. force — recompute without comparison (build, the shell
            row). */
+        /* The row needs a right panel tab (shapeSettings, tableSettings,
+           imageSettings): with selection kind, the row shows a control whose
+           counterpart is a field of that tab. SlideSelection uses this to decide
+           whether to feed the tab with selection properties while the card is closed. */
+        usesTab: function (tab, kind) {
+            var prefix = 'RightMenu:' + tab + '.';
+            return GROUPS.some(function (grp) {
+                return visibleFor(grp.when, kind) && grp.items.some(function (key) {
+                    var item = ITEMS[key];
+                    return !!item && typeof item.twin === 'string' && item.twin.indexOf(prefix) === 0 && itemShown(item, kind);
+                });
+            });
+        },
+
         refresh: function (kind, force) {
             if (!this.el) return;
             var me = this;

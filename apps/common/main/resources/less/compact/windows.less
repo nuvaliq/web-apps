@@ -1,0 +1,771 @@
+/*
+ * Template of a regular window in the compact shell, shared by the editors.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * Repaints the stock Common.UI.Window box (header, body, footer) and
+ * the stock components inside it: InputField, ComboBox, MetricSpinner,
+ * CheckBox, RadioBox. It acts only on a window to which the window mechanics
+ * (common/main/lib/view/compact/Windows.js) has set the template mark, and only
+ * in compact: every window selector starts with body.vo-compact
+ * .asc-window.vo-win. The stock interface, windows without the mark and everything
+ * outside the compact shell stay stock; the template does not touch the stock markup and JS.
+ *
+ * The look is built on AIR components: the box is ui.system.dialog, the field is
+ * ui.system.input --light-grey, the checkbox and switch are md, buttons are
+ * ui.air-buttons md, the dropdown list is the AIR menu metric. Color, font,
+ * radius and popover shadow (.vo-material-popup) are editor variables from
+ * the "Tokens: color" block of its compact-shell.less, geometry comes from the literals below,
+ * with the AIR token name on the right. Anything of our own that the design system lacks is marked "not in the DS".
+ *
+ * Icons (the cross, the chevron, the checkbox check mark, the check mark in a circle of the selected
+ * menu item) are drawn with a mask, like .vo-air. The image address is set by the
+ * window mechanics via variables on the document root: a relative url() from here
+ * would resolve against app.css, not the page (Common.UI.Compact.Icons).
+ *
+ * An editor imports this file first in its compact-windows.less; rules for a
+ * specific window go after it, each window under its own mark. The set for
+ * the stock windows of the shared layer is windows-stock.less.
+ */
+/* --- Geometry and typography --------------------------------------------- */
+
+// Box: ui-system-dialog
+@vo-win-pad-x:        24px;     // --ui-system-dialog-padding-x
+@vo-win-hd-pad-t:     14px;     // ui-system-dialog__header
+@vo-win-body-pad-t:   12px;     // ui-system-dialog__content
+@vo-win-body-pad-b:   18px;     // ui-system-dialog__content
+@vo-win-ft-pad-b:     24px;     // footer + margin-bottom of buttons
+@vo-win-x-w:          24px;     // cross: header-close-btn
+@vo-win-x-out:        4px;      // the cross extends past the padding
+
+// Heading: Headline md
+@vo-win-title-fs:     19px;
+@vo-win-title-lh:     26px;
+@vo-win-title-ls:     -.2px;
+
+// Body
+@vo-win-fs:           14px;     // --ui-font-size-md
+@vo-win-lh:           1.35;     // --ui-font-line-height-sm
+@vo-win-gap:          16px;     // --ui-space-stack-md: between body blocks
+@vo-win-gap-lg:       20px;     // --ui-space-stack-lg
+@vo-win-gap-xl:       24px;     // --ui-space-stack-xl: a body that starts with a choice
+@vo-win-row-gap:      12px;     // --ui-space-inline-sm: between fields in a row
+
+// Field: ui.system.input
+@vo-win-f-h:          38px;     // --min-height
+@vo-win-f-pad:        12px;     // --ui-space-inline-sm
+@vo-win-f-gap:        8px;      // --ui-space-inline-xs: value, units, arrows
+@vo-win-f-fs:         15px;     // --ui-font-size-lg
+@vo-win-lbl-fs:       13px;     // --ui-font-size-sm
+@vo-win-lbl-lh:       1.3;      // --ui-font-line-height-2xs
+@vo-win-lbl-gap:      6px;      // --ui-space-stack-2xs2
+@vo-win-r-2xs:        4px;      // --ui-border-radius-2xs
+@vo-win-in-2xs:       4px;      // --ui-space-inline-2xs
+@vo-win-msg-out:      6px;      // error label below the field edge
+@vo-win-chev:         18px;     // dropdown icon 18
+
+// Counter: arrows in a column on the right in the field; the DS has no counter
+@vo-win-arrow-w:      20px;
+@vo-win-arrow-h:      14px;
+@vo-win-arrow-ico:    16px;
+@vo-win-arrow-in:     6px;      // the column extends into the field padding by 6
+
+// Checkbox and switch: ui.system.checkbox / radiobutton, md
+@vo-win-ck:           18px;
+@vo-win-ck-r:         4px;      // --ui-checkbox-border-radius
+@vo-win-ck-dot:       3px;      // switch dot radius: dot 6
+@vo-win-ck-h:         24px;     // checkbox row
+@vo-win-ck-gap:       8px;      // --ui-space-inline-xs
+
+// Buttons: ui.air-buttons, md
+@vo-win-btn-h:        34px;     // --ui-btn-size-md
+@vo-win-btn-pad:      13px;     // --ui-btn-padding-left/right
+@vo-win-btn-r:        10px;     // --ui-border-radius-md
+@vo-win-btn-gap:      12px;     // footer left-buttons
+@vo-win-focus-off:    2px;      // ring outside the button, checkbox, switch
+
+// Dropdown list: AIR menu
+@vo-win-pop-pad-y:    8px;
+@vo-win-pop-gap:      4px;      // the menu is offset from the field
+@vo-win-pop-row-gap:  10px;
+@vo-win-pop-sep:      6px;      // air around the separator
+@vo-win-check:        20px;     // selected item check mark
+@vo-win-pop-max:      288px;    // eight rows of 36
+
+@vo-win-dur:          .12s;     // border and fill change
+
+// With no icon address the mask hides the icon entirely: without it (mask-image: none)
+// the element would be filled with the icon color as a solid square.
+@vo-win-no-ico:       linear-gradient(transparent, transparent);
+
+/* --- Bricks -------------------------------------------------------------- */
+/* Mixins, not classes: an editor builds the markup of its own compact windows
+   from them too, and the look of stock and own windows comes from one place. */
+
+.vo-win-mask() {
+    background: currentColor;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
+    -webkit-mask-size: contain;
+            mask-size: contain;
+}
+
+/* Focus ring is like the AIR checkbox and switch: solid, in the
+   accent-main-primary color and outside the box. Not the shell's --vo-focus: the window
+   has the component ring, not focus-outline. outline, not a shadow: the window elements
+   have no clipping ancestor. */
+.vo-win-ring(@offset: @vo-win-focus-off) {
+    outline: @vo-focus-w solid @vo-accent;
+    outline-offset: @offset;
+}
+
+/* Field ui.system.input --light-grey. An AIR field has no hover: the border
+   changes only on input. */
+.vo-win-field() {
+    box-sizing: border-box;
+    height: @vo-win-f-h;
+    padding: 0 @vo-win-f-pad;
+    border: 1px solid @vo-win-stroke;          // --border-color
+    border-radius: @vo-r-sm;                   // --ui-border-radius-sm
+    background: @vo-surface;
+    box-shadow: none;
+    opacity: 1;
+    color: @vo-text;
+    font-family: @vo-font;
+    font-size: @vo-win-f-fs;
+    line-height: @vo-win-lh;
+    transition: border-color @vo-win-dur;
+
+    &::placeholder { color: @vo-text-off; }    // base-4
+
+    &:focus {
+        border-color: @vo-accent;              // --border-color-active
+        box-shadow: none;
+        outline: none;
+    }
+
+    /* .ui-system-input.--disabled */
+    &[disabled] {
+        border-color: transparent;
+        background: @vo-win-off-bg;
+        color: @vo-win-off-fg;
+        cursor: default;
+
+        &::placeholder { color: @vo-win-off-fg; }
+    }
+}
+
+/* Button ui.air-buttons, md. The label is medium: at md it is such. */
+.vo-win-btn() {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: auto;
+    min-width: 0;
+    height: @vo-win-btn-h;
+    margin: 0;
+    padding: 0 @vo-win-btn-pad;
+    border: none;
+    border-radius: @vo-win-btn-r;
+    box-shadow: none;
+    opacity: 1;
+    font-family: @vo-font;
+    font-size: @vo-win-fs;
+    font-weight: 500;                          // --ui-font-weight-medium
+    line-height: @vo-win-lh;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color @vo-win-dur;
+
+    &:focus { box-shadow: none; outline: none; }
+    &:focus-visible { .vo-win-ring(); }
+
+    /* The Common.UI.Button label sits in span.caption, and the stock
+       .btn .caption (buttons.less:113, font-size-normal 11–12 px) would override
+       the button font size. The label takes the font size of its button. */
+    .caption { font-size: inherit; }
+}
+
+.vo-win-btn-filled() {
+    background: @vo-accent;                    // design-filled-bg → accent-main-primary
+    color: @vo-win-white;                      // design-filled-content
+
+    &:not(.disabled):not([disabled]):hover  { background: @vo-win-filled-hover; color: @vo-win-white; }
+    &:not(.disabled):not([disabled]):active { background: @vo-win-filled-act; }
+}
+
+/* plain is "Cancel" in the footer, without a backing. The background is white, not transparent:
+   hover is computed from the same base as outline, so its
+   values are taken. */
+.vo-win-btn-plain() {
+    background: @vo-surface;                   // bg-content-primary
+    color: @vo-text-2;                         // design-plain-content → base-2
+
+    &:not(.disabled):not([disabled]):hover  { background: @vo-outline-hover; color: @vo-text-2; }
+    &:not(.disabled):not([disabled]):active { background: @vo-outline-act; }
+}
+
+/* outline is a button inside a window ("Add", "Upload"). */
+.vo-win-btn-outline() {
+    border: @vo-outline-w solid @vo-outline-stroke;   // design-outline-stroke, border-width-medium
+    background: @vo-surface;                   // design-outline-bg
+    color: @vo-text-2;                         // design-outline-content
+
+    &:not(.disabled):not([disabled]):hover  { background: @vo-outline-hover; color: @vo-text-2; }
+    &:not(.disabled):not([disabled]):active { background: @vo-outline-act; }
+}
+
+/* Disabled AIR button: gray fill, border level with it, pale
+   text. The stock opacity (.4) is removed in .vo-win-btn(). */
+.vo-win-btn-off() {
+    border-color: @vo-win-off-bg;              // design-disabled-stroke → base-7
+    background: @vo-win-off-bg;                // design-disabled-bg
+    color: @vo-win-off-fg;                     // design-disabled-content
+    cursor: default;
+}
+
+/* --- Dimming ------------------------------------------------------------- */
+/* Under a compact window the document is dimmed, as under portal windows
+   (.popup-window-overlay: #333, 50 %). The color is here, on the whole compact mask.
+   For a show with animation the stock takes the opacity from --modal-window-mask-
+   opacity on the root (Window.js:811): it is set and removed by the shell together with
+   vo-compact. opacity in the rule is for a show without animation: then the stock
+   does not write opacity to the mask, and the style one applies (Window.js:807). */
+body.vo-compact .modals-mask {
+    background-color: #333;
+    opacity: .5;
+}
+
+/* --- Box ----------------------------------------------------------------- */
+
+/* The stock writes the window height inline: a numeric one in render, auto in _autoSize
+   right after it (Window.js:765, :257). In the template the header and body are in
+   flow, not absolute, and the box must follow the content if
+   the window changed its composition after showing. The inline value is overridden only this way. A window
+   whose size is driven by the stock (vo-win-sized: stretched with the mouse and computes
+   its internals from its height) keeps its own height. */
+body.vo-compact .asc-window.vo-win:not(.vo-win-sized) {
+    height: auto !important;
+}
+
+body.vo-compact .asc-window.vo-win {
+    .vo-material-popup();                      // radius 18 and shadow, as in the shell popovers
+    color: @vo-text;
+    font-family: @vo-font;
+    font-size: @vo-win-fs;
+    line-height: @vo-win-lh;
+    text-align: left;
+
+    /* --- Header: ui-system-dialog__header -------------------------------- */
+    /* The title on the left, the cross on the right in the same row. In the stock markup
+       the cross comes before the title, so the order is set by order. */
+    > .header {
+        position: static;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        height: auto;
+        padding: @vo-win-hd-pad-t @vo-win-pad-x 0;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: @vo-text;
+        font-size: @vo-win-title-fs;
+        font-weight: 500;                      // --ui-font-weight-medium
+        line-height: @vo-win-title-lh;
+        letter-spacing: @vo-win-title-ls;
+        text-align: left;
+
+        > .title {
+            order: 0;
+            flex: 1 1 auto;
+            min-width: 0;
+            /* render sets inline paddings of 20 px on the title for every header
+               icon (Window.js:756): this is how the stock centers the title between
+               the cross and emptiness. Here the title is on the left, and the cross sits
+               beside it in flow; the inline value is overridden only this way. */
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        > .tools {
+            order: 1;
+            position: static;
+            display: flex;
+            flex: 0 0 auto;
+            padding: 0;
+        }
+
+        /* The cross is an AIR icon mask instead of the stock's two rotated lines.
+           The icon is in ::before, not on the node itself: a mask on the node would clip
+           the focus ring too, if the node ever becomes focusable. */
+        > .tools > .tool.close {
+            position: relative;
+            right: -@vo-win-x-out;
+            float: none;
+            width: @vo-win-x-w;
+            height: @vo-win-title-lh;
+            margin: 0;
+            border-radius: @vo-win-r-2xs;
+            color: @vo-text-off;                // header-close-btn: base-4
+            opacity: 1;
+
+            &::before {
+                content: '';
+                position: absolute;
+                top: ((@vo-win-title-lh - @vo-win-x-w) / 2);
+                left: 0;
+                width: @vo-win-x-w;
+                height: @vo-win-x-w;
+                margin: 0;
+                transform: none;
+                .vo-win-mask();
+                -webkit-mask-image: var(--vo-win-ico-close, @vo-win-no-ico);
+                        mask-image: var(--vo-win-ico-close, @vo-win-no-ico);
+            }
+
+            &::after { content: none; }
+
+            /* The AIR cross has no pressed state: pressed looks like hover. */
+            &:not(.disabled):hover,
+            &:not(.disabled):active { color: @vo-text-2; opacity: 1; }   // base-2
+        }
+    }
+
+    /* --- Body: ui-system-dialog__content -------------------------------- */
+    /* The stock footer lies inside the body, so the body bottom padding is both
+       the air of a window without a footer (18) and part of the padding under the buttons (24). */
+    > .body {
+        position: static;
+        top: auto;
+        width: auto;
+        padding: @vo-win-body-pad-t @vo-win-pad-x @vo-win-body-pad-b;
+        border-radius: 0;
+        background: transparent;
+
+        > .box {
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        /* --- Footer: buttons on the left (left-buttons) ------------------ */
+        /* The stock footer.center centers the buttons; here it is a row on the left. */
+        > .footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0 @vo-win-btn-gap;
+            height: auto;
+            margin-top: @vo-win-body-pad-b;
+            padding: 0 0 (@vo-win-ft-pad-b - @vo-win-body-pad-b);
+            text-align: left;
+
+            .dlg-btn {
+                .vo-win-btn();
+                .vo-win-btn-plain();
+            }
+
+            .dlg-btn.primary {
+                .vo-win-btn-filled();
+            }
+
+            .dlg-btn.disabled,
+            .dlg-btn[disabled] {
+                .vo-win-btn-off();
+            }
+
+            /* plain disabled: without a backing. */
+            .dlg-btn:not(.primary).disabled,
+            .dlg-btn:not(.primary)[disabled] {
+                background: transparent;
+            }
+        }
+    }
+
+    /* --- Label above a field -------------------------------------------- */
+    .input-label {
+        display: block;
+        max-width: max-content;
+        margin: 0 0 @vo-win-lbl-gap;
+        color: @vo-win-label;                  // base-3
+        font-size: @vo-win-lbl-fs;
+        font-weight: 400;
+        line-height: @vo-win-lbl-lh;
+
+        &.disabled { opacity: 1; color: @vo-win-off-fg; }   // .ui-system-input.--disabled: --label-color
+    }
+
+    /* --- Input field: InputField ----------------------------------------- */
+    .input-field {
+        position: relative;
+
+        > .form-control { .vo-win-field(); }
+
+        /* Error: an alert border, the text lies on the bottom edge of the field in one
+           line with an ellipsis and does not move the layout. The text is put into the node
+           by the shell (edgeError); the stock tooltip hangs on the same node
+           and gives the full text on hover. The stock icon is not needed. */
+        &.error > .form-control:not([disabled]) { border-color: @vo-danger; }   // accent-main-alert
+
+        > .input-error {
+            position: absolute;
+            bottom: -@vo-win-msg-out;
+            left: (@vo-win-f-pad - @vo-win-in-2xs);
+            float: none;
+            max-width: calc(100% - (@vo-win-f-pad * 2));
+            padding: 0 @vo-win-in-2xs;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            border-radius: @vo-win-r-2xs;
+            background: @vo-surface;
+            color: @vo-danger;
+            font-size: @vo-win-lbl-fs;
+            line-height: @vo-win-lbl-lh;
+
+            &::before { display: none; }
+        }
+    }
+
+    /* --- Dropdown list: ComboBox ------------------------------------------ */
+    .combobox {
+        /* The right corners of the field and button are held by the stock with !important via a
+           theme variable (combobox.less, .input-group-nr). The variable is overridden here,
+           under the mark, and its own rule gives the template radius, without
+           a counter !important. */
+        --border-radius-form-control: @vo-r-sm;
+
+        > .form-control {
+            .vo-win-field();
+            padding-right: (@vo-win-f-pad + @vo-win-chev + @vo-win-f-gap);
+            text-overflow: ellipsis;
+        }
+
+        &.open > .form-control {
+            border-color: @vo-accent;
+            box-shadow: none;
+        }
+
+        /* The stock button stays a clickable zone on the right, only the
+           arrow is visible: an AIR chevron in place of the template field. */
+        > .btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            width: (@vo-win-f-pad + @vo-win-chev + @vo-win-f-gap + 1px);
+            min-width: 0;
+            height: auto;
+            margin: 0;
+            padding: 0 (@vo-win-f-pad + 1px) 0 0;   // +1 is the field border
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            opacity: 1;
+            color: @vo-win-label;              // chevron base-3
+
+            .caret {
+                display: block;
+                width: @vo-win-chev;
+                height: @vo-win-chev;
+                margin: 0;
+                border: none;
+                transform: none;
+                transition: transform @vo-dur-state;
+                .vo-win-mask();
+                -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                        mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+            }
+        }
+
+        &.open > .btn .caret { transform: rotate(180deg); }
+
+        &.disabled > .btn {
+            color: @vo-win-off-fg;
+            cursor: default;
+        }
+
+        /* The menu is like the shell AIR menu: row 38, font size 13, padding 19 (the same
+           numbers as for the document windows), the selected one is a check mark in a circle on the right
+           (accept), not a fill. The keyboard cursor is a hover fill,
+           as in the menu. */
+        .dropdown-menu {
+            .vo-material-popup();
+            min-width: 100%;
+            margin: @vo-win-pop-gap 0 0;
+            padding: @vo-win-pop-pad-y 0;
+
+            &.show-top { margin: 0 0 @vo-win-pop-gap; }
+
+            li { background: transparent; }
+
+            li > a {
+                display: flex;
+                align-items: center;
+                gap: @vo-win-pop-row-gap;
+                min-height: @vo-row-h;              // menu-popup-item height
+                padding: 0 @vo-row-pad-x;           // menu-popup-item-padding
+                background: transparent;
+                color: @vo-text;                    // base-1
+                font-family: @vo-font;
+                font-size: @vo-fs-row;              // menu-popup-item-font-size
+                line-height: @vo-win-lh;
+
+                /* The check mark of an unselected item is transparent, not hidden: the room
+                   for it is kept, and the shell styles hide a menu item
+                   with nothing (this is how the stock compact menus are checked). */
+                &::after {
+                    content: '';
+                    flex: 0 0 auto;
+                    width: @vo-win-check;
+                    height: @vo-win-check;
+                    margin-left: auto;
+                    opacity: 0;
+                    .vo-win-mask();
+                    background: @vo-accent;         // accent-main-primary
+                    -webkit-mask-image: var(--vo-win-ico-accept, @vo-win-no-ico);
+                            mask-image: var(--vo-win-ico-accept, @vo-win-no-ico);
+                }
+
+                &:hover,
+                &:focus,
+                &.focus { background: @vo-hover; color: @vo-text; }
+            }
+
+            li.selected > a {
+                background: transparent;
+                color: @vo-text;
+
+                &::after { opacity: 1; }
+
+                &:hover,
+                &:focus,
+                &.focus { background: @vo-hover; color: @vo-text; }
+            }
+
+            li.divider {
+                height: 1px;
+                margin: @vo-win-pop-sep 0;
+                background: @vo-win-divider;
+            }
+        }
+    }
+
+    /* --- Number field: MetricSpinner ----------------------------------- */
+    /* The arrows are stock: the same buttons and the same behavior, ↑↓ from the keyboard
+       too; the look is a column on the right in the field. */
+    .spinner {
+        > .form-control {
+            .vo-win-field();
+            padding-right: (@vo-win-f-pad - @vo-win-arrow-in + @vo-win-arrow-w + @vo-win-f-gap);
+        }
+
+        > .spinner-buttons {
+            top: ((@vo-win-f-h - @vo-win-arrow-h * 2) / 2);
+            right: (1px + @vo-win-f-pad - @vo-win-arrow-in);   // 1 is the field border
+            display: flex;
+            flex-direction: column;
+            border: none;
+
+            button {
+                display: block;
+                width: @vo-win-arrow-w;
+                height: @vo-win-arrow-h;
+                margin: 0;
+                padding: 0;
+                border: none;
+                border-radius: @vo-win-r-2xs;
+                background: transparent;
+                color: @vo-win-label;           // base-3
+                opacity: 1;
+                cursor: pointer;
+
+                &:not(.disabled):not(:disabled):hover  { background: @vo-hover; color: @vo-text; }
+                &:not(.disabled):not(:disabled):active { background: @vo-active; }
+
+                &.disabled,
+                &:disabled { color: @vo-win-off-fg; cursor: default; }
+
+                i {
+                    display: block;
+                    width: @vo-win-arrow-ico;
+                    height: @vo-win-arrow-ico;
+                    margin: ((@vo-win-arrow-h - @vo-win-arrow-ico) / 2) auto;
+                    border: none;
+                    transform: none;
+                    .vo-win-mask();
+                    -webkit-mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                            mask-image: var(--vo-win-ico-chevron, @vo-win-no-ico);
+                }
+            }
+
+            .spinner-up i { transform: rotate(180deg); }
+        }
+    }
+
+    /* --- Checkbox: CheckBox → ui.system.checkbox md ----------------------- */
+    /* Focus is on the outer label (FocusManager), the box is the nested
+       label. The box border is an inset shadow of ::before, as in the stock; the check mark is
+       a mask in ::after; the stock svg is needed only for the indeterminate state.
+       The AIR checkbox has no pressed state: pressed looks like hover. */
+    .checkbox-indeterminate {
+        display: inline-flex;
+        align-items: center;
+        gap: @vo-win-ck-gap;
+        min-height: @vo-win-ck-h;
+        padding-left: 0;
+        padding-right: 0;
+        outline: none;
+        opacity: 1;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-win-f-fs;               // field font size
+        line-height: @vo-win-lh;
+        cursor: pointer;
+
+        input[type=checkbox] + label {
+            position: relative;
+            left: auto;
+            right: auto;
+            flex: 0 0 auto;
+            width: @vo-win-ck;
+            height: @vo-win-ck;
+            margin: 0;
+            border-radius: @vo-win-ck-r;
+            background: @vo-win-white;          // base-white-fixed
+            cursor: pointer;
+
+            &::before {
+                border-radius: @vo-win-ck-r;
+                box-shadow: inset 0 0 0 1px @vo-win-stroke;   // base-7
+            }
+
+            &::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                left: 0;
+                visibility: hidden;
+                .vo-win-mask();
+                background: @vo-win-white;
+                -webkit-mask-image: var(--vo-win-ico-check, @vo-win-no-ico);
+                        mask-image: var(--vo-win-ico-check, @vo-win-no-ico);
+            }
+
+            svg { display: none; }
+            .chb-check-mark { display: none; }
+
+            + span { outline: none; }
+        }
+
+        &:hover:not(.disabled) input[type=checkbox] + label::before {
+            box-shadow: inset 0 0 0 1px @vo-accent;
+        }
+
+        input[type=checkbox]:checked + label,
+        input[type=checkbox]:indeterminate + label {
+            background: @vo-accent;
+
+            &::before { box-shadow: inset 0 0 0 1px @vo-accent; }
+        }
+
+        input[type=checkbox]:checked + label::after { visibility: visible; }
+
+        input[type=checkbox]:indeterminate + label svg {
+            display: block;
+            position: absolute;
+            top: ((@vo-win-ck - 14px) / 2);     // 14 is the stock svg size
+            left: ((@vo-win-ck - 14px) / 2);
+            border-radius: 0;
+            background: transparent;
+
+            .chb-indeterminate { fill: @vo-win-white; }
+        }
+
+        &:focus-visible input[type=checkbox] + label { .vo-win-ring(); }
+
+        &.disabled {
+            color: @vo-win-off-fg;
+            cursor: default;
+
+            input[type=checkbox] + label,
+            input[type=checkbox]:checked + label,
+            input[type=checkbox]:indeterminate + label {
+                background: @vo-win-off-bg;
+                cursor: default;
+
+                &::before { box-shadow: inset 0 0 0 1px @vo-win-off-bg; }
+            }
+
+            input[type=checkbox]:checked + label::after { background: @vo-text-off; }   // disabled-content-alt → base-4
+            input[type=checkbox]:indeterminate + label .chb-indeterminate { fill: @vo-text-off; }
+        }
+    }
+
+    /* --- Switch: RadioBox → ui.system.radiobutton md -------------------- */
+    /* The box is the stock svg itself: the border and fill are on it, its circle is hidden.
+       Exactly 16 × 16 remains inside the border: this is the stock viewBox, so the dot
+       sits in the center without recomputation. The AIR switch has no pressed state. */
+    .radiobox {
+        gap: @vo-win-ck-gap;
+        min-height: @vo-win-ck-h;
+        outline: none;
+        color: @vo-text;
+        font-family: @vo-font;
+        font-size: @vo-win-f-fs;
+        line-height: @vo-win-lh;
+        cursor: pointer;
+
+        > svg {
+            box-sizing: border-box;
+            flex: 0 0 auto;
+            width: @vo-win-ck;
+            height: @vo-win-ck;
+            margin: 0;
+            border: 1px solid @vo-win-stroke;  // base-7
+            border-radius: 50%;
+            background: @vo-win-white;         // base-white-fixed
+
+            .rb-circle { display: none; }
+
+            .rb-check-mark {
+                r: @vo-win-ck-dot;
+                fill: @vo-win-white;
+            }
+        }
+
+        > span { outline: none; }
+
+        &:hover:not(.disabled) > svg { border-color: @vo-accent; }
+
+        > input[type=radio]:checked + svg {
+            border-color: @vo-accent;
+            background: @vo-accent;
+        }
+
+        &:focus-visible > svg { .vo-win-ring(); }
+
+        &.disabled {
+            color: @vo-win-off-fg;
+            cursor: default;
+
+            > svg,
+            > span { opacity: 1; }
+
+            > svg,
+            > input[type=radio]:checked + svg {
+                border-color: @vo-win-off-bg;
+                background: @vo-win-off-bg;
+            }
+
+            > input[type=radio]:checked + svg .rb-check-mark { fill: @vo-text-off; }   // disabled-content-alt → base-4
+        }
+    }
+}

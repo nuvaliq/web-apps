@@ -51,6 +51,7 @@ define([
     'common/main/lib/controller/Fonts',
     'common/main/lib/collection/TextArt',
     'common/main/lib/util/LocalStorage',
+    'common/main/lib/util/utils',
     'documenteditor/main/app/collection/ShapeGroups',
     'documenteditor/main/app/collection/EquationGroups',
     'common/main/lib/controller/FocusManager',

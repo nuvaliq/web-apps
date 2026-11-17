@@ -81,6 +81,11 @@ const read = file => fs.readFileSync(file, 'utf8');
 const exists = file => { try { fs.accessSync(file); return true; } catch (e) { return false; } };
 const iconsSource = read(ICONS);
 const viewText = view => { const file = path.join(VIEW_DIR, view + '.js'); return exists(file) ? read(file) : ''; };
+/* The window mechanics on the template are shared: its icons and base are in common/main/lib/view/compact/Windows.js, the template and
+   the window set are in common/main/resources/less/compact. */
+const SHARED_WINDOWS = path.join(ROOT, 'apps/common/main/lib/view/compact/Windows.js');
+const SHARED_LESS_DIR = path.join(ROOT, 'apps/common/main/resources/less/compact');
+const sourceText = view => view === 'Windows' ? (exists(SHARED_WINDOWS) ? read(SHARED_WINDOWS) : '') : viewText(view);
 
 /* The AIR list as text from the literal `var AIR = {...}`: it is not visible from outside the module. */
 function airNames() {
@@ -105,7 +110,7 @@ const airFiles = () => fs.readdirSync(AIR_DIR).filter(f => f.endsWith('.svg')).m
 
 /* A literal list of strings `var <name> = [...]` of a view. */
 function listLiteral(view, name) {
-    const m = new RegExp('var\\s+' + name + '\\s*=\\s*\\[([^\\]]*)\\]').exec(viewText(view));
+    const m = new RegExp('var\\s+' + name + '\\s*=\\s*\\[([^\\]]*)\\]').exec(sourceText(view));
     assert.ok(m, view + '.js: the ' + name + ' list literal is found');
     return Array.from(m[1].matchAll(/'([A-Za-z][A-Za-z0-9]*)'/g), x => x[1]);
 }
@@ -130,8 +135,8 @@ function requestedNames() {
 }
 
 /* Stock node icons: variable names on the document root (CompactLeft is --vo-ar-ico-<name>,
-   CompactWindows is --vo-win-ico-<name>). */
-const stockNodeIcons = () => ({left: listLiteral('CompactLeft', 'ICONS'), windows: listLiteral('CompactWindows', 'ICONS')});
+   windows on the template are --vo-win-ico-<name>, the list of the shared window mechanics). */
+const stockNodeIcons = () => ({left: listLiteral('CompactLeft', 'ICONS'), windows: listLiteral('Windows', 'ICONS')});
 
 const EXTERNAL = /(?:https?:)?\/\/[a-z]/i;
 const withoutXmlns = text => text.replace(/xmlns(?::\w+)?="[^"]*"/g, '');
@@ -190,23 +195,25 @@ test('stock_node_icons_are_shared_files', () => {
     assert.ok(lists.left.length >= 10 && lists.windows.length >= 4, 'stock node icons are read: ' + lists.left.length + ', ' + lists.windows.length);
     const bad = lists.left.concat(lists.windows).filter(n => !files.has(n));
     assert.deepEqual(bad, [], 'stock node icons without a shared file');
-    ['CompactLeft', 'CompactWindows'].forEach(view => {
-        const m = /var\s+AIR_BASE\s*=\s*'([^']*)'/.exec(viewText(view));
+    ['CompactLeft', 'Windows'].forEach(view => {
+        const m = /var\s+AIR_BASE\s*=\s*'([^']*)'/.exec(sourceText(view));
         assert.ok(m, view + '.js: the AIR_BASE literal is found');
         assert.equal(m[1], SHARED_BASE, view + '.js: base of the stock node icons');
         assert.equal(new URL(m[1], BASE).href, 'http://stand.test/web-apps/apps/common/main/resources/img/air/', view + '.js: resolved base');
     });
     /* Styles take a mask by name from these lists: a name not in the list means the node has no address. */
     const used = {left: new Set(), windows: new Set()};
-    fs.readdirSync(LESS_DIR).filter(f => f.endsWith('.less')).forEach(f => {
-        const text = read(path.join(LESS_DIR, f)).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    const lessFiles = fs.readdirSync(LESS_DIR).filter(f => f.endsWith('.less')).map(f => path.join(LESS_DIR, f))
+        .concat(['windows.less', 'windows-stock.less'].map(f => path.join(SHARED_LESS_DIR, f)).filter(exists));
+    lessFiles.forEach(file => {
+        const text = read(file).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
         for (const m of text.matchAll(/\.vo-ar-ico\(\s*([A-Za-z][A-Za-z0-9]*)\s*\)/g)) used.left.add(m[1]);
         for (const m of text.matchAll(/--vo-win-ico-([A-Za-z][A-Za-z0-9]*)/g)) used.windows.add(m[1]);
     });
     assert.ok(used.left.has('focus') && used.left.has('pencil') && used.windows.has('close'), 'the probe sees the styles: ' +
         [...used.left].join(',') + ' / ' + [...used.windows].join(','));
     assert.deepEqual([...used.left].filter(n => !lists.left.includes(n)), [], 'masks of the areas without a CompactLeft address');
-    assert.deepEqual([...used.windows].filter(n => !lists.windows.includes(n)), [], 'masks of the windows without a CompactWindows address');
+    assert.deepEqual([...used.windows].filter(n => !lists.windows.includes(n)), [], 'masks of the windows without an address of the windows mechanics');
 });
 
 /* Moved icons are files of the former presentation set byte for byte; replaced names are the same

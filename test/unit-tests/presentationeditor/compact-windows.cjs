@@ -35,6 +35,7 @@ const LESS = ARGS[1] || path.join(PE_LESS, 'compact-windows.less');
 const SHELL_LESS = path.join(PE_LESS, 'compact-shell.less');
 const SHARED_ICONS = path.join(ROOT, 'apps/common/main/lib/view/compact/Icons.js');
 const SHARED_ABOUT = path.join(ROOT, 'apps/common/main/lib/view/compact/AboutWindow.js');
+const SHARED_WINDOWS = path.join(ROOT, 'apps/common/main/lib/view/compact/Windows.js');
 const _ = require(path.join(ROOT, 'vendor/underscore/underscore-node.cjs'));
 
 const LABEL_PREFIX = 'body.vo-compact .asc-window.vo-win';
@@ -246,6 +247,8 @@ context.innerWidth = 1440;
 Object.defineProperty(context, 'document', {get: () => doc});
 vm.createContext(context);
 context.define = (deps, factory) => factory();
+/* The window mechanics are shared (Common.UI.Compact.Windows): the presentation module depends on them. */
+if (fs.existsSync(SHARED_WINDOWS)) vm.runInContext(fs.readFileSync(SHARED_WINDOWS, 'utf8'), context, {filename: SHARED_WINDOWS});
 vm.runInContext(fs.readFileSync(FILE, 'utf8'), context, {filename: FILE});
 /* "About" is the shared compact window of the editors together with the shared icon set. */
 for (const file of [SHARED_ICONS, SHARED_ABOUT, path.join(VIEW, 'DocInfoWindow.js')])
@@ -791,6 +794,41 @@ check('set_styles_cover_tabs_lists_and_messages', async () => {
     assert.ok(has(/\.info-box > \.icon\.confirm::before$/), 'message: confirm icon');
 });
 
+/* The template and the mechanics come from the shared layer: the module takes Common.UI.Compact.Windows, shared windows
+   are its recipes, not own copies; its own styles hold only its own windows, the template and the set for stock
+   windows are imported from common/main/resources/less/compact. */
+const SHARED_LESS_DIR = path.join(ROOT, 'apps/common/main/resources/less/compact');
+check('template_and_stock_windows_come_from_the_shared_layer', () => {
+    const src = fs.readFileSync(FILE, 'utf8');
+    assert.ok(/'common\/main\/lib\/view\/compact\/Windows'/.test(src), 'CompactWindows does not require the shared windows module');
+    for (const own of ['guardEnter', 'edgeError', 'setActive', 'centreOverWork', 'primary', 'unbind'])
+        assert.ok(!new RegExp('\\b' + own + '\\s*:\\s*function').test(src), 'CompactWindows keeps its own ' + own);
+    const W = context.Common.UI && context.Common.UI.Compact && context.Common.UI.Compact.Windows;
+    assert.ok(W && typeof W.stock === 'function', 'no Common.UI.Compact.Windows.stock');
+    fresh();
+    const ids = M.RECIPES.map(r => r.id);
+    assert.ok(W.STOCK_IDS.length >= 15, 'stock recipes: ' + W.STOCK_IDS.length);
+    for (const id of W.STOCK_IDS) {
+        const own = M.RECIPES.filter(r => r.id === id);
+        assert.equal(own.length, 1, 'one recipe ' + id);
+        assert.equal(own[0], W.stock([id])[0], id + ' is not the shared recipe');
+    }
+    assert.deepEqual(ids.filter(id => !W.STOCK_IDS.includes(id)).sort(),
+        ['adv', 'datetime', 'docinfo', 'grid', 'hf', 'link', 'showsettings', 'slidesize'], 'own presentation windows');
+    const less = fs.readFileSync(LESS, 'utf8');
+    const imports = Array.from(less.matchAll(/^@import\s+"([^"]+)";/gm), m => m[1]);
+    assert.deepEqual(imports, ['../../../../common/main/resources/less/compact/windows.less',
+        '../../../../common/main/resources/less/compact/windows-stock.less'], 'compact-windows.less imports');
+    assert.ok(!/^@vo-win-pad-x\s*:|^\.vo-win-field\(\)\s*\{/m.test(less), 'compact-windows.less keeps its own template');
+    for (const id of W.STOCK_IDS)
+        assert.ok(!less.includes('.vo-win--' + id + ' ') && !less.includes('.vo-win--' + id + '\n') && !less.includes('.vo-win--' + id + ' {'),
+            'compact-windows.less keeps the rules of the shared window ' + id);
+    const tpl = fs.readFileSync(path.join(SHARED_LESS_DIR, 'windows.less'), 'utf8');
+    const stock = fs.readFileSync(path.join(SHARED_LESS_DIR, 'windows-stock.less'), 'utf8');
+    assert.ok(/^@vo-win-pad-x\s*:/m.test(tpl) && /^\.vo-win-field\(\)\s*\{/m.test(tpl), 'the shared template');
+    for (const id of W.STOCK_IDS) assert.ok(stock.includes('.vo-win.vo-win--' + id), 'windows-stock.less: no rules of ' + id);
+});
+
 /* --- "About" is the shared compact window ------------------------------ */
 
 /* The compact style layer as the editor's app.less includes it: stock image paths
@@ -830,9 +868,9 @@ check('about_window_is_the_shared_one', () => {
     assert.ok(/'common\/main\/lib\/view\/compact\/AboutWindow'/.test(fs.readFileSync(FILE, 'utf8')), 'CompactWindows does not require the shared AboutWindow');
     const less = fs.readFileSync(LESS, 'utf8');
     assert.ok(!/vo-win--about|\.about-(?:content|head|name|version|lines|line|cc)\b/.test(less), 'compact-windows.less still styles the About window');
-    /* The shared layer (tokens and the "About" window) comes before its own file: for a LESS variable the last
-       definition wins, and the window rules get the presentation values. The presentations have no shared-layer menu lines. */
-    assert.deepEqual(appLayer(path.join(PE_LESS, 'app.less')).shared, ['tokens', 'about'], 'shared layer files in app.less');
+    /* The shared layer (tokens, the menu bar and the "About" window) comes before its own file: for a LESS variable
+       the last definition wins, and the window rules get the presentation values. */
+    assert.deepEqual(appLayer(path.join(PE_LESS, 'app.less')).shared, ['tokens', 'menu', 'about'], 'shared layer files in app.less');
 });
 
 /* The window is the same as in documents: the shared about.less rules on each editor's values match. */

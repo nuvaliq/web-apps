@@ -2947,6 +2947,7 @@
   "SSE.Views.ColumnHeaderMenu.textColumnMenu_ARIA": "Столбец {0}",
   "SSE.Views.CompactShell.textCompact": "Включить компактный вид",
   "SSE.Views.CompactShell.textDocument": "Таблица",
+  "SSE.Views.CompactShell.textEdit": "Редактировать",
   "SSE.Views.CompactShell.textMenuBar_ARIA": "Меню",
   "SSE.Views.CompactShell.textModeEdit": "Редактирование",
   "SSE.Views.CompactShell.textModeEditHint": "Правки применяются сразу",

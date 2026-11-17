@@ -1,6 +1,6 @@
 /* Run: node test/unit-tests/presentationeditor/status-bar.cjs [path to CompactStatus.js]
  * The presentation shell status bar (#vo-status): on the left "Slide N of M" and the language, on the right
- * "Spell check", "Fit to width", "Fit to slide" and the edge icons are twins of the stock
+ * "Spell check", "Fit to width", "Fit to slide" (no edge icons without an action) are twins of the stock
  * status bar; captions come from the stock objects; without the edit right there is no language or
  * spelling; there is no zoom or slide show; the counter follows the engine events.
  *
@@ -258,11 +258,13 @@ const tests = [
             const fitS = env.byText('Fit to slide');
             assert.ok(lang, 'нет языка текста');
             assert.ok(spell && fitW && fitS, 'нет переключателей: ' + env.text());
-            /* Order: counter, language, spelling, fit to width, fit to slide, edge icons. */
+            /* Order: counter, language, spelling, fit to width, fit to slide. No edge icons
+               without an action: "Fit to slide" is the last element of the bar. */
             const order = env.status.descendants();
-            const seq = [counter, lang, spell, fitW, fitS, env.status.querySelector('.vo-st-tools')];
+            const seq = [counter, lang, spell, fitW, fitS];
             for (let i = 1; i < seq.length; i++) assert.ok(order.indexOf(seq[i - 1]) < order.indexOf(seq[i]), 'порядок строки нарушен на ' + i);
-            assert.equal(env.status.querySelector('.vo-st-tools').descendants().some(e => (e.listeners.click || []).length), false, 'значки края с действием');
+            assert.ok(!env.status.querySelector('.vo-st-tools'), 'значки края без действия на месте');
+            assert.equal(order.filter(e => order.indexOf(e) > order.indexOf(fitS) && !fitS.descendants().includes(e)).length, 0, 'после «По размеру слайда» ещё элементы');
 
             /* Twins: a click is the stock click, the state comes from the stock button. */
             env.reset();

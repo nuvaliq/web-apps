@@ -40,6 +40,10 @@ define([
        body.vo-boot). The number of build attempts is the same as the start loop
        had before the early start: 20 of 150 ms. */
     var BOOT_CLASS = 'vo-boot';
+
+    /* The loading skeleton (index.html, class sk-shell) during the claim: a different
+       id, so that the stock code does not remove it. */
+    var COVER_ID = 'vo-loading';
     var START_TRIES = 20, START_STEP = 150;
 
     /* The five numbers are duplicated in compact-shell.less and must change
@@ -236,6 +240,33 @@ define([
             this.booted = true;
             this.boot = {heights: null};
             document.body.classList.add(BOOT_CLASS);
+            /* The loading skeleton stays until the shell is built. The stock code removes
+               it by id on app:face, before the document is loaded, and would then show
+               the canvas in the colours of the interface theme (dark on a dark system)
+               and its own "Loading document" plate. Under a different id the skeleton
+               stays, and endBoot removes it together with the claim: when the shell is
+               built this is the same frame, on a failure the stock interface returns,
+               on an engine error see below. The stock password window lies above the
+               skeleton by z-index, and loading goes on after it. */
+            var mask = document.getElementById('loading-mask');
+            if (mask) mask.id = COVER_ID;
+            /* An engine error before the shell is built removes the skeleton and the
+               claim at once. The stock code removes its own mask on it (Main.onError →
+               hidePreloader) and opens the error window, while app:ready never comes
+               after an opening error: nothing would call endBoot, and the loading band
+               would keep running under the window and after OK. Under the window the
+               stock interface belongs, as in the stock editor. An error after which
+               loading still reaches app:ready gets the shell from the regular start,
+               as without the early start. The stock onError is registered earlier
+               (Main.onLaunch) and the engine calls its callbacks in order, so the stock
+               window is already open by our call. guarded, because an exception here
+               would cut off the remaining error callbacks. */
+            var vp = DE.getController('Viewport');
+            var api = vp && vp.api;
+            if (api && api.asc_registerCallback)
+                api.asc_registerCallback('asc_onError', guarded('оболочка: ошибка до постройки', function () {
+                    if (me.boot) me.endBoot(true);
+                }));
             /* The subscription is registered here, that is, later than the stock handlers of
                app:face (they are registered at controller startup): by our call the
                stock code has already laid out the areas by its flags. */
@@ -299,6 +330,8 @@ define([
             if (!b) return;
             this.boot = null;
             document.body.classList.remove(BOOT_CLASS);
+            var cover = document.getElementById(COVER_ID);
+            if (cover && cover.parentNode) cover.parentNode.removeChild(cover);
             (b.heights || []).forEach(function (x) {
                 if (x.panel.height !== x.ours) return;
                 x.panel.height = x.stock;

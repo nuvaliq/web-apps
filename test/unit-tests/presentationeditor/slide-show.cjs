@@ -179,6 +179,9 @@ context.define = (deps, factory) => factory();
 /* Icons are the shared editor set (Common.UI.Compact.Icons): a module of the shared compact layer. */
 const SHARED_ICONS = path.join(ROOT, 'apps/common/main/lib/view/compact/Icons.js');
 vm.runInContext(fs.readFileSync(SHARED_ICONS, 'utf8'), context, {filename: SHARED_ICONS});
+/* The window mechanics of the CompactWindows zone are shared (Common.UI.Compact.Windows). */
+const SHARED_WINDOWS = path.join(ROOT, 'apps/common/main/lib/view/compact/Windows.js');
+vm.runInContext(fs.readFileSync(SHARED_WINDOWS, 'utf8'), context, {filename: SHARED_WINDOWS});
 for (const name of ['StockBridge', 'SlideActions']) {
     const file = path.join(VIEW, name + '.js');
     vm.runInContext(fs.readFileSync(file, 'utf8'), context, {filename: file});

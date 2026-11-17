@@ -126,7 +126,7 @@ function load(opts) {
     };
     sel.install(shell);
     const focus = list => (callbacks.asc_onFocusObject || []).forEach(f => f(list));
-    return {sel, nc, log, api, engine, rightmenu, focus, shell, warnings};
+    return {sel, nc, log, api, engine, rightmenu, focus, shell, warnings, ctx, asked: []};
 }
 
 const SLIDE = () => el('Slide', {get_LayoutIndex: 0});
@@ -332,6 +332,32 @@ test('change_settings_for_hidden_table_tab', () => {
     assert.equal(calls[0].props, tbl.value, 'TableSettings got not the props of the selected table');
     assert.equal(env.rightmenu.tableSettings.btnBackColor.color, 'fill-of-table', 'the table fields are empty with the panel collapsed');
     assert.equal(env.log.filter(c => c.tab === 'shape').length, 0, 'a table selection fed the shape tab');
+});
+
+/* With the properties card closed, a tab is fed only if the row shows its controls for the
+   selection (CompactToolbar.usesTab); with the card open — always (the card feeds the shown tab
+   itself on opening, SlideSections.showStock). */
+test('closed_card_feeds_only_the_tabs_the_toolbar_uses', () => {
+    const env = load();
+    const card = {open: false};
+    const uses = {shapeSettings: false, tableSettings: true, imageSettings: false};
+    const views = env.ctx.PE.Views;
+    views.SlideSections = {isOpen: () => card.open};
+    views.CompactToolbar = {usesTab: (tab, kind) => { env.asked.push(tab + ':' + kind); return uses[tab]; }};
+    const sh = shape();
+    env.focus([SLIDE(), sh]);
+    assert.equal(env.log.filter(c => c.tab === 'shape').length, 0, 'the shape tab is fed with the card closed and no toolbar control');
+    assert.ok(env.asked.includes('shapeSettings:shape'), 'the toolbar is not asked by the kind of the selection: ' + env.asked);
+    const tbl = el('Table', {get_Fill: 'fill-of-table'});
+    env.focus([SLIDE(), PARA(), tbl]);
+    assert.equal(env.log.filter(c => c.tab === 'table').length, 1, 'a tab the toolbar uses is not fed');
+    card.open = true;
+    env.focus([SLIDE(), sh]);
+    assert.equal(env.log.filter(c => c.tab === 'shape').length, 1, 'the open card does not get the shape props');
+    card.open = false;
+    env.log.length = 0;
+    env.focus([SLIDE(), sh]);
+    assert.equal(env.log.length, 0, 'fed again with the card closed');
 });
 
 test('no_tab_feeding_in_standard_interface', () => {

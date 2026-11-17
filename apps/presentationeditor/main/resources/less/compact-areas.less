@@ -992,10 +992,9 @@ body.vo-compact .tooltip:has(> .tooltip-inner > b) {
 /* As in documents: over the area, white 95 %, labels base-3, 30 between them.
    On the left the counter and language, "to the limit" goes to the first button after the labels;
    buttons have padding 7 for focus and an equal negative edge: labels are
-   exactly 30 apart. The edge icons are 107 wide at the right edge, without action. */
+   exactly 30 apart. There are no edge icons while they have no action: the row
+   padding on the right is the same as on the left. */
 body.vo-compact #vo-status {
-    padding-right: 0;
-
     .vo-st-item {
         white-space: nowrap;
         color: #828b95;                               /* base-3 */
@@ -1043,60 +1042,6 @@ body.vo-compact #vo-status {
     }
 
     .vo-st-item + .vo-st-btn { margin-left: auto; }
-
-    .vo-st-tools {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        width: 107px;
-        height: 24px;
-        margin-left: -6px;                            /* 30 → 24 */
-        flex: none;
-    }
-
-    .vo-st-ico {
-        position: relative;
-        display: flex;
-        width: 20px;
-        height: 20px;
-        color: #000;
-        opacity: .3;
-        cursor: pointer;
-
-        svg { display: block; }
-        &:hover { opacity: .6; }
-
-        /* The hover area is wider than the icon: 5 to the sides and the full row height. */
-        &::after {
-            content: '';
-            position: absolute;
-            inset: -5px;
-        }
-    }
-
-    .vo-st-close {
-        width: 24px;
-        height: 24px;
-
-        &::after { inset: -3px -10px -3px -5px; }
-    }
-
-    .vo-st-sep {
-        position: relative;
-        width: 5px;
-        height: 24px;
-        flex: none;
-
-        &::before {
-            content: '';
-            position: absolute;
-            left: 3px;
-            top: 4px;
-            width: 1px;
-            height: 16px;
-            background: rgba(0, 0, 0, .1);
-        }
-    }
 }
 
 /* Language list is above the language label; the material of shell popups. */

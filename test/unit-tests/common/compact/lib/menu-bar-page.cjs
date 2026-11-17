@@ -1,5 +1,6 @@
 /* Browser page with the shared compact menu bar over an editor adapter.
- * Headless Chrome through Playwright (NODE_PATH or PLAYWRIGHT_MODULE points to the package).
+ * Headless Chrome through Playwright (NODE_PATH or PLAYWRIGHT_MODULE points to the package;
+ * CHROMIUM_PATH optional).
  * The page has no jQuery, underscore or editor namespaces: MenuModel.js and MenuBar.js are
  * loaded as they are, with a small define() that hands over the shared modules by name.
  * The editor module (lib/editors.cjs, field adapter) is loaded into the page as well and
@@ -45,12 +46,14 @@ function playwright() {
 }
 
 /* Editors of lib/editors.cjs that describe their menu for the shared layer. */
+/* Editors whose menu bar is a row of sections (lib/editors.cjs, menuRow). */
 function editorsWithAdapter() {
-    return require('./editors.cjs').filter(e => e.adapter);
+    return require('./editors.cjs').filter(e => e.adapter && e.menuRow !== false);
 }
 
 async function launch() {
-    return playwright().chromium.launch({channel: 'chrome', headless: true});
+    return playwright().chromium.launch(process.env.CHROMIUM_PATH ?
+        {headless: true, executablePath: process.env.CHROMIUM_PATH} : {headless: true, channel: 'chrome'});
 }
 
 /* A new page with the menu bar of the editor.

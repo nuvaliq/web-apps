@@ -57,6 +57,16 @@ define([], function () {
             nc.on('shell:advanced', shell.guarded('modes: stock interface', function (advanced) {
                 if (advanced && me.current === 'view') me.leave();
             }));
+            /* When removing another lock reason (reconnect, version history),
+               the stock restores the top reason of the stack — our own "Viewing" — by a direct
+               call of Main.onEditingDisable, without a notification, and the ribbon mask
+               (Toolbar.DisableToolbar) suspends all shortcuts again.
+               The handler runs after the stock one: when "Viewing" is on top again,
+               the show and comment keys are woken up again. */
+            nc.on('editing:disable', shell.guarded('modes: view keys', function (disable, options, type) {
+                if (type === VIEW_TYPE || me.current !== 'view' || !me.viewOnTop()) return;
+                me.wakeKeys();
+            }));
         },
 
         mode: function () { return this.current; },
@@ -99,15 +109,28 @@ define([], function () {
             this.bit = this.canComment() ? R.OnlyComments : R.View;
             this.engineBit(this.bit, true);
             Common.NotificationCenter.trigger('editing:disable', true, this.viewOptions(true), VIEW_TYPE);
-            var keys = this.hotkeys(), sc = Common.util && Common.util.Shortcuts;
-            if (sc && typeof sc.resumeEvents === 'function') {
-                sc.resumeEvents(keys.preview);
-                if (this.canComment()) sc.resumeEvents(keys.comment);
-            }
+            this.wakeKeys();
             if (open) this.reopenPanel(open);
             this.viewerMenus();
             this.shell.setRow('toolbar', false, 'view');
             Common.NotificationCenter.trigger(this.MODE_EVENT, {mode: 'view'});
+        },
+
+        /* The show and comment keys stay alive in "Viewing", although the ribbon mask
+           suspends them. */
+        wakeKeys: function () {
+            var keys = this.hotkeys(), sc = Common.util && Common.util.Shortcuts;
+            if (!sc || typeof sc.resumeEvents !== 'function') return;
+            sc.resumeEvents(keys.preview);
+            if (this.canComment()) sc.resumeEvents(keys.comment);
+        },
+
+        /* Our own "Viewing" is the top reason of the stock lock stack. */
+        viewOnTop: function () {
+            var main = ctl('Main'), st = main && main.stackDisableActions;
+            if (!st || typeof st.length !== 'function' || typeof st.get !== 'function') return false;
+            var n = st.length(), top = n > 0 ? st.get(n - 1) : null;
+            return !!top && top.type === VIEW_TYPE;
         },
 
         leave: function () {

@@ -260,3 +260,14 @@
         }
     }
 }
+
+// Compact shell: styles for body.vo-compact and body.vo-boot.
+// The shared compact layer goes first (defaults, the menu bar and the About window), then the own
+// file with the values of the PDF viewer: a LESS variable takes its last
+// definition. The windows go last: the shared window template, the set for the stock windows
+// and the Document Info window, then the viewer's own windows (compact-windows.less).
+@import "../../../../common/main/resources/less/compact/tokens.less";
+@import "../../../../common/main/resources/less/compact/menu.less";
+@import "../../../../common/main/resources/less/compact/about.less";
+@import "compact-shell.less";
+@import "compact-windows.less";

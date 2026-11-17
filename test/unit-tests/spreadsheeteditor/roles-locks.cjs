@@ -157,9 +157,10 @@ class El {
     remove() { if (this.parentNode) this.parentNode.removeChild(this); }
     addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); }
     removeEventListener(t, fn) { const a = this.listeners[t] || []; const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); }
-    dispatch(t) {
-        const ev = {type: t, target: this, preventDefault() {}, stopPropagation() {}};
+    dispatch(t, extra) {
+        const ev = Object.assign({type: t, target: this, preventDefault() {}, stopPropagation() {}}, extra || {});
         (this.listeners[t] || []).slice().forEach(fn => fn.call(this, ev));
+        return ev;
     }
     click() { this.dispatch('click'); }
     descendants() { return this.children.flatMap(c => [c, ...c.descendants()]); }
@@ -178,10 +179,21 @@ function matchSimple(el, s) {
 }
 function matches(el, sel) {
     return sel.split(',').some(part => {
-        const chain = part.trim().split(/\s+/);
-        if (!matchSimple(el, chain[chain.length - 1])) return false;
+        const tokens = part.trim().split(/\s+/);
+        const chain = [];
+        const direct = [];
+        tokens.forEach(token => {
+            if (token === '>') { direct[chain.length - 1] = true; return; }
+            chain.push(token);
+        });
+        if (!chain.length || !matchSimple(el, chain[chain.length - 1])) return false;
         let node = el.parentNode;
         for (let i = chain.length - 2; i >= 0; i--) {
+            if (direct[i]) {
+                if (!node || !matchSimple(node, chain[i])) return false;
+                node = node.parentNode;
+                continue;
+            }
             while (node && !matchSimple(node, chain[i])) node = node.parentNode;
             if (!node) return false;
             node = node.parentNode;
@@ -502,6 +514,9 @@ function makeEnv(opt = {}) {
         flush() { let n = 0; while (timers.length && n++ < 100) timers.shift()(); },
         create() { shell.create(); env.flush(); return env; },
         modeButton() { return doc.querySelector('#vo-shell .vo-hd .vo-docmode .vo-mode'); },
+        editRequestButton() {
+            return doc.querySelector('#vo-shell .vo-hd .vo-hd-right > .vo-mode.accent');
+        },
         modeItem(v) { return doc.querySelector('#vo-shell .vo-docmode [data-mode="' + v + '"]'); },
         choose(v) { env.modeButton().click(); env.modeItem(v).click(); env.flush(); },
         bar() { return doc.getElementById('vo-tb'); },
@@ -646,6 +661,7 @@ test('reader_has_no_mode_switch', () => {
     /* A reader has no switch at all, as in Documents. A boolean, not a node: an assert message
        about a fake node would unfold the whole DOM. */
     assert.equal(!!env.modeButton(), false, 'reader has a mode switch');
+    assert.equal(!!env.editRequestButton(), false, 'plain reader has an edit request button in the header');
     assert.equal(!!env.doc.querySelector('#vo-shell .vo-hd .vo-docmode'), false, 'reader has .vo-docmode in the header');
     assert.equal(!!env.modeItem('edit'), false, 'reader is offered «Editing»');
     assert.equal(env.bar(), null, 'reader has a formatting toolbar');
@@ -705,6 +721,68 @@ test('request_edit_rights_by_stock_condition', () => {
         row.click();
         assert.deepEqual(env.log.filter(s => /^file |gateway/.test(s)), ['file edit', 'gateway: request edit rights'],
             'not one stock request: ' + JSON.stringify(env.log));
+        noWarnings(env);
+    }
+});
+
+test('header_edit_button_follows_request_edit_condition_and_locks', () => {
+    for (const isEdit of [false, true]) for (const canEdit of [false, true]) for (const req of [false, true]) {
+        const opts = {isEdit, canEdit, canRequestEditRights: req};
+        const env = makeEnv({reader: !isEdit, options: opts}).create();
+        const btn = env.editRequestButton();
+        const want = !isEdit && canEdit && req;
+        assert.equal(!!btn, want, 'header edit button presence differs from canRequestEdit for ' + JSON.stringify(opts));
+        if (isEdit) {
+            assert.ok(env.modeButton(), 'editor has no mode switch for ' + JSON.stringify(opts));
+        } else {
+            assert.equal(!!env.doc.querySelector('#vo-shell .vo-docmode'), false,
+                'reader has .vo-docmode wrapper for ' + JSON.stringify(opts));
+        }
+        if (!want) continue;
+
+        assert.equal(btn.textContent, env.shell.textEdit, 'header edit button caption');
+        assert.equal(btn.getAttribute('aria-disabled'), 'false', 'header edit button is initially aria-disabled');
+        assert.equal(btn.classList.contains('vo-locked'), false, 'header edit button is initially locked');
+        assert.ok(btn.getAttribute('aria-description'), 'header edit button has no aria-description');
+        assert.equal(btn.getAttribute('title'), null, 'header edit button must not use native title');
+
+        /* Mouse click sends exactly one edit request. */
+        env.log.length = 0;
+        btn.click();
+        assert.deepEqual(env.log.filter(s => /^file |gateway/.test(s)), ['file edit', 'gateway: request edit rights'],
+            'mouse click did not send one stock request: ' + JSON.stringify(env.log));
+
+        /* Enter and Space on the button each send one request and prevent default click synthesis. */
+        for (const key of ['Enter', ' ']) {
+            env.log.length = 0;
+            let prevented = false;
+            btn.dispatch('keydown', {key, target: btn, preventDefault() { prevented = true; }, stopPropagation() {}});
+            assert.equal(prevented, true, key + ' on header edit button did not call preventDefault');
+            assert.deepEqual(env.log.filter(s => /^file |gateway/.test(s)), ['file edit', 'gateway: request edit rights'],
+                key + ' did not send one stock request: ' + JSON.stringify(env.log));
+        }
+
+        /* Connection loss locks the button and blocks the request. */
+        env.main._state.isDisconnected = true;
+        env.NC.trigger('api:disconnect');
+        assert.equal(btn.classList.contains('vo-locked'), true, 'disconnected header edit button has no .vo-locked');
+        assert.equal(btn.getAttribute('aria-disabled'), 'true', 'disconnected header edit button has no aria-disabled=true');
+        env.log.length = 0;
+        btn.click();
+        btn.dispatch('keydown', {key: 'Enter', target: btn, preventDefault() {}, stopPropagation() {}});
+        assert.deepEqual(env.log.filter(s => /^file |gateway/.test(s)), [],
+            'locked header edit button sent a request on disconnect: ' + JSON.stringify(env.log));
+
+        /* Restoring connection unlocks it; losing the capability after build blocks the request and locks the button. */
+        env.main._state.isDisconnected = false;
+        env.NC.trigger('editing:disable', false, {}, 'reconnect');
+        assert.equal(btn.classList.contains('vo-locked'), false, 'reconnected header edit button stayed locked');
+        env.appOptions.canRequestEditRights = false;
+        env.log.length = 0;
+        btn.click();
+        assert.deepEqual(env.log.filter(s => /^file |gateway/.test(s)), [],
+            'header edit button sent a request after capability was lost: ' + JSON.stringify(env.log));
+        assert.equal(btn.classList.contains('vo-locked'), true, 'header edit button was not locked after capability loss');
         noWarnings(env);
     }
 });

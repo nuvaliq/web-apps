@@ -2226,6 +2226,16 @@ body.vo-ce-dragging * {
     }
 }
 
+/* The header Edit button sits in the right group without the mode-switch wrapper.
+   Same height, label size and tracking as the switch; padding is symmetric because there is no chevron.
+   #vo-back keeps the smaller .vo-mode metrics. */
+.vo-hd .vo-hd-right > .vo-mode {
+    height: @vo-h-ctrl;
+    padding: 0 @vo-hd-mode-pad-l;
+    font-size: @vo-fs-mode;
+    letter-spacing: @vo-track-mode;
+}
+
 #vo-back {
     margin: 0 8px;
     vertical-align: middle;

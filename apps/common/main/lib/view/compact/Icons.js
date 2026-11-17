@@ -111,7 +111,16 @@ define([], function () {
         background:1, borderDash:1, borderWeight:1, dateTime:1, duplicate:1, eyeOff:1, filmstrip:1,
         flipV:1, group:1, layout:1, newSlide:1, notes:1, pause:1, pencil:1, play:1, replaceImg:1,
         resetImg:1, rotateCcw:1, rotateCw:1, smartart:1, textAdd:1, textart:1, theme:1, transition:1,
-        ungroup:1
+        ungroup:1,
+
+        /* PDF viewer commands that the other editors do not have. Source — AIR ui.icon-set:
+             outline — demonstration = demonstration-on (the viewer "Full screen" button),
+               moreV = more-vertical-m (the "⋮" menu);
+             fitLandscape ("Fit to width") — the landscape drawing above with a ↔ arrow inside, from edge to edge.
+               AIR has no such drawing.
+           The other viewer commands take the names above: navigation — outline and chevronL, pages —
+           chevronL and chevronR, fit to page — fitPage. */
+        demonstration:1, fitLandscape:1, moreV:1
     };
 
     Common.UI.Compact.Icons = {

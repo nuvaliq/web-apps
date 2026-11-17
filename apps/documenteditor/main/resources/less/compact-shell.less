@@ -687,13 +687,14 @@ body.vo-compact #viewport {
 }
 
 /* Early start: the early-start class is set from the moment the config arrives (Gateway init) until
-   the shell is built on app:ready (CompactShell.announce/start). By that
-   time the stock has already removed the loading mask and would show its own title, ribbon,
-   status bar and side menus: they are hidden, and in place of the panel a frame is drawn:
-   heights are set on the areas by bootLayout, here is the color. A white header and menu bar
-   above a strip of the canvas color, as in the shell. The class is removed by endBoot: after
-   the build, after a create() failure or when the attempts run out; then
-   the stock interface comes back whole. */
+   the shell is built on app:ready (CompactShell.announce/start). The loading skeleton covers
+   the page during that time (CompactShell.announce keeps it under another id), but under it
+   the stock code shows its own title, ribbon, status bar and side menus after app:face:
+   they are hidden, and in place of the panel a frame is drawn: heights are set on the areas
+   by bootLayout, here is the color. A white header and menu bar above a strip of the canvas
+   color, as in the shell. The class is removed by endBoot: after the build, after a create()
+   failure, when the attempts run out or on an opening error; then the stock interface comes
+   back whole. */
 body.vo-boot {
     #app-title,
     #left-menu,
@@ -719,6 +720,14 @@ body.vo-boot {
     }
 
     #editor_sdk { background: @vo-canvas-bg; }
+}
+
+/* The stock loading plate ("Loading document" with a percentage) is not needed
+   during the claim: the loading indicator is the shell skeleton, which
+   CompactShell.announce keeps until the shell is built. */
+body.vo-boot .asc-loadmask,
+body.vo-boot .asc-loadmask-body {
+    display: none !important;
 }
 
 /* Smoothness of the shell and document area height change. */

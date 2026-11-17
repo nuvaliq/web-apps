@@ -4,7 +4,7 @@
  * (--ui-font-family-system) and no Inter over it, letter spacing only from the AIR scale
  * (--ui-text-letter-spacing-*: -0.03em, -0.02em, -0.01em, 0.025em, auto) and font sizes from the AIR scale.
  * The LESS sources of the shell (the shared tokens.less, menu.less and about.less, then compact-shell.less and the window
- * files it imports, in the import order of app.less) are read as text; two px letter spacings of the window
+ * files it imports with the shared window template, in the import order of app.less) are read as text; two px letter spacings of the window
  * files are known exceptions, named one by one; the compiled styles are checked in headless Chrome through
  * Playwright over fixtures/compact-shell-page.cjs (the real menu bar, outline rail and title fitting of the
  * shell), with the header title, the mode button, the toolbar value, the status button, the slash item and
@@ -21,7 +21,9 @@ const SOURCES = [
     'apps/common/main/resources/less/compact/menu.less',
     'apps/common/main/resources/less/compact/about.less',
     'apps/documenteditor/main/resources/less/compact-shell.less',
-    /* Imported at the end of compact-shell.less, in this order. */
+    /* Imported at the end of compact-shell.less, in this order; compact-windows.less starts with the
+       shared window template. */
+    'apps/common/main/resources/less/compact/windows.less',
     'apps/documenteditor/main/resources/less/compact-windows.less',
     'apps/documenteditor/main/resources/less/compact-bookmarks.less',
     'apps/documenteditor/main/resources/less/compact-watermark.less'
@@ -40,7 +42,7 @@ const AIR_SIZES = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 
    the compact windows and the small buttons of the watermark window. Any other value, or one of these changed,
    fails the check. */
 const TRACK_EXCEPTIONS = [
-    {file: 'compact-windows.less', raw: '@vo-win-title-ls', value: '-.2px'},
+    {file: 'windows.less', raw: '@vo-win-title-ls', value: '-.2px'},
     {file: 'compact-watermark.less', raw: '@vo-wm-sm-ls', value: '-.15px'}
 ];
 const isTrackException = d => TRACK_EXCEPTIONS.some(e => e.file === d.file && e.raw === d.raw && e.value === d.value);

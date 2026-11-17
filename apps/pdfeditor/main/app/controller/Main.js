@@ -50,6 +50,7 @@ define([
     'common/main/lib/component/Tooltip',
     'common/main/lib/controller/Fonts',
     'common/main/lib/util/LocalStorage',
+    'common/main/lib/util/utils',
     'common/main/lib/controller/FocusManager',
     'common/main/lib/controller/LaunchController',
     'common/main/lib/controller/HintManager',

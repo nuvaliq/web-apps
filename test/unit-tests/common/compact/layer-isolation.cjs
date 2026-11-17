@@ -1,6 +1,7 @@
 /* Run: node test/unit-tests/common/compact/layer-isolation.cjs [folder]
  * Shared compact files (every compact/ folder under apps/common) do not reach into an
- * editor: no editor application namespace and no key of the document editor menu catalog.
+ * editor: no editor application namespace and no key of the document or PDF editor menu
+ * catalog.
  * The editor builds its menu through its own adapter; the shared layer only knows the
  * contract. The optional argument scans another folder instead, for a negative control.
  * Nor do they know the disabled reasons of the document editor: the shared layer knows four
@@ -23,7 +24,9 @@ const CONTROLLER_FORBIDDEN = [
 const FORBIDDEN = [
     {what: 'document editor namespace', re: /(^|[^\w.$])DE\s*\./},
     {what: 'spreadsheet editor namespace', re: /(^|[^\w.$])SSE\s*\./},
-    {what: 'document editor menu catalog', re: /DocumentActions/}
+    {what: 'document editor menu catalog', re: /DocumentActions/},
+    {what: 'PDF editor namespace', re: /(^|[^\w.$])PDFE\s*\./},
+    {what: 'PDF editor menu catalog', re: /PdfActions/}
 ];
 
 /* Disabled reasons the document editor declares on top of the common ones: their codes as string
@@ -71,7 +74,7 @@ function check(name, fn) {
     catch (error) { console.error('FAIL', name, error.message); failed++; }
 }
 
-check('shared compact files mention no editor namespace or documents catalog key', () => {
+check('shared compact files mention no editor namespace or menu catalog key', () => {
     const files = process.argv[2] ? compactFiles(path.resolve(process.argv[2])) : compactFiles(COMMON);
     assert.ok(files.length, 'shared compact files exist');
     if (!process.argv[2])
@@ -99,11 +102,16 @@ check('the scan reports editor references', () => {
             'if (window.SSE) SSE.getController("Main");',
             "var key = 'DE.Views.DocumentActions.textFile';",
             'var ok = Common.UI.Compact.MenuModel; // MODE.x, SIDE.y',
-            'var b = obj.DE.x;'
+            'var b = obj.DE.x;',
+            'if (window.PDFE) PDFE.getController("Main");',
+            "var pdfKey = 'PDFE.Views.PdfActions.textFile';",
+            'var c = obj.PDFE.x; // PDFEX.y, MYPDFE.z'
         ].join('\n'));
         const found = scan(compactFiles(dir));
-        assert.equal(found.length, 4, found.join('\n'));
-        assert.ok(found.every(f => !/:4:|:5:/.test(f)), found.join('\n'));
+        assert.equal(found.length, 7, found.join('\n'));
+        assert.ok(found.every(f => !/:4:|:5:|:8:/.test(f)), found.join('\n'));
+        assert.deepEqual(found.filter(f => /PDF editor/.test(f)).map(f => f.replace(/^.*Probe\.js:/, '')),
+            ['6: PDF editor namespace', '7: PDF editor namespace', '7: PDF editor menu catalog'], found.join('\n'));
 
         const reasons = path.join(dir, 'compact', 'Reasons.js');
         fs.writeFileSync(reasons, [

@@ -1579,12 +1579,15 @@ define([
             var right = document.createElement('div');
             right.className = 'vo-hd-right';
             this.collabBtns = {};
+            this.editBtn = null;
             if (this.canHistory()) right.appendChild(this.buildCollabButton('history'));
             var download = this.buildDownload();
             if (download) right.appendChild(download);
             if (this.canSharing()) right.appendChild(this.buildCollabButton('sharing'));
             var mode = this.buildModeSwitch();
             if (mode) right.appendChild(mode);
+            var edit = !mode ? this.buildEditButton() : null;
+            if (edit) right.appendChild(edit);
 
             /* The hidden twin of the title: the field is fitted to the text width by it (fitTitle).
                The font is the same as the title's, no tracking (compact-shell.less,
@@ -3227,6 +3230,7 @@ define([
             if (this.tb && typeof this.tb.setLocked === 'function' && !!this.tb.locked !== mask) this.tb.setLocked(mask);
             if (this.menu) this.menu.refresh();
             this.applyModeLock();
+            this.applyEditButtonLock();
             this.applyCollabLock();
             this.refreshDownloadRows();
             this.applyRenameRight();
@@ -3499,6 +3503,58 @@ define([
             ui.btn.classList.toggle('vo-locked', lock);
             ui.btn.setAttribute('aria-disabled', lock ? 'true' : 'false');
             if (lock) this.closeModePopover();
+        },
+
+        /* Header "Edit" button for a reader who can request editing from the host:
+           the same entry condition and command as "File → Edit spreadsheet" (canRequestEdit,
+           SheetActions.requestEditRights). Built without .vo-docmode so the mode-switch
+           container stays exclusive to editing sessions. */
+        buildEditButton: function () {
+            var me = this;
+            this.editBtn = null;
+            if (!this.canRequestEdit()) return null;
+            var btn = document.createElement('button');
+            btn.setAttribute('type', 'button');
+            btn.className = 'vo-mode accent';
+            btn.textContent = this.textEdit;
+            var item = SheetActions.item('editDoc');
+            CompactToolbar.setTip(btn, (item && SheetActions.label(item)) || this.textEdit);
+            this.editBtn = btn;
+            this.applyEditButtonLock();
+            btn.addEventListener('click', guarded('shell: header edit', function (e) {
+                e && e.stopPropagation && e.stopPropagation();
+                me.runEditRequest();
+            }));
+            btn.addEventListener('keydown', guarded('shell: header edit key', function (e) {
+                if (!e || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || me.advanced) return;
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                e.stopPropagation();
+                me.runEditRequest();
+            }));
+            return btn;
+        },
+
+        editButtonLocked: function () {
+            return !this.canRequestEdit() || this.modeLocked();
+        },
+
+        applyEditButtonLock: function () {
+            var btn = this.editBtn;
+            if (!btn) return;
+            var lock = this.editButtonLocked();
+            btn.classList.toggle('vo-locked', lock);
+            btn.setAttribute('aria-disabled', lock ? 'true' : 'false');
+        },
+
+        runEditRequest: function () {
+            if (this.editButtonLocked()) {
+                this.applyEditButtonLock();
+                return;
+            }
+            this.closeSurfaces();
+            this.beforeCommand();
+            SheetActions.requestEditRights();
         },
 
         /* Stock on a ban and disconnect does not send a separate "shell — disable your own": the look
@@ -3883,6 +3939,7 @@ define([
 
         textCompact: 'Switch to compact view',
         textDocument: 'Spreadsheet',
+        textEdit: 'Edit',
         textMenuBar_ARIA: 'Menu',
         textModeEdit: 'Editing',
         textModeEditHint: 'Changes are applied immediately',

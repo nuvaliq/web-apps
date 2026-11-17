@@ -244,6 +244,189 @@
             50%  { opacity:1; }
             100% { opacity:0.5; }
         }
+        /* Compact shell skeleton. Drawn instead of the stock one for documents (PDF
+           forms keep the stock skeleton): the rows of the shell (name row 46px, menu
+           row 30px, toolbar card 44px at 80px) and the page where the editor draws it
+           at 100% zoom, so the shell takes the place of the skeleton without a jump.
+           The colours are literals of the shell palette and do not follow the
+           interface theme: the shell has no dark palette, and a dark skeleton before
+           a light editor reads as a flash. The shell keeps the skeleton (under another
+           id) until it is built, so the rules do not rely on the id.
+           The page does not know yet whether the shell will start: that is decided
+           by editorConfig.ui.shell, which arrives after the first paint. Every open
+           of a document through the platform carries the shell, so the skeleton is
+           drawn for all documents; a session without it (the platform and the image
+           disagree on the shell value) shows this skeleton and then the stock
+           interface. */
+        body > .loadmask.sk-shell {
+            background: #eef2f4;                    /* bg-content-tertiary */
+        }
+
+        .loadmask.sk-shell > .brendpanel,
+        .loadmask.sk-shell > .sktoolbar,
+        .loadmask.sk-shell > .placeholder {
+            display: none !important;
+        }
+
+        .loadmask > .skc {
+            display: none;
+        }
+
+        .loadmask.sk-shell > .skc {
+            display: block;
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+        }
+
+        .rtl .loadmask.sk-shell > .skc {
+            transform: scaleX(-1);
+        }
+
+        .skc-band {
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 76px;
+            background: #fff;                       /* bg-content-primary */
+        }
+
+        .skc-card {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            left: 20px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .9);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .15);
+            overflow: hidden;
+        }
+
+        /* Half the page and half the 14px vertical scrollbar of the canvas. */
+        .skc-page {
+            position: absolute;
+            top: 152px;
+            bottom: 0;
+            left: 50%;
+            width: 794px;
+            margin-left: -404px;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .sk-view .skc-card {
+            display: none;
+        }
+
+        .sk-view .skc-page {
+            top: 104px;
+        }
+
+        /* One light band runs over all the bars at once: the gradient is fixed to
+           the viewport, so it does not restart in every bar. */
+        .skc i {
+            position: absolute;
+            display: block;
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, .1);
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, .55) 50%, rgba(255, 255, 255, 0) 65%);
+            background-size: 200vw 100%;
+            background-attachment: fixed;
+            animation: skc-flow 2.4s linear infinite;
+        }
+
+        .skc-band .skc-title {
+            top: 16px;
+            left: 20px;
+            width: 168px;
+            height: 14px;
+        }
+
+        .skc-band .skc-icon {
+            top: 15px;
+            right: 206px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc-band .skc-mode {
+            top: 9px;
+            right: 20px;
+            width: 165px;
+            height: 32px;
+            border-radius: 8px;
+        }
+
+        .sk-view .skc-band .skc-mode {
+            display: none;
+        }
+
+        .sk-view .skc-band .skc-icon {
+            right: 22px;
+        }
+
+        .skc-menu {
+            position: absolute;
+            top: 51px;
+            left: 20px;
+            display: flex;
+            gap: 30px;
+        }
+
+        .skc-menu i {
+            position: relative;
+            flex: none;
+            height: 10px;
+        }
+
+        .sk-view .skc-menu .skc-edit {
+            display: none;
+        }
+
+        .skc-card i {
+            top: 12px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc-card i.skc-field {
+            top: 17px;
+            height: 10px;
+        }
+
+        .skc-card i.skc-end {
+            right: 11px;
+        }
+
+        .skc-page i {
+            right: 96px;
+            left: 96px;
+            height: 8px;
+            border-radius: 3px;
+        }
+
+        .skc-page i.skc-heading {
+            right: auto;
+            width: 300px;
+            height: 14px;
+        }
+
+        @keyframes skc-flow {
+            from { background-position: -100vw 0; }
+            to   { background-position: 100vw 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .skc i {
+                animation: none;
+                background-image: none;
+            }
+        }
+
     </style>
 
     <script>
@@ -324,7 +507,9 @@
     <script src="../../../../../apps/common/main/lib/util/htmlutils.js?__inline=true"></script>
     <script src="../../../../../apps/common/main/lib/util/docserviceworker.js?__inline=true"></script>
 
-    <div id="loading-mask" class="loadmask"><div class="brendpanel" style="display: none;"><div><div class="spacer"></div></div><div><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span></div></div>
+    <div id="loading-mask" class="loadmask sk-shell">
+        <div class="skc"><div class="skc-band"><i class="skc-title"></i><i class="skc-icon"></i><i class="skc-mode"></i><div class="skc-menu"><i style="width:33px"></i><i style="width:46px"></i><i style="width:24px"></i><i class="skc-edit" style="width:50px"></i><i class="skc-edit" style="width:50px"></i><i style="width:124px"></i><i style="width:53px"></i></div></div><div class="skc-card"><i style="left:11px"></i><i style="left:49px"></i><i style="left:87px"></i><i style="left:125px"></i><i class="skc-field" style="left:166px;width:40px"></i><i class="skc-field" style="left:276px;width:64px"></i><i class="skc-field" style="left:396px;width:72px"></i><i class="skc-field" style="left:536px;width:22px"></i><i style="left:624px"></i><i style="left:662px"></i><i style="left:700px"></i><i style="left:738px"></i><i style="left:776px"></i><i style="left:814px"></i><i style="left:872px"></i><i style="left:910px"></i><i style="left:964px"></i><i style="left:1011px"></i><i style="left:1078px"></i><i style="left:1149px"></i><i style="left:1187px"></i><i style="left:1225px"></i><i style="left:1283px"></i><i class="skc-end"></i></div><div class="skc-page"><i class="skc-heading" style="top:96px"></i><i style="top:132px"></i><i style="top:154px"></i><i style="top:176px"></i><i style="top:198px;right:220px"></i><i style="top:242px"></i><i style="top:264px"></i><i style="top:286px"></i><i style="top:308px;right:220px"></i><i style="top:352px"></i><i style="top:374px"></i><i style="top:396px"></i><i style="top:418px"></i><i style="top:440px;right:300px"></i><i style="top:484px"></i><i style="top:506px"></i><i style="top:528px;right:300px"></i><i style="top:572px"></i><i style="top:594px"></i><i style="top:616px"></i><i style="top:638px;right:220px"></i><i style="top:682px"></i><i style="top:704px"></i><i style="top:726px"></i><i style="top:748px"></i><i style="top:770px;right:300px"></i><i style="top:814px"></i><i style="top:836px"></i><i style="top:858px;right:300px"></i><i style="top:902px"></i><i style="top:924px"></i><i style="top:946px"></i><i style="top:968px;right:220px"></i><i style="top:1012px"></i><i style="top:1034px"></i><i style="top:1056px"></i><i style="top:1078px;right:220px"></i><i style="top:1122px"></i><i style="top:1144px"></i><i style="top:1166px"></i><i style="top:1188px"></i><i style="top:1210px;right:300px"></i><i style="top:1254px"></i><i style="top:1276px"></i><i style="top:1298px;right:300px"></i></div></div>
+        <div class="brendpanel" style="display: none;"><div><div class="spacer"></div></div><div><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span></div></div>
     <div id="sktoolbar" class="sktoolbar" style="display: none;"><section class="box-controls"><ul><li class="compact" style="width: 30px;display: none;"></li><li class="compact space" style="display: none;"></li><li class="compact" style="width: 90px;display: none;"></li><li class="not-compact" style="width: 63px;"></li><li class="space"></li><li style="width: 234px;"></li><li class="space"></li><li style="width: 189px;"></li><li class="fat"></li></ul><ul><li class="compact" style="width: 30px;display: none;"></li><li class="compact space" style="display: none;"></li><li class="compact" style="width: 90px;display: none;"></li><li class="not-compact" style="width: 63px;"></li><li class="space"></li><li style="width: 234px;"></li><li class="space"></li><li style="width: 189px;"></li></ul></section></div>
     <div id="sktoolbar-pdf" class="sktoolbar" style="display: none;"><section class="box-controls"><ul><li class="compact" style="width: 30px;display: none;"></li><li class="compact space" style="display: none;"></li><li class="compact" style="width: 90px;display: none;"></li><li class="not-compact" style="width: 63px;"></li><li class="space" style="width: 98px;"></li><li style="width: 105px;"></li><li class="space"></li><li style="width: 160px;"></li></ul><ul><li class="compact" style="width: 30px;display: none;"></li><li class="compact space" style="display: none;"></li><li class="compact" style="width: 90px;display: none;"></li><li class="not-compact" style="width: 63px;"></li><li class="space"></li><li class="big"/><li class="big"/><li class="space"></li><li style="width: 105px;"></li><li class="space"></li><li style="width: 160px;"></li></ul></section></div>
     <div class="placeholder" style="display: none;"><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div></div></div>
@@ -338,11 +523,17 @@
             tabBackground = params["tabBackground"],
             fillforms = params["mode"] == 'fillforms',
             visible = true,
-            // Compact shell: neutral skeleton for documents. The editor config (and with it
-            // ui.shell) is not known yet, so the stock ribbon and title silhouettes would
-            // flash before the compact shell. Only the loader (background and page
-            // placeholder) is drawn. PDF forms keep the stock skeleton.
+            // Compact shell: the stock ribbon and title silhouettes would flash before the
+            // compact shell, so documents get the skeleton of the shell itself (the
+            // sk-shell class is in the markup from the first paint). The editor config is
+            // not known yet; the mode is: view mode has no toolbar card. PDF forms keep
+            // the stock skeleton.
             neutral = !(isForm || fillforms);
+
+        if (!neutral)
+            document.getElementById('loading-mask').classList.remove('sk-shell');
+        else if (view)
+            document.getElementById('loading-mask').classList.add('sk-view');
 
         isForm && document.body.classList.add('pdf-form');
         if (compact || view || notoolbar) {

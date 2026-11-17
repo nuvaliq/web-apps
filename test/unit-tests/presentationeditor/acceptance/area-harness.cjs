@@ -31,10 +31,13 @@ const VIEW_DIR = path.join(APP, 'app/view');
 const LESS_DIR = path.join(APP, 'resources/less');
 const LOCALE_DIR = path.join(APP, 'locale');
 
-const SHELL_MODULES = ['CompactShell', 'StockBridge', 'SlideActions', 'SlideSelection',
+const SHELL_MODULES = ['CompactShell', 'StockBridge', 'SlideActions', 'CompactMenuAdapter', 'SlideSelection',
     'CompactToolbar', 'SlideSections', 'CompactLeft', 'CompactStatus', 'CompactModes', 'CompactWindows', 'DocInfoWindow'];
 /* Shared compact layer modules that the shell takes instead of its own: name → file; the module is Common.UI.Compact.<name>. */
-const SHARED_MODULES = {Icons: path.join(ROOT, 'apps/common/main/lib/view/compact/Icons.js')};
+const SHARED_COMPACT = path.join(ROOT, 'apps/common/main/lib/view/compact');
+const SHARED_MODULES = {Icons: path.join(SHARED_COMPACT, 'Icons.js'), MenuModel: path.join(SHARED_COMPACT, 'MenuModel.js'),
+    AdapterKit: path.join(SHARED_COMPACT, 'AdapterKit.js'), MenuBar: path.join(SHARED_COMPACT, 'MenuBar.js'),
+    Windows: path.join(SHARED_COMPACT, 'Windows.js')};
 const SHELL_LESS = ['compact-shell.less', 'compact-menu.less', 'compact-toolbar.less',
     'compact-panel.less', 'compact-areas.less', 'compact-galleries.less', 'compact-windows.less'];
 

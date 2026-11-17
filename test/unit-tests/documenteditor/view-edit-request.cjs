@@ -7,8 +7,9 @@
  * sessions opened for editing keep the stock options.
  * Main.js does not load in vm: onEditorPermissions of each editor is cut out of the source and run in vm on stubs;
  * the options are recorded where the views receive them (applyModeCommonElements, app:face, the end of the call).
- * The entry conditions of Header.js and FileMenu.js are cut out of the source and evaluated on those options;
- * DocumentActions.js and CompactShell.js load in vm as they are.
+ * The entry conditions of Header.js and FileMenu.js are cut out of the source and evaluated on those options.
+ * The spreadsheet compact header offers Edit only when CompactShell.buildEditButton is gated by
+ * canRequestEdit. DocumentActions.js and the document CompactShell.js load in vm as they are.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -200,6 +201,22 @@ for (const type of TYPES) {
 }
 const fileMenuOffersEdit = (type, options) => fileMenuConditions[type].call({mode: options});
 
+/* Spreadsheet compact header: the same canRequestEdit the "File" item uses, and only once
+   buildEditButton refuses to build without that condition. */
+const SHEET_SHELL = 'apps/spreadsheeteditor/main/app/view/CompactShell.js';
+const sheetShellSource = read(SHEET_SHELL);
+const sheetCanRequestEdit = (() => {
+    const m = /canRequestEdit:\s*function\s*\(\)\s*\{([\s\S]*?)\n        \},/.exec(sheetShellSource);
+    assert.ok(m, 'SSE CompactShell.js defines canRequestEdit');
+    return vm.runInNewContext(
+        '(function (options) {\n' +
+        '  var SSE = {getController: function () { return {appOptions: options || {}}; }};\n' +
+        m[1] + '\n})',
+        {});
+})();
+const sheetEditButtonGated = /buildEditButton:\s*function\s*\(\)\s*\{[\s\S]*?if\s*\(\s*!this\.canRequestEdit\(\)\s*\)\s*return null/.test(sheetShellSource);
+const sheetHeaderOffersEdit = r => sheetEditButtonGated && sheetCanRequestEdit(r.seen.final);
+
 /* The compact shell and its menu, loaded as they are. */
 let compactMain = {appOptions: {}, editorConfig: {}};
 const compactContext = {
@@ -252,6 +269,7 @@ const compactOffersEdit = r => compactMenu(r).some(group => group.items.includes
 function entries(type, r) {
     const list = {header: headerOffersEdit(faceOptions(r)), fileMenu: fileMenuOffersEdit(type, fileMenuOptions(type, r))};
     if (type === 'docx') list.compact = compactOffersEdit(r);
+    if (type === 'xlsx') list.sheetHeader = sheetHeaderOffersEdit(r);
     return list;
 }
 const noEntries = (type, r) => Object.fromEntries(Object.keys(entries(type, r)).map(k => [k, false]));
@@ -421,6 +439,18 @@ check('test_sheet_and_slide_headers_offer_edit_button_in_view_session', () => {
             assert.equal(headerOffersEdit(r.seen.face), true,
                 type + ' ' + shell + ': the header has the edit button (canEdit=' + r.seen.face.canEdit + ')');
         }
+});
+
+check('test_xlsx_compact_header_follows_can_request_edit', () => {
+    for (const shell of SHELLS) {
+        const r = run('xlsx', VIEW_SESSION(shell));
+        assert.equal(entries('xlsx', r).sheetHeader, true,
+            'xlsx ' + shell + ': the compact header offers Edit when the session can request editing');
+    }
+    const editor = run('xlsx', session({mode: 'edit', edit: true, review: true, config: withShell('modern')}));
+    assert.equal(entries('xlsx', editor).sheetHeader, false, 'an editing session has no extra header Edit button');
+    const plain = run('xlsx', session({config: withShell('modern', {canRequestEditRights: false})}));
+    assert.equal(entries('xlsx', plain).sheetHeader, false, 'without the request right the compact header has no Edit button');
 });
 
 check('test_file_menus_offer_edit_item_in_view_session', () => {

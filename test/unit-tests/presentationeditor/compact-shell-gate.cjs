@@ -59,7 +59,7 @@ class El {
     all() { return this.childNodes.reduce((a, c) => a.concat([c], c.all()), []); }
 }
 
-let doc, main, viewport, leftMenu, handlers, timers, warnings, installs, tb, st, layouts, resized;
+let doc, main, viewport, leftMenu, holder, handlers, timers, warnings, installs, tb, st, layouts, resized;
 const panel = h => { const p = {height: h, writes: [], el: {css: (k, v) => p.writes.push(v)}}; return p; };
 
 const context = {
@@ -67,6 +67,7 @@ const context = {
         if (name === 'Main') return main;
         if (name === 'Viewport') return viewport;
         if (name === 'LeftMenu') return leftMenu;
+        if (name === 'DocumentHolder') return holder;
         return null;
     }},
     _,
@@ -92,6 +93,9 @@ context.define = (deps, factory) => factory();
 /* Icons are the shared editor set (Common.UI.Compact.Icons): a module of the shared compact layer. */
 const SHARED_ICONS = path.join(ROOT, 'apps/common/main/lib/view/compact/Icons.js');
 vm.runInContext(fs.readFileSync(SHARED_ICONS, 'utf8'), context, {filename: SHARED_ICONS});
+/* The window mechanics of the CompactWindows zone are shared (Common.UI.Compact.Windows). */
+const SHARED_WINDOWS = path.join(ROOT, 'apps/common/main/lib/view/compact/Windows.js');
+vm.runInContext(fs.readFileSync(SHARED_WINDOWS, 'utf8'), context, {filename: SHARED_WINDOWS});
 for (const name of ZONES) {
     const file = path.join(VIEW, name + '.js');
     vm.runInContext(fs.readFileSync(file, 'utf8'), context, {filename: file});
@@ -216,15 +220,15 @@ check('announce_tunes_stock_settings', () => {
     assert.deepEqual(plain.customization, {plugins: true}, 'without the shell the config is untouched');
     assert.equal((handlers['gateway:opendocument'] || []).length, 0);
 
-    /* With the shell: plugins, "Suggest a feature" and "New" hints are removed;
-       the integrator's nested objects are copies, other keys stay in place. */
+    /* With the shell: "Suggest a feature" and "New" hints are removed, plugins stay
+       stock; the integrator's nested objects are copies, other keys stay in place. */
     fresh({});
     const own = {logo: {image: 'x'}, features: {spellcheck: {mode: true}}};
     const cfg = {ui: {shell: 'modern'}, customization: own};
     shell.announce(cfg);
     assert.notEqual(cfg.customization, own, 'the integrator object is replaced by a copy');
     assert.deepEqual(own, {logo: {image: 'x'}, features: {spellcheck: {mode: true}}}, 'the integrator object is untouched');
-    assert.equal(cfg.customization.plugins, false);
+    assert.equal('plugins' in cfg.customization, false, 'the shell switches the plugins off');
     assert.equal(cfg.customization.suggestFeature, false);
     assert.deepEqual(plainObj(cfg.customization.features), {spellcheck: {mode: true}, featuresTips: false});
     assert.equal(cfg.customization.logo, own.logo, 'other keys are kept');
@@ -232,12 +236,50 @@ check('announce_tunes_stock_settings', () => {
     fresh({});
     const bare = {ui: {shell: 'modern'}};
     shell.announce(bare);
-    assert.deepEqual(plainObj(bare.customization), {plugins: false, suggestFeature: false, features: {featuresTips: false}});
+    assert.deepEqual(plainObj(bare.customization), {suggestFeature: false, features: {featuresTips: false}});
 
-    /* "Protect" is the protect right in the copy of the Main rights, after its loadDocument. */
+    fresh({});
+    const withPlugins = {ui: {shell: 'modern'}, customization: {plugins: true}};
+    shell.announce(withPlugins);
+    assert.equal(withPlugins.customization.plugins, true, 'the plugins of the integrator are kept');
+
+    /* "Protect" is a stock right: the copy of the Main rights is not changed. */
     main.permissions = {edit: true, protect: true};
     (handlers['gateway:opendocument'] || []).forEach(f => f({doc: {}}));
-    assert.deepEqual(main.permissions, {edit: true, protect: false});
+    assert.deepEqual(main.permissions, {edit: true, protect: true}, 'the protect right is taken away');
+});
+
+/* Plugins and "Protect" stay stock, the compact shell hides only their items: "AI" of the context menu
+   (the AI plugin items do not reach the stock updateCustomItems) and "Protect" of the "File" screen —
+   by a rule under body.vo-compact. In the "Stock interface" the "AI" item is in place, other plugin items —
+   always. */
+check('ai_item_and_protect_hidden_only_in_compact', () => {
+    fresh(SHELL);
+    const got = [];
+    /* As in the stock: the view prototype first has a stub, the real method comes later. */
+    const proto = {updateCustomItems() { got.push('stub'); }};
+    const view = Object.create(proto);
+    holder = {documentHolder: view};
+    try {
+        shell.hideAiItem();
+        shell.hideAiItem();
+        proto.updateCustomItems = function (menu, data) { got.push(data.map(d => d.guid)); };
+        const AI = 'asc.{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007}';
+        const data = () => [{guid: AI, items: [{text: 'AI'}]}, {guid: 'asc.{other}', items: [{text: 'Other'}]}];
+        doc.body.classList.add('vo-compact');
+        view.updateCustomItems({}, data());
+        assert.deepEqual(got.pop(), ['asc.{other}'], 'the AI item reaches the menu in the compact shell');
+        shell.advanced = true;
+        doc.body.classList.remove('vo-compact');
+        view.updateCustomItems({}, data());
+        assert.deepEqual(got.pop(), [AI, 'asc.{other}'], 'the stock interface loses the AI item');
+        assert.equal(got.length, 0, 'the stock method is wrapped twice');
+    } finally {
+        holder = null;
+    }
+    const less = fs.readFileSync(path.join(ROOT, 'apps/presentationeditor/main/resources/less/compact-shell.less'), 'utf8');
+    const rule = /body\.vo-compact #file-menu-panel #fm-btn-rights,\s*body\.vo-compact #file-menu-panel #fm-btn-protect\s*\{\s*display:\s*none !important;/;
+    assert.ok(rule.test(less), 'no compact rule hiding «Protect» on the File screen');
 });
 
 check('boot_heights_on_app_face_stock_back_on_end_boot', () => {

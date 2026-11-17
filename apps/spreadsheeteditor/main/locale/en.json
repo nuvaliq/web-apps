@@ -2936,6 +2936,7 @@
   "SSE.Views.ColumnHeaderMenu.textColumnMenu_ARIA": "Column {0}",
   "SSE.Views.CompactShell.textCompact": "Switch to compact view",
   "SSE.Views.CompactShell.textDocument": "Spreadsheet",
+  "SSE.Views.CompactShell.textEdit": "Edit",
   "SSE.Views.CompactShell.textMenuBar_ARIA": "Menu",
   "SSE.Views.CompactShell.textModeEdit": "Editing",
   "SSE.Views.CompactShell.textModeEditHint": "Changes are applied immediately",

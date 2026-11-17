@@ -1,6 +1,7 @@
 /* Run after the editor LESS build:
  *   COMPACT_CSS_DOCUMENTEDITOR=<deploy>/apps/documenteditor/main/resources/css/app.css \
  *   COMPACT_CSS_SPREADSHEETEDITOR=<deploy>/apps/spreadsheeteditor/main/resources/css/app.css \
+ *   COMPACT_CSS_PDFEDITOR=<deploy>/apps/pdfeditor/main/resources/css/app.css \
  *     node test/unit-tests/common/compact/about-window.cjs
  * The compact About window of the shared layer (lib/view/compact/AboutWindow.js): a stock
  * Common.UI.Window 520 wide without a footer; its body is Common.Views.About.prototype.contentHtml(),
@@ -38,7 +39,8 @@ const BRAND = /onlyoffice/i;
  *  - radius — the popup radius of the editor (@vo-r-pop of its compact-shell.less). */
 const EDITORS = [
     {name: 'documenteditor', app: 'apps/documenteditor/main', cssEnv: 'COMPACT_CSS_DOCUMENTEDITOR', radius: '12px'},
-    {name: 'spreadsheeteditor', app: 'apps/spreadsheeteditor/main', cssEnv: 'COMPACT_CSS_SPREADSHEETEDITOR', radius: '18px'}
+    {name: 'spreadsheeteditor', app: 'apps/spreadsheeteditor/main', cssEnv: 'COMPACT_CSS_SPREADSHEETEDITOR', radius: '18px'},
+    {name: 'pdfeditor', app: 'apps/pdfeditor/main', cssEnv: 'COMPACT_CSS_PDFEDITOR', radius: '12px'}
 ];
 
 const read = f => fs.readFileSync(f, 'utf8');

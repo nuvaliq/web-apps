@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 
 const VIEW = path.resolve(__dirname, '../../../apps/documenteditor/main/app/view');
 
-let main = null, viewport = null, shellNode = null;
+let main = null, viewport = null, shellNode = null, maskNode = null;
 const classes = new Set();
 const handlers = {};
 const timers = [];
@@ -35,7 +35,7 @@ const context = {
             add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c),
             toggle: (c, on) => ((on === undefined ? !classes.has(c) : on) ? classes.add(c) : classes.delete(c))
         }},
-        getElementById: id => (id === 'vo-shell' ? shellNode : null)
+        getElementById: id => (id === 'vo-shell' ? shellNode : maskNode && maskNode.id === id ? maskNode : null)
     },
     $: jq,
     setTimeout: f => timers.push(f),
@@ -69,6 +69,7 @@ function fresh(cfg, appOptions = {isEdit: true, customization: {}}) {
     for (const k of Object.keys(handlers)) delete handlers[k];
     timers.length = 0;
     shellNode = null;
+    maskNode = null;
     shell.boot = null; shell.booted = false; shell.startupFailed = false;
     main = {editorConfig: cfg, appOptions};
     tb = panel(112); tb.el.owner = tb;
@@ -120,6 +121,92 @@ check('announce: request class only for ui.shell, one subscription', () => {
     assert.equal(classes.has('vo-boot'), true);
     assert.equal((handlers['app:face'] || []).length, 1);
 });
+/* The loading skeleton from index.html: the #loading-mask node the stock code removes by id. */
+function mask() {
+    const node = {id: 'loading-mask', removed: false};
+    node.parentNode = {removeChild: n => { n.removed = true; if (maskNode === n) maskNode = null; }};
+    return node;
+}
+check('loading skeleton: kept from the stock under another id until endBoot', () => {
+    fresh({ui: {mode: 'compact'}});
+    const stock = maskNode = mask();
+    shell.announce({ui: {mode: 'compact'}});
+    assert.equal(stock.id, 'loading-mask', 'without the shell the stock removes it as before');
+
+    fresh(SHELL);
+    const held = maskNode = mask();
+    shell.announce(SHELL);
+    assert.equal(held.id, 'vo-loading');
+    assert.equal(context.document.getElementById('loading-mask'), null, 'the stock lookup misses it');
+    face();
+    assert.equal(held.removed, false, 'app:face does not take it');
+    shell.endBoot(false);
+    assert.equal(held.removed, true, 'the hand-over frame takes it');
+
+    fresh(SHELL);
+    const failed = maskNode = mask();
+    shell.announce(SHELL);
+    shell.endBoot(true);
+    assert.equal(failed.removed, true, 'the fail-safe takes it too');
+
+    fresh(SHELL);
+    shell.announce(SHELL);
+    assert.doesNotThrow(() => shell.endBoot(true), 'no skeleton on the page');
+});
+/* An opening error arrives before app:ready, and no app:ready follows it: the error
+   itself has to remove the skeleton and the claim, otherwise the stock window hangs
+   over the skeleton and the loading band keeps running after OK. */
+check('loading skeleton: an opening error before the shell takes it and the request', () => {
+    const errors = [];
+    const fire = (...args) => errors.forEach(f => f(...args));
+    const session = () => {
+        fresh(SHELL);
+        errors.length = 0;
+        viewport.api.asc_registerCallback = (name, fn) => { if (name === 'asc_onError') errors.push(fn); };
+        const node = maskNode = mask();
+        shell.announce(SHELL);
+        return node;
+    };
+
+    const late = session();
+    face();
+    assert.equal(errors.length, 1, 'one error subscription per session');
+    assert.notEqual(tb.height, 112, 'the skeleton heights are on');
+    fire(-4, 2);
+    assert.equal(late.removed, true, 'the skeleton does not stay under the error window');
+    assert.equal(classes.has('vo-boot'), false, 'the stock interface is back under the window');
+    assert.equal(tb.height, 112, 'stock heights are back');
+    assert.equal(st.height, 25);
+    assert.doesNotThrow(() => fire(-4, 2), 'a second error is harmless');
+
+    const early = session();
+    fire(-4, 2);
+    assert.equal(early.removed, true, 'an error before app:face takes it too');
+    assert.equal(classes.has('vo-boot'), false);
+    face();
+    assert.equal(tb.height, 112, 'a late app:face does not lay out the skeleton again');
+    const saved = shell.create;
+    try {
+        assert.equal(run(() => { shellNode = {}; }), 1, 'a load that still reaches app:ready gets the shell');
+    } finally {
+        shell.create = saved;
+    }
+
+    session();
+    face();
+    shell.endBoot(false);
+    classes.add('vo-compact');
+    const before = layouts;
+    fire(-4, 2);
+    assert.equal(classes.has('vo-compact'), true, 'after the shell is built errors are the stock business');
+    assert.equal(layouts, before, 'and they do not re-lay the shell');
+
+    fresh(SHELL);
+    viewport.api = {Resize: () => {}};
+    assert.doesNotThrow(() => shell.announce(SHELL), 'an engine without callbacks');
+    assert.equal(classes.has('vo-boot'), true);
+});
+
 check('skeleton: shell heights on app:face, stock heights back on endBoot(true)', () => {
     fresh(SHELL);
     shell.announce(SHELL);

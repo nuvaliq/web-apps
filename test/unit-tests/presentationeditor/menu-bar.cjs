@@ -1,13 +1,16 @@
 /* Run: node test/unit-tests/presentationeditor/menu-bar.cjs [path to SlideActions.js]
- * The presentation shell menu bar in #vo-menubar: a submenu is a snapshot of the stock menu at the moment of
- * opening, a click is a lock recheck and one stock call, galleries are the twin's stock
- * popup list, the reason of a disabled item is visible before pressing, a long list
- * is scrolled by its own wheel handler.
+ * The presentation shell menu bar in #vo-menubar is the shared compact layer menu bar
+ * (Common.UI.Compact.MenuBar) with the presentation adapter: a submenu is a snapshot of the stock menu at the
+ * moment of opening, a click is a lock recheck and one stock call, galleries are the twin's stock
+ * popup list, the reason of a disabled item is visible before pressing, the wheel over
+ * a long list scrolls the list and does not reach the page, F10 and the arrows reach every
+ * section, item shortcuts come from the stock registry.
  *
  * The world is a fake stock editor from the shared shell check fixtures
  * (acceptance/mode-harness.cjs). The optional argument is a corrupted copy of the module for
  * a negative control: a copy that takes the submenu once from the start must fail
- * submenu_from_live_stock_menu.
+ * submenu_from_live_stock_menu; SlideActions with its own menu bar must fail
+ * keyboard_reaches_every_section_from_f10 and shortcuts_come_from_the_stock_registry.
  */
 'use strict';
 
@@ -32,8 +35,9 @@ const DIR = viewDir();
 const RU = {textEdit: 'Правка', textSlide: 'Слайд', textArrange: 'Упорядочить', textReview: 'Рецензирование', textFormat: 'Формат',
     textSelectObject: 'Выделите объект на слайде'};
 
-function world(opts) {
+function world(opts, {pointerEvents = true} = {}) {
     const w = h.createWorld(opts || {edit: true}, {viewDir: DIR});
+    if (pointerEvents) w.ctx.onpointerdown = null;
     Object.assign(w.modules.SlideActions, RU);
     h.boot(w);
     w.SA = w.modules.SlideActions;
@@ -64,6 +68,60 @@ function stockItem(w, label, caption) {
 }
 
 const tests = [
+    {name: 'canvas_press_without_mousedown_closes_menu', fn() {
+        const w = world();
+        const canvas = h.byId(w, 'id_viewer');
+        canvas.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        open(w, 'Формат');
+        assert.equal(w.SA.isMenuOpen(), true);
+        const press = h.makeEvent(w.doc, 'pointerdown');
+        h.dispatch(canvas, press);
+        assert.equal(press.defaultPrevented, true, 'the canvas still handles the press');
+        assert.equal(w.SA.isMenuOpen(), false, 'the menu closes without a compatibility mousedown');
+        assert.equal(sectionBtn(w, 'Формат').getAttribute('aria-expanded'), 'false');
+    }},
+
+    {name: 'press_inside_menu_or_gallery_keeps_menu_open', fn() {
+        const w = world();
+        const gallery = w.doc.createElement('div');
+        w.doc.body.appendChild(gallery);
+        const closed = [];
+        w.B.gallery = () => true;
+        w.B.galleryOwns = node => gallery.contains(node);
+        w.B.closeGallery = how => { closed.push(how); };
+        const drop = open(w, 'Слайд');
+        h.click(w, row(drop, 'changeLayout'));
+        for (const target of [drop, gallery]) {
+            const where = target === drop ? 'menu' : 'gallery';
+            const press = h.makeEvent(w.doc, 'pointerdown');
+            assert.equal(h.dispatch(target, press), true);
+            assert.equal(w.SA.isMenuOpen(), true, 'a press in the ' + where + ' keeps the menu open');
+            assert.deepEqual(closed, [], 'a press in the ' + where + ' keeps the gallery open');
+        }
+        h.dispatch(h.byId(w, 'id_viewer'), h.makeEvent(w.doc, 'pointerdown'));
+        assert.equal(w.SA.isMenuOpen(), false, 'a press on the slide closes the menu');
+        assert.deepEqual(closed, ['close'], 'a press on the slide closes the gallery once');
+    }},
+
+    {name: 'same_section_button_closes_menu', fn() {
+        const w = world();
+        open(w, 'Формат');
+        assert.equal(w.SA.isMenuOpen(), true);
+        h.click(w, sectionBtn(w, 'Формат'));
+        assert.equal(w.SA.isMenuOpen(), false, 'the same section button closes the menu');
+        assert.equal(sectionBtn(w, 'Формат').getAttribute('aria-expanded'), 'false');
+    }},
+
+    {name: 'outside_mousedown_closes_menu_without_pointer_events', fn() {
+        const w = world(undefined, {pointerEvents: false});
+        open(w, 'Формат');
+        h.dispatch(h.byId(w, 'id_viewer'), h.makeEvent(w.doc, 'mousedown'));
+        assert.equal(w.SA.isMenuOpen(), false);
+    }},
+
     {name: 'submenu_from_live_stock_menu', fn() {
         const w = world();
         const twin = w.B.twin('ViewTab:btnGridlines');
@@ -211,35 +269,87 @@ const tests = [
         assert.equal(air(icons[1]), 'rotateCcw', 'counterclockwise rotation: the AIR glyph');
         assert.equal(air(icons[2]), 'compare', '«Отразить слева направо»: the AIR glyph');
         assert.equal(air(icons[3]), 'flipV', '«Отразить сверху вниз»: the AIR glyph');
-        assert.ok(icons[4].classList.contains('vo-mn-i-none') && !icons[4].firstChild, 'an item not in the table has no icon');
+        assert.ok(!icons[4].firstChild, 'an item not in the table has no icon (the empty glyph place is hidden by the styles)');
         /* Without an icon table for a catalog item: snapshot rows without icons. */
         const grid = w.B.twin('ViewTab:btnGridlines');
         grid.menu.items = [stockItem(w, 'g0', 'Показать линии сетки')];
         grid.menu.items[0].iconCls = 'menu__icon btn-flip-hor';
         h.click(w, row(open(w, 'Вид'), 'gridlines'));
-        assert.ok(flies(w)[0].querySelector('.vo-mn-i').classList.contains('vo-mn-i-none'), 'icons come from the catalog item only');
+        assert.ok(!flies(w)[0].querySelector('.vo-mn-i .vo-air'), 'icons come from the catalog item only');
     }},
 
+    /* The wheel over a long list scrolls the list itself (the browser does the scrolling) and does not
+       reach the page: the SDK wheel handler would cancel it on bubbling. A list with nothing
+       to scroll swallows the wheel. */
     {name: 'long_menu_scrolls_with_wheel', fn() {
         const w = world();
         const drop = open(w, 'Вид');
-        Object.defineProperty(drop, 'scrollHeight', {value: 900, configurable: true});
-        Object.defineProperty(drop, 'clientHeight', {value: 400, configurable: true});
-        drop.scrollTop = 0;
         let prevented = false, stopped = false;
-        const wheel = (dy, mode) => {
-            const e = h.makeEvent(w.doc, 'wheel', {deltaY: dy, deltaMode: mode || 0});
+        const wheel = () => {
+            prevented = stopped = false;
+            const e = h.makeEvent(w.doc, 'wheel', {deltaY: 120, deltaMode: 0});
             e.preventDefault = () => { prevented = true; };
             e.stopPropagation = () => { stopped = true; };
             h.dispatch(drop, e);
         };
-        wheel(120);
-        assert.equal(drop.scrollTop, 120, 'the list scrolls by the wheel');
-        assert.ok(prevented && stopped, 'the wheel is handled by the menu, not by the page');
-        wheel(3, 1);
-        assert.equal(drop.scrollTop, 219, 'line mode scrolls by lines');
-        wheel(5000);
-        assert.equal(drop.scrollTop, 500, 'scrolling stops at the end');
+        drop.style.overflowY = 'auto';
+        Object.defineProperty(drop, 'scrollHeight', {value: 900, configurable: true});
+        Object.defineProperty(drop, 'clientHeight', {value: 400, configurable: true});
+        wheel();
+        assert.ok(stopped, 'the wheel over the list does not reach the page');
+        assert.ok(!prevented, 'a long list scrolls by the wheel itself');
+        Object.defineProperty(drop, 'scrollHeight', {value: 400, configurable: true});
+        wheel();
+        assert.ok(stopped && prevented, 'a list with nothing to scroll swallows the wheel');
+    }},
+
+    /* The menu bar is the shared compact layer bar: F10 puts the focus on the first section, the arrows
+       go through all nine sections in a circle, the arrow down opens a section, Esc closes
+       it and leaves the focus on the section. */
+    {name: 'keyboard_reaches_every_section_from_f10', fn() {
+        const w = world();
+        const labels = Array.from(bar(w).querySelectorAll('.vo-mn-wrap > .vo-mn-item'))
+            .filter(b => !b.parentNode.classList.contains('vo-mn-more')).map(b => h.norm(b.textContent));
+        assert.equal(labels.length, 9, 'nine sections: ' + labels.join(', '));
+        /* The bar is visible: the fake node has no rects, and F10 does not enter an invisible bar. */
+        bar(w).getClientRects = () => [{width: 1, height: 1}];
+        /* No stock window is open: under one, F10 stays with the window. */
+        w.ctx.Common.Utils.ModalWindow = {isVisible: () => false};
+        h.press(w, 'F10', w.doc.body);
+        const at = () => h.norm(w.doc.activeElement && w.doc.activeElement.textContent || '');
+        assert.equal(at(), labels[0], 'F10 puts the focus on the first section');
+        const seen = [at()];
+        for (let i = 1; i < labels.length; i++) {
+            h.press(w, 'ArrowRight');
+            seen.push(at());
+        }
+        assert.deepEqual(seen, labels, 'the arrows reach every section in order');
+        h.press(w, 'ArrowRight');
+        assert.equal(at(), labels[0], 'the arrows go round');
+        h.press(w, 'ArrowDown');
+        assert.ok(w.SA.isMenuOpen(), 'the arrow down opens the section');
+        h.press(w, 'Escape');
+        assert.ok(!w.SA.isMenuOpen(), 'Esc closes the section');
+        assert.equal(at(), labels[0], 'the focus stays on the section');
+    }},
+
+    /* An item shortcut comes from the stock shortcut registry (Common.Controllers.Shortcuts):
+       a reassigned shortcut is visible in the menu, the shell has no shortcut text of its own. */
+    {name: 'shortcuts_come_from_the_stock_registry', fn() {
+        const w = h.createWorld({edit: true}, {viewDir: DIR});
+        Object.assign(w.modules.SlideActions, RU);
+        const asked = [];
+        w.controllers['Common.Controllers.Shortcuts'] = {getShortcutsByActionType(type) {
+            asked.push(type);
+            return type === 'Save' ? [{keys: ['Ctrl', 'Shift', 'Q']}] : type === 'EditUndo' ? [{keys: ['Alt', 'Z']}] : null;
+        }};
+        h.boot(w);
+        w.SA = w.modules.SlideActions;
+        const hint = (drop, k) => { const r = row(drop, k); const el = r && r.querySelector('.vo-mn-h'); return el ? h.norm(el.textContent) : ''; };
+        assert.equal(hint(open(w, 'Файл'), 'save'), 'Ctrl+Shift+Q', '«Сохранить» shows the registry shortcut');
+        assert.equal(hint(open(w, 'Правка'), 'undo'), 'Alt+Z', '«Отменить» shows the registry shortcut');
+        assert.equal(hint(open(w, 'Правка'), 'redo'), '', 'no registry shortcut — no shortcut at the item');
+        assert.ok(asked.includes('Save') && asked.includes('EditUndo') && asked.includes('EditRedo'), 'the registry is asked by action names');
     }}
 ];
 

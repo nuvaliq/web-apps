@@ -174,11 +174,17 @@ define([], function () {
         },
 
         /* ChangeSettings of the right-panel tabs with the object properties — like
-           the stock RightMenu.onFocusObject for the open tab, but always.
-           Only with edit rights: without them there is no stock right panel. In
-           the "Stock interface" and after a startup failure the stock code feeds the
-           panel itself. A tab failure interferes with neither the neighbors nor the
-           selection event; logged once per tab. */
+           the stock RightMenu.onFocusObject for the open tab. A tab has two
+           consumers: the properties card (SlideSections) and the row controls
+           whose counterparts are its fields (CompactToolbar.usesTab: shape fill and
+           outline, image crop, table). While the card is closed, the tab is fed
+           only if the row shows its controls for the current selection: the card
+           feeds the shown tab itself on opening with the stock RightMenu
+           properties (SlideSections.showStock). Only with edit rights: without
+           them there is no stock right panel. In the "Stock interface" and after
+           a startup failure the stock code feeds the panel itself. A tab failure
+           interferes with neither the neighbors nor the selection event; logged
+           once per tab. */
         feedTabs: function (props) {
             var shell = this.shell;
             if (!shell || shell.advanced === true || shell.startupFailed === true) return;
@@ -186,9 +192,14 @@ define([], function () {
             var ctl = PE.getController ? PE.getController('RightMenu') : null;
             var view = ctl && ctl.rightmenu;
             if (!view) return;
+            props = props || {};
+            var sections = PE.Views.SlideSections, bar = PE.Views.CompactToolbar, kind = this.current;
+            var open = !!(sections && typeof sections.isOpen === 'function' && sections.isOpen());
             TABS.forEach(function (t) {
                 var tab = view[t[0]], value = props[t[1]];
                 if (!value || !tab || typeof tab.ChangeSettings !== 'function') return;
+                /* Without the row module there is no way to decide — feed as before. */
+                if (!open && bar && typeof bar.usesTab === 'function' && !bar.usesTab(t[0], kind)) return;
                 try {
                     tab.ChangeSettings(value);
                 } catch (e) {

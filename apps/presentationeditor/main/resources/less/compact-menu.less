@@ -27,127 +27,74 @@
 @vo-mn-sep-bg:      #f0f0f0;   // divider-default
 
 /* --- Menu bar ---------------------------------------------------------------- */
+/* The row mechanics and rules are the shared layer (common/.../compact/menu.less, markup —
+   Common.UI.Compact.MenuBar); here are the presentation values: variables of the shared rules and
+   the rules where the presentation look differs. */
+
+@vo-menu-gap:          6px;    // between section backings: labels 12 + 6 + 12 = 30 apart
+@vo-menu-item-h:       28px;   // section hover backing: taller than the row by 4 above and below
+@vo-menu-item-pad-x:   12px;
+@vo-menu-pad-bottom:   @vo-menubar-pad-b;
+@vo-menu-drop-min-w:   @vo-mn-min-w;
+@vo-pop-pad-top:       extract(@vo-mn-pad, 1);
+@vo-pop-pad-bottom:    extract(@vo-mn-pad, 3);
+@vo-row-pad-l:         @vo-mn-row-l;
+@vo-row-pad-r:         @vo-mn-row-r;
+@vo-row-gap:           @vo-mn-ico-gap;
+@vo-menu-glyph:        @vo-mn-ico;
+@vo-menu-hint-gap:     12px;
+
+body.vo-compact {
+    --vo-menu-fg:         var(--vo-fig-menu-fg);
+    --vo-menu-row-fg:     var(--vo-fig-row-fg);
+    --vo-menu-icon:       var(--vo-fig-row-icon);
+    --vo-menu-icon-hover: var(--vo-fig-row-icon);
+}
+
+/* The bar fills the #vo-menubar row: by its width the shared layer moves sections into "…". */
+#vo-menubar > .vo-mn {
+    flex: 1 1 auto;
+    min-width: 0;
+}
 
 .vo-mn {
-    display: flex;
-    align-items: center;
-    /* 30 between labels = 12 + 6 + 12; the hover backing is wider than the label by 4
-       on each side, negative margins keep the step. */
-    gap: 14px;
-    position: relative;
-    height: 100%;
-    font-family: @vo-font;
-
-    .vo-mn-wrap { position: relative; }
-
     .vo-mn-item {
-        height: 28px;
-        margin: -4px;
-        padding: 4px 12px;
-        border: none;
         border-radius: @vo-r-sm;     /* like the AIR sm button of the same height (28): --ui-border-radius-sm */
-        background: transparent;
-        color: var(--vo-fig-menu-fg);
-        font-family: @vo-font;
-        font-size: @vo-mn-fs-item;
-        letter-spacing: @vo-mn-track;
-        line-height: 1;
-        white-space: nowrap;
-        cursor: pointer;
-        transition: background-color @vo-mn-dur ease-out;
-
-        &:hover, &.vo-open { background: @vo-hover; }
-        &:active { background: @vo-active; }
-        &:focus-visible { outline: 2px solid @vo-focus; outline-offset: 1px; }
+        &.vo-open { background: @vo-hover; }
+        &:focus-visible { outline: 2px solid @vo-focus; outline-offset: 1px; box-shadow: none; }
     }
 
-    /* Dropdown window of a section and the submenu. The ceiling comes from the window height: a long
-       section scrolls instead of going past the bottom edge. */
     .vo-mn-drop {
-        display: none;
-        position: absolute;
-        top: calc(100% + 5px);
-        left: -4px;
-        z-index: @vo-z-drop;
         box-sizing: border-box;
-        min-width: @vo-mn-min-w;
-        max-height: calc(100vh - @vo-h-header - @vo-h-menu - 8px);
-        padding: @vo-mn-pad;
-        overflow-x: hidden;
-        overflow-y: auto;
         overscroll-behavior: contain;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(0, 0, 0, .22) transparent;
-        background: @vo-surface;
-        border: none;
-        border-radius: @vo-mn-r-pop;
-        box-shadow: @vo-shadow;
     }
 
-    .vo-mn-drop.open { display: block; }
+    /* The list appears at once, without scaling: that is how it opens in presentations. */
+    .vo-mn-drop.open { animation: none; }
 
-    /* The submenu is in the menu bar itself; SlideActions.placeFly writes its position. */
-    .vo-mn-fly {
-        top: 0;
-        left: 0;
-        max-height: calc(100vh - 8px);
-        z-index: @vo-z-drop + 1;
-    }
+    .vo-mn-fly { z-index: @vo-z-drop + 1; }
 
-    /* List row: the hover backing is full width; on the right is a column for the
-       mark, so that a long label does not reach the edge. */
+    .vo-mn-item,
     .vo-mn-sub {
-        display: flex;
-        align-items: center;
-        gap: @vo-mn-ico-gap;
-        position: relative;
-        box-sizing: border-box;
-        width: 100%;
-        min-height: @vo-mn-row-h;
-        padding: 0 @vo-mn-row-r 0 @vo-mn-row-l;
-        border: none;
-        border-radius: 0;
-        background: transparent;
-        color: var(--vo-fig-row-fg);
-        font-family: @vo-font;
-        font-size: @vo-mn-fs-row;
-        letter-spacing: @vo-mn-track;
-        text-align: left;
-        white-space: nowrap;
-        cursor: pointer;
         transition: background-color @vo-mn-dur ease-out, color @vo-mn-dur ease-out;
+    }
 
-        &:hover, &.vo-sub-open { background: @vo-hover; }
-        &:active { background: @vo-active; }
-        &:focus-visible { outline: 2px solid @vo-focus; outline-offset: -2px; }
+    .vo-mn-sub {
+        position: relative;
+        &:focus-visible { outline: 2px solid @vo-focus; outline-offset: -2px; box-shadow: none; }
     }
 
     .vo-mn-i {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-        width: @vo-mn-ico;
-        height: @vo-mn-ico;
-        color: var(--vo-fig-row-icon);
-
         svg, .vo-air { width: @vo-mn-ico; height: @vo-mn-ico; }
     }
 
     /* An item without an icon has no empty column, the label starts from padding 18. */
-    .vo-mn-i.vo-mn-i-none { display: none; }
-    .vo-mn-i-none + .vo-mn-t { margin-left: 4px; }
+    .vo-mn-i:empty { display: none; }
+    .vo-mn-i:empty + .vo-mn-t,
+    .vo-mn-sub:not(:has(> .vo-mn-i)) > .vo-mn-t { margin-left: 4px; }
 
-    .vo-mn-t { flex: 1 1 auto; }
-
-    .vo-mn-h {
-        margin-left: 12px;
-        color: @vo-text-off;
-        font-size: 11px;
-        font-variant-numeric: tabular-nums;
-    }
-
-    /* The mark is in the right column, ▸ is in the same place for items with a submenu. */
+    /* The mark and ▸ are in the right column of the row (the right padding @vo-mn-row-r). ▸ is the
+       shared layer's "left" glyph, mirrored. */
     .vo-mn-chk,
     .vo-mn-arrow {
         display: inline-flex;
@@ -158,29 +105,31 @@
         top: 50%;
         width: 18px;
         height: 18px;
-        transform: translateY(-50%);
-        color: var(--vo-fig-row-fg);
+        margin: 0;
 
         svg, .vo-air { width: 18px; height: 18px; }
     }
 
-    .vo-mn-arrow { color: var(--vo-fig-row-icon); }
-
-    /* A disabled item: a class, not the disabled attribute: availability is rechecked
-       on click; the reason is given by the row tooltip. */
-    .vo-mn-sub.vo-locked {
-        color: @vo-text-off;
-        cursor: default;
-
-        &:hover, &:active { background: transparent; }
-        .vo-mn-i, .vo-mn-h, .vo-mn-chk, .vo-mn-arrow { color: @vo-text-off; }
-    }
+    /* The ✓ mark uses the label color, not the shared layer's accent. */
+    .vo-mn-chk { transform: translateY(-50%); color: var(--vo-fig-row-fg); }
+    .vo-mn-arrow { transform: translateY(-50%) scaleX(-1); color: var(--vo-fig-row-icon); }
+    .vo-mn-h + .vo-mn-chk,
+    .vo-mn-h + .vo-mn-arrow { margin: 0; }
 
     .vo-mn-sep {
-        height: 1px;
         margin: @vo-mn-sep-m;
         background: @vo-mn-sep-bg;
     }
+}
+
+.rtl .vo-mn {
+    .vo-mn-chk, .vo-mn-arrow { right: auto; left: 14px; margin: 0; }
+    .vo-mn-arrow { transform: translateY(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vo-mn .vo-mn-item,
+    .vo-mn .vo-mn-sub { transition: none; }
 }
 
 /* AIR icon set glyph in the menu: a file mask in the row text color (as in documents). */
@@ -198,11 +147,6 @@
             mask-position: center;
     -webkit-mask-size: contain;
             mask-size: contain;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .vo-mn .vo-mn-item,
-    .vo-mn .vo-mn-sub { transition: none; }
 }
 
 /* --- Stock galleries by the menu bar and the panel --------------------------- */

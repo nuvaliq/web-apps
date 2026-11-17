@@ -4,8 +4,8 @@
  * shell_registers_no_shortcuts_but_esc: the shell modules register no combinations: there are
  * no own Common.util.Shortcuts maps and the stock ones are not suspended; only the
  * stock slide show and comment combinations are resumed (their keys come from the stock DocumentHolder); the key
- * listeners on document and window are only Esc: the stock combinations from the "Keyboard shortcuts" list
- * pass through them untouched, Esc closes an open menu and the language list.
+ * listeners on document and window are only Esc and the F10 entry of the shared menu bar: the stock combinations from
+ * the "Keyboard shortcuts" list pass through them untouched, Esc closes an open menu and the language list.
  * catalog_twins_resolve_in_stock_tree: every item of the menu bar catalog and every toolbar button has
  * exactly one binding: a twin that is found in the sources of the stock ribbon and view, a marked
  * engine call (a stock controller method or an api call that the stock code makes) or
@@ -221,6 +221,9 @@ const tests = [
             }
             const glob = /\b(document|window)\s*\.\s*addEventListener\s*\(\s*['"](keydown|keyup|keypress)['"]/g;
             while ((r = glob.exec(src))) staticGlobal.push(name + '.js:' + lineOf(src, r.index));
+            /* The shared menu bar sets its window listeners with the listen helper: Esc and the F10 entry. */
+            const shared = /\blisten\s*\(\s*window\s*,\s*['"](keydown|keyup|keypress)['"]/g;
+            while ((r = shared.exec(src))) staticGlobal.push(name + '.js:' + lineOf(src, r.index));
             assert.ok(!/\b(document\.body|document\.documentElement)\s*\.\s*addEventListener\s*\(\s*['"]key/.test(src),
                 name + '.js listens for keys on body or html');
         }

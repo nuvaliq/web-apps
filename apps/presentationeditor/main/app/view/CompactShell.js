@@ -23,6 +23,7 @@ define([
     'presentationeditor/main/app/view/SlideSelection',
     'presentationeditor/main/app/view/CompactModes',
     'presentationeditor/main/app/view/SlideActions',
+    'presentationeditor/main/app/view/CompactMenuAdapter',
     'presentationeditor/main/app/view/CompactToolbar',
     'presentationeditor/main/app/view/SlideSections',
     'presentationeditor/main/app/view/CompactLeft',
@@ -41,6 +42,10 @@ define([
        the request is set on Gateway init and hides the stock chrome until the build,
        20 build attempts 150 ms apart. */
     var BOOT_CLASS = 'vo-boot';
+
+    /* The AI plugin of the stock editor: the compact shell does not show its "AI"
+       context menu item (hideAiItem). */
+    var AI_PLUGIN = 'asc.{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007}';
     var START_TRIES = 20, START_STEP = 150;
 
     /* Row heights — the numbers of the documents and spreadsheets header (name 46, menu 30,
@@ -269,11 +274,6 @@ define([
             this.booted = true;
             this.boot = {heights: null};
             this.tuneConfig(config);
-            /* Main subscribes to opendocument at controller startup, this
-               handler comes later and follows its loadDocument. */
-            Common.Gateway.on('opendocument', guarded('shell: opendocument', function () {
-                me.tunePermissions();
-            }));
             document.body.classList.add(BOOT_CLASS);
             /* The subscription is later than the stock one (which was set up at controller startup):
                by our call the stock has already laid out the areas by its flags. */
@@ -284,30 +284,46 @@ define([
 
         /* Stock settings that the shell sets itself, like an integrator:
            the "What's New" tips about stock editor novelties
-           (customization.features.featuresTips), "Suggest a Feature" on the
-           "File" screen (suggestFeature) and plugins (plugins) — with them the
-           "AI" item of the context menu goes away. They are written into the Gateway init config before
+           (customization.features.featuresTips) and "Suggest a Feature" on the
+           "File" screen (suggestFeature). They are written into the Gateway init config before
            Main lays it out (see wanted). The integrator's nested objects are not
            changed — copies are put in. The settings act for the whole session, and in
-           the "Stock interface" too. */
+           the "Stock interface" too. Plugins and "Protect" stay
+           stock: the compact shell hides only their items (hideAiItem,
+           #fm-btn-protect in compact-shell.less), while the "Stock interface" shows
+           them. */
         tuneConfig: function (config) {
             if (!config || typeof config !== 'object') return;
             var c = config.customization && typeof config.customization === 'object' ? config.customization : {};
             var f = c.features && typeof c.features === 'object' ? c.features : {};
             config.customization = _.extend({}, c, {
-                plugins: false,
                 suggestFeature: false,
                 features: _.extend({}, f, {featuresTips: false})
             });
         },
 
-        /* "Protect" on the "File" screen and the password window go away via the stock right
-           permissions.protect = false. The right comes with opendocument, and Main
-           copies it to itself in loadDocument, and reads it only in
-           onEditorPermissions — after the server reply, that is, later than us. */
-        tunePermissions: function () {
-            var main = controller('Main');
-            if (main && main.permissions && typeof main.permissions === 'object') main.permissions.protect = false;
+
+        /* The "AI" context menu item comes from the AI plugin: the engine sends
+           plugin items on every menu show (onPluginContextMenu), and the stock
+           puts them in with the stock updateCustomItems and removes them when the menu closes. In
+           the compact shell the AI plugin items do not reach the menu; in the "Stock
+           interface" and after a startup failure they are stock. Other plugin items and the
+           plugins themselves are not touched. The wrapper is on the view instance, and the stock method
+           is taken at call time: the view prototype gets the real updateCustomItems
+           later, with the deferred loading of DocumentHolderExt, and until then
+           there is a stub. */
+        hideAiItem: function () {
+            var me = this, dh = controller('DocumentHolder'), view = dh && dh.documentHolder;
+            if (!view || typeof view.updateCustomItems !== 'function' || view.updateCustomItems._voAi) return;
+            var own = Object.prototype.hasOwnProperty.call(view, 'updateCustomItems') ? view.updateCustomItems : null;
+            var wrapped = function (menu, data) {
+                if (_.isArray(data) && !me.advanced && !me.startupFailed && document.body.classList.contains('vo-compact'))
+                    data = _.reject(data, function (d) { return !!d && d.guid === AI_PLUGIN; });
+                var update = own || Object.getPrototypeOf(this).updateCustomItems;
+                return typeof update === 'function' ? update.call(this, menu, data) : undefined;
+            };
+            wrapped._voAi = true;
+            view.updateCustomItems = wrapped;
         },
 
         /* Frame heights. The stock ones are remembered nearby: endBoot returns them before
@@ -464,6 +480,7 @@ define([
         /* Stock notifications that the frame itself listens to. */
         bindStock: function () {
             var me = this, nc = Common.NotificationCenter;
+            this.hideAiItem();
             /* Edit right revoked — the only thing that resets the snapshot: other
                stock locks (connection loss, "Viewing") do not take the right away. */
             nc.on('collaboration:sharingdeny', guarded('shell: sharingdeny', function () {
@@ -1591,9 +1608,12 @@ define([
             }
             /* The section popup panel (SlideSections) — last: its menus,
                palettes and galleries close before it (a stock menu with focus
-               inside closes itself — the panel stays). */
+               inside closes itself — the panel stays). An input field outside
+               the panel (search, comment) takes Esc for itself: the panel stays. */
             var sections = PE.Views.SlideSections;
             if (sections && typeof sections.isOpen === 'function' && sections.isOpen() && !this.stockMenuOpen()) {
+                var card = typeof sections.card === 'function' ? sections.card() : null;
+                if (this.ownField(t) && !(card && typeof card.contains === 'function' && card.contains(t))) return false;
                 sections.close('escape');
                 return true;
             }

@@ -279,7 +279,7 @@ async function menuWithGlyph(page) {
             const where = editor.name + ': ';
             const bar = rulesOf(rules, '.vo-mn');
             assert.equal(bar.length, 1, where + 'one shared .vo-mn rule');
-            assert.equal(value(bar[0], 'height'), vars['vo-h-menu'], where + '.vo-mn height');
+            assert.equal(value(bar[0], 'height'), resolveVar(vars, 'vo-h-menu'), where + '.vo-mn height');
             const padX = parseInt(vars['vo-pad-x'], 10) - parseInt(vars['vo-menu-item-pad-x'], 10);
             assert.equal(value(bar[0], 'padding'), '0 ' + padX + 'px ' + vars['vo-menu-pad-bottom'], where + '.vo-mn padding');
             assert.equal(value(rulesOf(rules, '.vo-mn .vo-mn-sub')[0], 'min-height'), vars['vo-row-h'], where + 'list row');
@@ -373,16 +373,21 @@ async function menuWithGlyph(page) {
     });
 
     await check('icon path resolves to the shared folder from the editor css', () => {
+        let drawn = 0;
         list.forEach(({editor, css}) => {
             const cssDir = path.posix.join(editor.app || 'apps/fixture/main', 'resources/css');
             const urls = Array.from(css.matchAll(/url\(\s*["']?([^"')]*img\/air\/[^"')]*)["']?\s*\)/g), m => m[1]);
-            assert.ok(urls.length > 0, editor.name + ': the css draws icons of the set');
+            /* An editor whose icons all come from Common.UI.Compact.Icons (an inline --vo-air-src)
+               draws none from its css; the ones it draws must resolve. */
+            if (editor.drawsCssIcons !== false) assert.ok(urls.length > 0, editor.name + ': the css draws icons of the set');
+            drawn += urls.length;
             urls.forEach(u => {
                 const target = path.posix.normalize(path.posix.join(cssDir, u));
                 assert.ok(target.startsWith(AIR), editor.name + ': ' + u + ' resolves to ' + target);
                 assert.ok(fs.existsSync(path.join(ROOT, target)), editor.name + ': ' + target + ' exists');
             });
         });
+        assert.ok(drawn > 0, 'some editor css draws icons of the set');
     });
 
     await check('missing built css fails with a message naming the variable', () => {
@@ -578,7 +583,7 @@ async function menuWithGlyph(page) {
                 /* A long status does not grow the menu bar. */
                 await p.evaluate(() => { menu.close(); menu.status().textContent = 'x'.repeat(400); });
                 await settle(p);
-                assert.equal((await box(p, '.vo-mn')).height + 'px', vars['vo-h-menu'], where + 'menu bar with a status');
+                assert.equal((await box(p, '.vo-mn')).height + 'px', resolveVar(vars, 'vo-h-menu'), where + 'menu bar with a status');
                 await p.close();
             }
         });

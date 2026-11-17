@@ -1,0 +1,279 @@
+/*
+ * PDF viewer windows on the Air template of the compact shell.
+ * Part of the web-apps fork, AGPL-3.0.
+ *
+ * The window template, the set for stock windows and the "Document Info" window are shared by
+ * the editors (common/main/resources/less/compact/windows.less, windows-stock.less and
+ * docinfo.less): the viewer enables the shared windows it opens in Air (messages, the copy
+ * warning, the keyboard shortcuts) and the shared "Document Info" window, their rules are there.
+ * Here are the viewer's own windows — the File screen panels in windows — each under its own
+ * mark. It acts only on a window to which the CompactWindows module has set the template mark,
+ * and only in compact: every window selector starts with body.vo-compact .asc-window.vo-win.
+ */
+
+@import "../../../../common/main/resources/less/compact/windows.less";
+@import "../../../../common/main/resources/less/compact/windows-stock.less";
+@import "../../../../common/main/resources/less/compact/docinfo.less";
+
+/* --- Windows with File panels ------------------------------------------------ */
+/* Print, advanced settings and "Download as" are windows of the template (FileWindows,
+   the print, settings, saveas recipes) with the stock panel of the File screen inside. In the stock
+   the panel look is set only inside the screen (#file-menu-panel, filemenu.less), while
+   the stock components — ComboBox, InputField, CheckBox, the button in the body — are dressed by
+   the window template. Here is the panel layout in the window and what the window does not have: the panel
+   title (it is the window title), its buttons (they are in the window footer) and the fields that
+   the viewer does not need. */
+
+@vo-fw-left:        200px;     // not in the DS: the parameter label column, "Default Zoom Value" wraps to two lines
+@vo-fw-tile-w:      70px;      // format tile — the tile size of the File screen (filemenu.less)
+@vo-fw-tile-h:      90px;
+@vo-fw-max-h:       ~"calc(100vh - 220px)";   // the window header and footer, the air above and below it
+
+body.vo-compact .asc-window.vo-win.vo-win--print,
+body.vo-compact .asc-window.vo-win.vo-win--settings,
+body.vo-compact .asc-window.vo-win.vo-win--saveas {
+    .content-box {
+        position: relative;
+        display: block;
+        width: auto;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        color: @vo-text;
+        font-size: @vo-win-fs;
+        line-height: @vo-win-lh;
+    }
+
+    /* The horizontal scrollbar of the stock Scroller: the panel in the window is as wide as the window. */
+    .ps-scrollbar-x-rail { display: none; }
+
+    table {
+        width: 100%;
+        margin: 0;
+        border-collapse: collapse;
+    }
+
+    td {
+        padding: 0;
+        vertical-align: middle;
+    }
+
+    label {
+        margin: 0;
+        font-weight: 400;
+    }
+
+    /* Fields span the full column width (stock: inline 248, 160), their lists are not narrower
+       than the field (stock: inline min-width 248). */
+    .combobox,
+    .input-field { width: 100% !important; }
+
+    .combobox > .dropdown-menu { min-width: 100% !important; }
+}
+
+/* Print: "Print range", "Pages" and "Content". Size, orientation and margins for
+   PDF are always disabled in the stock (Print.SetDisabled), so the window does not have them; there is no
+   preview; the printer, color, copies and sides are shown by the stock code only in the
+   desktop app. The field label is a separate table row before it. */
+body.vo-compact .asc-window.vo-win.vo-win--print {
+    #panel-print > div { height: auto !important; }   // stock: inline 100 %
+
+    #id-print-settings,
+    .print-settings,
+    .flex-settings {
+        position: static;
+        width: auto;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+        border: none;
+    }
+
+    .main-header,
+    #print-preview-box,
+    tr.fms-btn-apply {
+        display: none !important;
+    }
+
+    /* Separate rule: a browser without :has() drops a whole selector list that contains it,
+       and the simple selectors above must still apply. */
+    tr:has(> td.desktop-settings),
+    tr:has(#print-combo-pages), tr:has(+ tr #print-combo-pages),
+    tr:has(#print-combo-orient), tr:has(+ tr #print-combo-orient),
+    tr:has(#print-combo-margins), tr:has(+ tr #print-combo-margins) {
+        display: none !important;
+    }
+
+    /* The label above the field is the template field label. */
+    label.font-weight-bold {
+        display: block;
+        margin: 0 0 @vo-win-lbl-gap;
+        color: @vo-win-label;                  // base-3
+        font-size: @vo-win-lbl-fs;
+        font-weight: 400;
+        line-height: @vo-win-lbl-lh;
+    }
+
+    td.padding-large { padding-bottom: @vo-win-gap; }
+
+    /* Field nodes span the full width (stock: inline 248). */
+    [id^="print-combo-"] { width: 100% !important; }
+
+    /* "Pages:" — the label to the left of the field, on one line: the field refines the range. */
+    #print-txt-pages {
+        width: 100% !important;
+        padding: 0;
+    }
+
+    td.padding-large:first-child:not(:only-child) {
+        padding-right: @vo-win-row-gap;
+        color: @vo-win-label;
+        font-size: @vo-win-lbl-fs;
+        line-height: @vo-win-lbl-lh;
+        white-space: nowrap;
+    }
+
+    /* For the last field the air below comes from the window footer. */
+    tr:has(#print-combo-content) > td.padding-large { padding-bottom: 0; }
+
+    /* "Print to PDF" is an action, not a cancel: outline. */
+    > .body > .footer .dlg-btn.vo-btn-outline:not(.primary) {
+        .vo-win-btn-outline();
+    }
+}
+
+/* Advanced settings — only what works in the viewer: theme,
+   comments, screen reading, default zoom, hinting, keyboard shortcuts.
+   The shell has no tab style and background, interface navigation key, mini panel, quick
+   access or live viewing. The rest (saving,
+   co-editing, units) the stock code hides by itself in viewing mode. */
+body.vo-compact .asc-window.vo-win.vo-win--settings #panel-settings {
+    /* The first row is a group title: its air on top is eaten by the body padding. */
+    .flex-settings {
+        max-height: @vo-fw-max-h;
+        margin: -@vo-win-gap 0 0;
+        padding: 0;
+        border: none;
+    }
+
+    .flex-settings > .header,
+    .fms-flex-apply,
+    tr.fms-btn-apply,
+    tr.tab-style,
+    tr.tab-background,
+    tr.edit,
+    tr.edit-pdf,
+    tr.live-viewer {
+        display: none !important;
+    }
+
+    /* Separate rule: see the print window. */
+    tr:has(#fms-chb-use-alt-key) {
+        display: none !important;
+    }
+
+    /* The stock table: inline paddings and width by content (filemenu.less, #panel-settings). */
+    .flex-settings table {
+        width: 100% !important;
+        margin: 0;
+    }
+
+    tbody {
+        display: flex;
+        flex-direction: column;
+        gap: @vo-win-adv-check;                // between rows — stack-xs
+    }
+
+    /* Empty separator rows of the stock: between groups there is the group title air. */
+    tr:empty { display: none; }
+
+    table tr {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }
+
+    table tr td {
+        display: block;
+        min-width: 0;
+        padding: 0;
+    }
+
+    table tr td[colspan] { flex: 1 1 auto; }
+
+    /* The group title is Text md medium, as in the advanced settings windows. */
+    table tr td.group-name {
+        padding-top: @vo-win-gap;
+
+        label {
+            color: @vo-text;
+            font-size: @vo-win-fs;
+            font-weight: 500;                  // --ui-font-weight-medium
+            line-height: @vo-win-lh;
+        }
+    }
+
+    /* A "label — field" row: the label on the left in the field label color. */
+    table tr td:first-child:not([colspan]) {
+        flex: 0 0 @vo-fw-left;
+        width: @vo-fw-left;
+        padding-right: @vo-win-row-gap;
+
+        label {
+            display: block;
+            color: @vo-win-label;              // base-3
+            font-size: @vo-win-lbl-fs;
+            line-height: @vo-win-lbl-lh;
+            overflow-wrap: break-word;
+        }
+    }
+
+    table tr td:first-child:not([colspan]) + td { flex: 1 1 auto; }
+
+    /* The theme spans the whole column, "dark mode" is under it (stock: on one line, inline-block). */
+    #fms-cmb-theme,
+    #fms-chb-dark-mode {
+        display: block;
+        margin: 0;
+    }
+
+    #fms-chb-dark-mode { margin-top: @vo-win-adv-check; }
+}
+
+/* Download as: the format tiles of the stock panel in groups by rows, as on the File
+   screen of a wide window. */
+body.vo-compact .asc-window.vo-win.vo-win--saveas {
+    > .body { padding-bottom: @vo-win-pad-x; }   // bottom — as the sides: there is no footer
+
+    .content-container { margin: 0; }
+
+    .content-container > .header { display: none; }
+
+    .format-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: @vo-win-gap @vo-win-gap-xl;       // stack-md, stack-xl
+    }
+
+    .format-item {
+        float: none;
+        margin: 0;
+    }
+
+    .btn-doc-format {
+        width: @vo-fw-tile-w;
+        height: @vo-fw-tile-h;
+        border-radius: @vo-r-sm;
+    }
+
+    /* The stock group separator is a row break (stock: inline 0 or 100 %). */
+    .format-items > .divider {
+        flex: 0 0 100%;
+        width: 100% !important;
+        height: 0;
+        margin: (-@vo-win-gap / 2) 0;
+    }
+
+    .format-items > .divider:last-child { display: none; }
+}

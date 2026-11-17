@@ -43,7 +43,8 @@ if (Common === undefined)
     var Common = {};
 
 define([
-    'common/main/lib/component/BaseView'
+    'common/main/lib/component/BaseView',
+    'common/main/lib/util/utils'
 ], function () {
     'use strict';
 

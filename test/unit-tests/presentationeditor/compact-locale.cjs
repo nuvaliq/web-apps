@@ -4,7 +4,8 @@
  * has a key in all three files, en matches the module default, the shell's own
  * captions in ru are verbatim, placeholders are as in ru, JSON is strict and
  * without duplicates, line endings are as before (en.json is CRLF, ru.json and de.json are
- * LF), there are no Cyrillic literals in the shell modules.
+ * LF), there are no Cyrillic literals in the shell modules, the shared menu bar strings
+ * that the shell shows are in all three files.
  * The optional arguments are copies of the locale/ directory and the app/view/ directory
  * for checking on corrupted copies.
  */
@@ -37,7 +38,7 @@ const SCOPE = {
         'textAdvancedSettings', 'textArrange', 'textBackground', 'textBulletsNumbering', 'textCase',
         'textClearFormatting', 'textColorScheme', 'textDocInfo', 'textDocLanguage', 'textDownload',
         'textEdit', 'textFindReplace', 'textFocusMode', 'textFormat', 'textHideToolbar', 'textIgnoreAll',
-        'textMenuBar_ARIA', 'textMoveSlide', 'textNoEditRight', 'textNoMacroRecording', 'textNotGroup',
+        'textMenuBar_ARIA', 'textMoveSlide', 'textNoEditRight', 'textNoEditRightRequest', 'textNoMacroRecording', 'textNotGroup',
         'textNothingToRedo', 'textNothingToUndo', 'textNoUnsavedChanges', 'textObjectProperties',
         'textPlaceCursor', 'textSelectImage', 'textSelectObject', 'textSelectObjectOrText', 'textSelectTable',
         'textSelectText', 'textSelectTwoObjects', 'textSelectTwoShapes', 'textSharing', 'textSlide',
@@ -95,6 +96,7 @@ const OWN_RU = {
     'SlideActions.textIgnoreAll': 'Пропустить всё',
     'SlideActions.textMoveSlide': 'Переместить слайд',
     'SlideActions.textNoEditRight': 'Нет права на редактирование',
+    'SlideActions.textNoEditRightRequest': 'Только просмотр — чтобы править, выберите «Файл → Редактировать»',
     'SlideActions.textNoMacroRecording': 'Запись макроса не идёт',
     'SlideActions.textNotGroup': 'Выделенное — не группа',
     'SlideActions.textNothingToRedo': 'Нечего повторить',
@@ -283,6 +285,42 @@ check('every_default_has_ru_en_de_key', () => {
                 problems.push(full + ': en differs from the module default "' + defs[k] + '"');
             }
             if (!(SCOPE[mod] || []).includes(k)) problems.push(full + ': not in SCOPE');
+        }
+    }
+    assert.deepEqual(problems, []);
+});
+
+/* Strings of the shared menu bar (Common.UI.Compact.MenuBar) that the shell shows:
+   disable reasons ("File → Edit" for a reader shows the offline reason) and the "More" label.
+   The shell has its own label for the menu bar itself (SlideActions.textMenuBar_ARIA). Without a key
+   in the locale the string stays the English default of the module. */
+const MENU_BAR = path.join(ROOT, 'apps/common/main/lib/view/compact/MenuBar.js');
+const MENU_BAR_KEYS = ['textReasonLimit', 'textReasonOffline', 'textReasonProtected', 'textReasonView', 'txtMore_ARIA'];
+
+check('shared_menu_bar_texts_have_ru_en_de', () => {
+    const {code} = scanJs(fs.readFileSync(MENU_BAR, 'utf8'));
+    const defs = {};
+    for (const m of code.matchAll(/(?:^|[,{\s])((?:text|txt)[A-Z][\w$]*)\s*:\s*'((?:\\.|[^'\\])*)'/g)) defs[m[1]] = m[2].replace(/\\(.)/g, '$1');
+    const problems = [];
+    for (const k of MENU_BAR_KEYS) {
+        const full = 'Common.UI.Compact.MenuBar.' + k;
+        if (!(k in defs)) { problems.push(full + ': no default in MenuBar.js'); continue; }
+        for (const lang of LANGS) {
+            const v = locale(lang)[full];
+            if (typeof v !== 'string' || !v.trim()) problems.push(full + ': no text in ' + lang + '.json');
+        }
+        if (typeof locale('en')[full] === 'string' && locale('en')[full] !== defs[k]) {
+            problems.push(full + ': en differs from the module default "' + defs[k] + '"');
+        }
+        const ru = locale('ru')[full], de = locale('de')[full];
+        if (typeof ru === 'string' && !/[А-Яа-яЁё]/.test(ru)) problems.push(full + ': ru is not Russian');
+        if (typeof de === 'string' && (/[А-Яа-яЁё]/.test(de) || de === defs[k])) problems.push(full + ': de is not German');
+        for (const lang of LANGS) {
+            const keys = keyLines(raw(lang)), i = keys.indexOf(full);
+            if (i < 0) continue;
+            if ((i > 0 && lc(keys[i - 1]) > lc(full)) || (i < keys.length - 1 && lc(full) > lc(keys[i + 1]))) {
+                problems.push(full + ': out of alphabetical order in ' + lang + '.json');
+            }
         }
     }
     assert.deepEqual(problems, []);

@@ -43,6 +43,8 @@ function lessCompiler() {
 /* Documents together with the shared compact layer (apps/common/.../compact), as app.less includes them. */
 async function compile(file) {
     if (file === DE_LESS) return require('./acceptance/shell-harness.cjs').compileDocumentsLess();
+    /* Presentations — like documents: with the shared compact layer, in the order of their app.less. */
+    if (file === path.join(PE_LESS_DIR, 'compact-shell.less')) return require('./acceptance/shell-harness.cjs').compilePresentationLess();
     const out = await lessCompiler().render(read(file), {filename: file, javascriptEnabled: true});
     return out.css;
 }
@@ -132,11 +134,9 @@ check('parity_heights_match_documents_and_sheets', async () => {
 check('parity_tokens_match_documents_incl_boot', async () => {
     const pe = rules(await compile(PE_LESS));
     const de = rules(await compile(DE_LESS));
-    /* The shared layer menu tokens are read only by its menu bar rules; the presentation menu bar is its own. */
-    const sharedMenu = require('./acceptance/shell-harness.cjs').sharedMenuTokens();
+    /* Both have the shared menu bar of the compact layer: its --vo-menu-* tokens are compared with the rest. */
     for (const classes of [['vo-compact'], ['vo-boot'], ['vo-compact', 'theme-type-dark'], ['vo-boot', 'theme-type-dark']]) {
         const want = tokensFor(de, classes);
-        sharedMenu.forEach(name => delete want[name]);
         assert.ok(Object.keys(want).length > 40, 'documents tokens are not found for ' + classes.join('.'));
         assert.deepEqual(tokensFor(pe, classes), want, 'tokens differ for body.' + classes.join('.'));
     }

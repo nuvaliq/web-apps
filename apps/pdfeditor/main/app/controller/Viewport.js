@@ -47,7 +47,8 @@ define([
     'common/main/lib/view/Header',
     'common/main/lib/view/SearchBar',
     'pdfeditor/main/app/view/Viewport',
-    'pdfeditor/main/app/view/LeftMenu'
+    'pdfeditor/main/app/view/LeftMenu',
+    'pdfeditor/main/app/view/CompactShell'
 ], function (Viewport) {
     'use strict';
 
@@ -179,6 +180,20 @@ define([
 
             Common.NotificationCenter.on('app:face', this.onAppShowed.bind(this));
             Common.NotificationCenter.on('app:ready', this.onAppReady.bind(this));
+
+            /* Compact shell (view/CompactShell.js), only for editorConfig.ui.shell === 'modern'.
+               On Gateway init the shell requests the early start: the stock chrome is hidden
+               until the shell is built. On app:ready it is built with retries; a failure
+               brings the stock editor back. Both handlers are guarded: an exception here
+               would break the stock config loading and the app:ready subscribers. */
+            var shell = PDFE.Views.CompactShell;
+            Common.Gateway.on('init', shell.guarded('shell: init', function (data) {
+                shell.announce(data && data.config);
+            }));
+            Common.NotificationCenter.on('app:ready', shell.guarded('shell: app ready', function () {
+                if (!shell.wanted()) { shell.endBoot(true); return; }
+                shell.start();
+            }));
             Common.NotificationCenter.on('search:show', _.bind(this.onSearchShow, this));
         },
 

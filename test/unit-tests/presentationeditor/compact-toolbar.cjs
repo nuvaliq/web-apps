@@ -190,6 +190,20 @@ test('image_group', async () => {
     assert.deepEqual(calls(props, 'api'), [], 'Object properties calls the engine directly');
 });
 
+/* Right-panel tabs whose fields are counterparts of the row controls: by them SlideSelection feeds
+   the tab with selection properties while the card is closed. */
+test('toolbar_tells_which_right_panel_tabs_its_controls_use', async () => {
+    const env = await mount('none');
+    const tb = env.toolbar();
+    assert.equal(typeof tb.usesTab, 'function', 'no CompactToolbar.usesTab');
+    const used = kind => ['shapeSettings', 'tableSettings', 'imageSettings'].filter(t => tb.usesTab(t, kind));
+    assert.deepEqual(used('shape'), ['shapeSettings'], 'shape');
+    assert.deepEqual(used('line'), ['shapeSettings'], 'line');
+    assert.deepEqual(used('image'), ['imageSettings'], 'image');
+    assert.deepEqual(used('table'), ['tableSettings'], 'table');
+    for (const kind of ['none', 'chart', 'typing']) assert.deepEqual(used(kind), [], kind);
+});
+
 test('table_chart_line_groups', async () => {
     const {env, out} = await rows();
     const groups = {table: ['tableFill', 'tableBorder', 'rowsCols'], chart: ['editData', 'chartType'], line: ['lineColor', 'lineWidth', 'lineType']};

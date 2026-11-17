@@ -140,7 +140,9 @@ h.run([
             assert.equal(env.SS.current(), 'transition', 'причина применена до vo:mode');
             env.nc.trigger('vo:mode', {mode: 'view'});
             env.drain();
-            assert.ok(asked.some(it => it.section === 'theme') && asked.every(it => it.edit === true),
+            /* The menu bar also recomputes itself on vo:mode: here — only the section queries. */
+            const bySections = asked.filter(it => it && it.section);
+            assert.ok(bySections.some(it => it.section === 'theme') && bySections.every(it => it.edit === true),
                 'на vo:mode разделы не спросили CompactModes.reason');
             assert.equal(env.SS.reasons.theme, 'Недоступно в режиме просмотра', 'раздел не запомнил причину');
             assert.equal(env.SS.current(), null, 'в «Просмотре» всплывающая панель осталась открытой');

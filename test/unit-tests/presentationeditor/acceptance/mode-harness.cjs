@@ -25,12 +25,15 @@ const LOCALE_RU = path.join(ROOT, 'apps/presentationeditor/main/locale/ru.json')
 const SELF = __filename;
 /* Modules the shell takes from the shared compact layer: name → file. The module is Common.UI.Compact.<name>,
    not PE.Views.<name>. */
-const SHARED_MODULES = {Icons: path.join(ROOT, 'apps/common/main/lib/view/compact/Icons.js')};
+const SHARED_COMPACT = path.join(ROOT, 'apps/common/main/lib/view/compact');
+const SHARED_MODULES = {Icons: path.join(SHARED_COMPACT, 'Icons.js'), MenuModel: path.join(SHARED_COMPACT, 'MenuModel.js'),
+    AdapterKit: path.join(SHARED_COMPACT, 'AdapterKit.js'), MenuBar: path.join(SHARED_COMPACT, 'MenuBar.js'),
+    Windows: path.join(SHARED_COMPACT, 'Windows.js')};
 const TEST_DIR = __dirname;
 
 /* Shell modules in load order: a module comes after the ones it may take as an AMD dependency. */
-const SHELL_MODULES = ['Icons', 'DocInfoWindow', 'CompactWindows', 'StockBridge', 'SlideSelection', 'CompactModes', 'SlideActions',
-    'CompactToolbar', 'SlideSections', 'CompactLeft', 'CompactStatus', 'CompactShell'];
+const SHELL_MODULES = ['Icons', 'MenuModel', 'AdapterKit', 'MenuBar', 'DocInfoWindow', 'Windows', 'CompactWindows', 'StockBridge', 'SlideSelection',
+    'CompactModes', 'SlideActions', 'CompactMenuAdapter', 'CompactToolbar', 'SlideSections', 'CompactLeft', 'CompactStatus', 'CompactShell'];
 
 /* ------------------------------------------------------------------------ */
 /* Command line and runner                                                   */
@@ -116,6 +119,7 @@ function makeStyle() {
     Object.defineProperties(st, {
         setProperty: {value(n, v) { st[camel(n)] = v == null ? '' : String(v); }},
         getPropertyValue: {value(n) { const v = st[camel(n)]; return v == null ? '' : String(v); }},
+        getPropertyPriority: {value() { return ''; }},
         removeProperty: {value(n) { delete st[camel(n)]; }},
         cssText: {
             get() { return Object.keys(st).filter(k => st[k] !== '' && st[k] != null).map(k => kebab(k) + ': ' + st[k]).join('; '); },
@@ -1762,7 +1766,8 @@ function createWorld(options, cliOpts) {
             alert: spyDialog('alert'), warning: spyDialog('warning'), error: spyDialog('error'), info: spyDialog('info'), confirm: spyDialog('confirm'),
             Menu: permissive(Object.assign(function () { return anything('Common.UI.Menu()'); }, {Manager: permissive({hideAll: () => {}}, 'Menu.Manager', world)}), 'Common.UI.Menu', world),
             LayoutManager: permissive({isElementVisible: () => true, addControls: () => {}}, 'LayoutManager', world),
-            Compact: {},
+            /* the shared compact layer keeps the strings the locale put there (Common.UI.Compact.MenuBar…) */
+            Compact: (commonLocale.UI && commonLocale.UI.Compact) || {},
             FeaturesManager: permissive({canChange: () => true, isFeatureEnabled: () => false}, 'FeaturesManager', world),
             isRTL: () => false
         }, 'Common.UI', world),
@@ -1882,6 +1887,15 @@ function createWorld(options, cliOpts) {
     main.onEditingDisable = stockMethod(world, 'controller/Main.js', 'onEditingDisable');
     main.onPreviewStart = stockMethod(world, 'controller/Main.js', 'onPreviewStart');
     main.onEndDemonstration = stockMethod(world, 'controller/Main.js', 'onEndDemonstration');
+    /* edit request of the compact menu and the host answer to it: the methods of controller/Main.js
+       with the texts the locale gives the controllers */
+    for (const name of ['onProcessRightsChange', 'markEditRequest', 'isEditRequestWaiting', 'answerEditRequest',
+        'cancelEditRequestWait', 'editRequestStatus']) main[name] = stockMethod(world, 'controller/Main.js', name);
+    main.editRequest = null;
+    const mainTexts = world.localeOf('PE.Controllers.Main');
+    main.textEditRequestFailed = mainTexts.textEditRequestFailed;
+    main.warnProcessRightsChange = mainTexts.warnProcessRightsChange;
+    leftCtl.requestEditRightsText = world.localeOf('PE.Controllers.LeftMenu').requestEditRightsText;
     if (toolbarView.btnPreview) {
         toolbarView.btnPreview.on('click', (b, e) => toolbarCtl.onPreviewBtnClick(b, e));
         toolbarView.btnPreview.menu.on('item:click', (m, i) => toolbarCtl.onPreviewItemClick(m, i));

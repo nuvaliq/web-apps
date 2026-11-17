@@ -212,9 +212,9 @@ body.vo-boot.theme-type-dark {
 @vo-dur-pop:        .22s;
 @vo-dur-state:      .15s;
 
-/* The compact windows (compact-windows.less) are built on the documents window template, so
-   here is what it relies on, with the same values as in
-   documents: colors are the same custom properties from the values block above, the
+/* The compact windows (compact-windows.less) are built on the shared editors window template
+   (common/main/resources/less/compact/windows.less), so here is what it relies on,
+   with the same values as in documents: colors are the same custom properties from the values block above, the
    dropdown list row is the final numbers of their menu (38 × 19, the shell lists
    above have the same 38 row). */
 @vo-link:           var(--vo-link);
@@ -418,16 +418,16 @@ body.vo-compact:has(#vo-status:not([hidden])) #editor_sdk {
     z-index: @vo-z-drop + 1;
 }
 
-/* Paddings are as in the documents menu bar: the first label at x = @vo-hd-pad-l
-   (an item has its own padding 8), on the title line; in height at 46..66 from the
-   window top, under them a 10 white field up to the shadow. */
+/* The menu bar row. Paddings belong to the bar itself (shared .vo-mn rules): the first label
+   at x = @vo-pad-x, on the title line; in height at 46..66 from the window top, under
+   them a 10 white field up to the shadow. */
 #vo-menubar {
     display: flex;
     align-items: center;
     flex: 0 0 @vo-h-menu;
     height: @vo-h-menu;
     box-sizing: border-box;
-    padding: 0 (@vo-hd-pad-l - 8px) @vo-menubar-pad-b;
+    padding: 0;
     background: @vo-shell-bg;
     box-shadow: 0 1px 1px rgba(0, 0, 0, .05);
     position: relative;
@@ -1023,11 +1023,12 @@ body.vo-compact .vo-show {
 
 /* --- "File" screen ----------------------------------------------------------- */
 /* "Access rights" lead to the portal rights window; the compact menu bar has none, and
-   the item also goes away from the shell "File" screen. In the "Stock interface" it is
-   stock. The stock settings remove "Protect" and "Suggest a feature"
-   (CompactShell.tuneConfig, tunePermissions). The stock applyMode shows the
-   item inline: overridden only this way. */
-body.vo-compact #file-menu-panel #fm-btn-rights {
+   the item also goes away from the shell "File" screen. "Protect" is not shown
+   in the compact: the right is stock, and in the "Stock interface" both items are stock.
+   "Suggest a feature" is removed by the stock settings (CompactShell.tuneConfig).
+   The stock applyMode shows the items inline: overridden only this way. */
+body.vo-compact #file-menu-panel #fm-btn-rights,
+body.vo-compact #file-menu-panel #fm-btn-protect {
     display: none !important;
 }
 

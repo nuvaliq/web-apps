@@ -262,6 +262,162 @@
         .pixel-ratio__1_5 {
             --scaled-one-px-value: calc(1px / 1.5);
         }
+        /* Compact shell skeleton. Drawn instead of the stock one: the bar of the viewer
+           shell (card 44px, 4px under the top edge, 20px from the sides) and the page
+           where the engine draws it at 100% zoom, so the shell takes the place of the
+           skeleton without a jump. The viewer has one bar in every mode.
+           The colours are literals of the shell palette and do not follow the
+           interface theme: the shell has no dark palette, and a dark skeleton before
+           a light viewer reads as a flash. The shell keeps the skeleton (under another
+           id) until it is built, so the rules do not rely on the id.
+           The page does not know yet whether the shell will start: that is decided
+           by editorConfig.ui.shell, which arrives after the first paint. Every open
+           of a PDF through the platform carries the shell, so the skeleton is
+           drawn for all sessions; a session without it (the platform and the image
+           disagree on the shell value) shows this skeleton and then the stock
+           interface. */
+        body > .loadmask.sk-shell {
+            background: #eef2f4;                    /* canvas-bg */
+        }
+
+        .loadmask.sk-shell > .brendpanel,
+        .loadmask.sk-shell > .sktoolbar,
+        .loadmask.sk-shell > .placeholder {
+            display: none !important;
+        }
+
+        .loadmask > .skc {
+            display: none;
+        }
+
+        .loadmask.sk-shell > .skc {
+            display: block;
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+        }
+
+        .rtl .loadmask.sk-shell > .skc {
+            transform: scaleX(-1);
+        }
+
+        .skc-card {
+            position: absolute;
+            top: 4px;
+            right: 20px;
+            left: 20px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .9);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .15);
+            overflow: hidden;
+        }
+
+        /* The page: 20px under the bar row (4 + 44 + 8) as the engine leaves it above the
+           first page, 794px wide (A4 at 100%), the centre of the area less half the 14px
+           vertical scrollbar of the canvas. */
+        .skc-page {
+            position: absolute;
+            top: 76px;
+            bottom: 0;
+            left: 50%;
+            width: 794px;
+            margin-left: -404px;
+            background: #fff;
+        }
+
+        /* One light band runs over all the placeholders at once: the gradient is fixed to
+           the viewport, so it does not restart in each of them. */
+        .skc i {
+            position: relative;
+            display: block;
+            flex: none;
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, .1);
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, .55) 50%, rgba(255, 255, 255, 0) 65%);
+            background-size: 200vw 100%;
+            background-attachment: fixed;
+            animation: skc-flow 2.4s linear infinite;
+        }
+
+        /* Three zones as on the bar: the icon and the name, the pages and the zoom in the
+           centre, the buttons; the placeholders stand where the controls do (a 32px button
+           holds a 20px icon, so it has 6px of margin on each side). */
+        .skc-start,
+        .skc-mid,
+        .skc-end {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .skc-start {
+            left: 8px;
+            gap: 12px;
+        }
+
+        .skc-mid {
+            right: 0;
+            left: 0;
+            justify-content: center;
+        }
+
+        .skc-end {
+            right: 12px;
+            gap: 18px;
+        }
+
+        .skc-start i.skc-file {
+            width: 18px;
+            height: 18px;
+        }
+
+        .skc-start i.skc-name {
+            width: 120px;
+            height: 14px;
+        }
+
+        .skc-mid i,
+        .skc-end i {
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc-mid i {
+            margin: 0 6px;
+        }
+
+        .skc-mid i.skc-page-no {
+            width: 29px;
+            height: 10px;
+        }
+
+        .skc-mid i.skc-zoom {
+            width: 56px;
+            height: 10px;
+            margin: 0 12px 0 25px;
+        }
+
+        .skc-mid i.skc-fit {
+            margin-left: 12px;
+        }
+
+        @keyframes skc-flow {
+            from { background-position: -100vw 0; }
+            to   { background-position: 100vw 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .skc i {
+                animation: none;
+                background-image: none;
+            }
+        }
+
     </style>
 
     <script>
@@ -348,7 +504,8 @@
 <body role="application">
 <script src="../../common/main/lib/util/htmlutils.js"></script>
 <script src="../../common/main/lib/util/docserviceworker.js"></script>
-<div id="loading-mask" class="loadmask">
+<div id="loading-mask" class="loadmask sk-shell">
+    <div class="skc"><div class="skc-card"><div class="skc-start"><i class="skc-file"></i><i class="skc-name"></i></div><div class="skc-mid"><i></i><i class="skc-page-no"></i><i></i><i class="skc-zoom"></i><i class="skc-fit"></i></div><div class="skc-end"><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="skc-page"></div></div>
     <div class="brendpanel" style="display: none;">
         <div>
             <div class="spacer"></div>

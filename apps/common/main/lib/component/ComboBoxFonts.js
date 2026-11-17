@@ -45,7 +45,8 @@ if (Common === undefined)
 var FONT_TYPE_RECENT = 4;
 
 define([
-    'common/main/lib/component/ComboBox'
+    'common/main/lib/component/ComboBox',
+    'common/main/lib/util/utils'
 ], function () {
     'use strict';
 

@@ -52,6 +52,7 @@ define([
     'common/main/lib/controller/Fonts',
     'common/main/lib/collection/TextArt',
     'common/main/lib/util/LocalStorage',
+    'common/main/lib/util/utils',
     'presentationeditor/main/app/collection/ShapeGroups',
     'presentationeditor/main/app/collection/SlideLayouts',
     'presentationeditor/main/app/collection/EquationGroups',
@@ -556,6 +557,11 @@ define([
 
             onProcessRightsChange: function(data) {
                 if (data && data.enabled === false) {
+                    // A refusal answers the open edit request of the compact menu: the session stays as it is.
+                    if (this.editRequest && this.editRequest.open) {
+                        this.answerEditRequest(data.message);
+                        return;
+                    }
                     var me = this,
                         old_rights = this._state.lostEditingRights;
                     this._state.lostEditingRights = !this._state.lostEditingRights;
@@ -568,6 +574,58 @@ define([
                             me._state.lostEditingRights = false;
                         }});
                 }
+            },
+
+            // Edit request from the compact menu. One request is open until the host answers it: the host refuses
+            // only a request to switch to editing and drops a repeat while switching, success reloads the page.
+            // The request is sent only when none is open; every choice shows the wait indicator and restarts
+            // the one five second timer. Without an answer by then the general text replaces the indicator,
+            // and the request stays open for a late answer.
+            markEditRequest: function() {
+                var me = this,
+                    req = this.editRequest || (this.editRequest = {open: false, timer: null});
+                if (!req.open) {
+                    req.open = true;
+                    Common.Gateway.requestEditRights();
+                }
+                if (!req.unload) {
+                    // A page that leaves for the editing session does not report the wait as failed.
+                    req.unload = function() { me.cancelEditRequestWait(); };
+                    window.addEventListener('beforeunload', req.unload);
+                }
+                clearTimeout(req.timer);
+                req.timer = setTimeout(function() {
+                    req.timer = null;
+                    me.editRequestStatus(me.textEditRequestFailed);
+                }, 5000);
+                var lm = this.getApplication().getController('LeftMenu');
+                this.editRequestStatus(lm && lm.requestEditRightsText || '');
+            },
+
+            // The indicator is shown and the item waits for the first five seconds of a choice.
+            isEditRequestWaiting: function() {
+                return !!(this.editRequest && this.editRequest.timer);
+            },
+
+            answerEditRequest: function(message) {
+                var req = this.editRequest;
+                clearTimeout(req.timer);
+                req.timer = null;
+                req.open = false;
+                // The host text is shown as is: the status place renders it as text.
+                this.editRequestStatus(_.isEmpty(message) ? this.textEditRequestFailed : String(message));
+            },
+
+            cancelEditRequestWait: function() {
+                var req = this.editRequest;
+                if (!req || !req.timer) return;
+                clearTimeout(req.timer);
+                req.timer = null;
+                this.editRequestStatus('');
+            },
+
+            editRequestStatus: function(text) {
+                Common.NotificationCenter.trigger('editrequest:status', text);
             },
 
             onDownloadAs: function(format) {
@@ -3156,6 +3214,7 @@ define([
             },
 
             // Translation
+            textEditRequestFailed: 'Couldn\'t open the presentation for editing. Try again',
             errorLang: 'The interface language is not loaded.<br>Please contact your Document Server administrator.'
         }
     })(), PE.Controllers.Main || {}))

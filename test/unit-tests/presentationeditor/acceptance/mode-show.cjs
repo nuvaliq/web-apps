@@ -231,6 +231,26 @@ const tests = [
         const st = starts(w, m);
         assert.equal(st.length, 1, 'Ctrl+F5 starts one show');
         assert.deepEqual(st[0].args, [0], 'Ctrl+F5 is the stock show from the beginning');
+    }},
+
+    /* Reconnect in "View": the stock drops its reason and returns "View" by a direct
+       call, the ribbon mask suspends the shortcuts again — show and comment stay alive. */
+    {name: 'view_mode_keeps_show_and_comment_keys_after_reconnect', fn() {
+        const w = h.createWorld({edit: true, comment: true});
+        h.boot(w);
+        assert.equal(w.modules.CompactModes.setMode('view'), true, 'no view mode');
+        assert.equal(w.shortcutActive('ctrl+f5') && w.shortcutActive('alt+h'), true, 'the keys are asleep in view mode');
+        const opts = disable => ({viewMode: disable, allowSignature: false, rightMenu: {clear: false, disable: true},
+            statusBar: true, leftMenu: {disable: true, previewMode: true}, fileMenu: {protect: true, history: true},
+            comments: {disable: false, previewMode: true}, chat: true, review: true, viewport: true,
+            documentHolder: {clear: false, disable: true}, toolbar: true, header: {search: false}, shortcuts: false,
+            documentPreview: {draw: false}});
+        const nc = w.ctx.Common.NotificationCenter;
+        nc.trigger('editing:disable', true, opts(true), 'reconnect');
+        nc.trigger('editing:disable', false, opts(false), 'reconnect');
+        assert.equal(w.modules.CompactModes.mode(), 'view', 'view mode is lost');
+        assert.equal(w.shortcutActive('ctrl+f5'), true, 'Ctrl+F5 sleeps after the reconnect');
+        assert.equal(w.shortcutActive('alt+h'), true, 'Alt+H sleeps after the reconnect');
     }}
 ];
 

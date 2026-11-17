@@ -1,5 +1,7 @@
 /*
- * SlideActions — the catalog of the menu row sections.
+ * SlideActions — the catalog of the menu row sections and the row itself: the row
+ * mechanics are the shared layer (Common.UI.Compact.MenuBar), the presentation adapter
+ * (CompactMenuAdapter) hands it the items from this catalog.
  * Part of the web-apps fork, AGPL-3.0.
  *
  * Nine sections: File · Edit · View · Insert · Format · Slide ·
@@ -26,6 +28,10 @@
  * of the CompactShell.command command): visibility and availability — by the counterpart,
  * the window opens; without a command owner — the stock path.
  *
+ * sc — the name of a stock action in the shortcut registry (Asc.c_oAscPresentationShortcutType):
+ * the item shows the shortcut currently in the registry; hint — a note on the right instead
+ * of a shortcut (a key without an action in the registry).
+ *
  * Flags: edit — the item edits the presentation; needRight — does not edit, but
  * the stock editor without edit rights does not create it; when — a capability
  * (download, print, portal): without it the item is not drawn; sel — selection
@@ -40,7 +46,9 @@
  * The frame (CompactShell) installs the zone by calling install(shell) in the order of
  * CompactShell.ZONES.
  */
-define([], function () {
+define([
+    'common/main/lib/view/compact/MenuBar'
+], function () {
     'use strict';
 
     if (window.PE === undefined) window.PE = {};
@@ -93,13 +101,8 @@ define([], function () {
        the "File" menu (LeftMenu.clickSaveAsFormat), while the menu row has its own closing. */
     var SAVE_AS_MENU = {hide: function () {}};
 
-    /* Hovering an item with a submenu does not open it at once — as in the menus
-       of documents and spreadsheets. */
-    var HOVER_DELAY = 150;
-    /* The submenu stands with its first row level with the item: the menu window padding on top. */
-    var POP_PAD_Y = 13;
-    /* Wheel step in lines (deltaMode 1) — in pixels. */
-    var WHEEL_LINE = 33;
+    /* Keys with which the menu row opens a section from its section button. */
+    var OPEN_KEYS = ['Enter', ' ', 'ArrowDown', 'ArrowUp'];
 
     function bridge() { return PE.Views.StockBridge; }
 
@@ -107,22 +110,6 @@ define([], function () {
     function guard(label, fn) {
         var shell = PE.Views.CompactShell;
         return shell && typeof shell.guarded === 'function' ? shell.guarded(label, fn) : fn;
-    }
-
-    function glyph(name) {
-        var C = window.Common && Common.UI && Common.UI.Compact, icons = C && C.Icons;
-        try { return name && icons && typeof icons.svg === 'function' ? icons.svg(name, 24) : ''; } catch (e) { return ''; }
-    }
-
-    /* Icon of a snapshot row: the stock item icon class (iconCls, btn-*) by
-       the icons table of the catalog item — {cls, i}. No entry — a row without an icon. */
-    function mirrorGlyph(root, entry) {
-        var list = root && root.icons;
-        if (!Array.isArray(list) || !entry || !entry.icon) return '';
-        for (var n = 0; n < list.length; n++) {
-            if (list[n] && list[n].cls === entry.icon) return glyph(list[n].i);
-        }
-        return '';
     }
 
     function ctl(name) {
@@ -133,6 +120,17 @@ define([], function () {
         var main = ctl('Main');
         return (main && main.appOptions) || {};
     }
+
+    /* No connection to the server — the stock connection loss flag (Main.onCoAuthoringDisconnect). */
+    function offline() {
+        var main = ctl('Main');
+        return !!(main && main._state && main._state.isDisconnected);
+    }
+
+    /* An edit request is on its way: for this long after choosing "Edit" the item is
+       disabled, as in documents (their indicator of waiting for the host reply). A repeated
+       request is not sent during this time; the host replies by reloading into editing. */
+    var EDIT_REQUEST_WAIT = 5000;
 
     /* Caption of a stock object: 'Toolbar.textTabFile' — PE.Views.Toolbar,
        'Common.Views.ReviewChanges.txtCoAuthMode' — from window. The stock locale
@@ -146,24 +144,6 @@ define([], function () {
         return typeof v === 'string' ? v : '';
     }
 
-    /* Keyboard shortcut in a caption — as in stock tooltips (⌘ on Mac), without the brackets
-       of the tooltip template. */
-    function keys(s) {
-        var str = window.Common && Common.Utils && Common.Utils.String;
-        try {
-            return str && typeof str.platformKey === 'function' ? str.platformKey(s, '{0}') : s;
-        } catch (e) {
-            return s;
-        }
-    }
-
-    /* A shortcut with the Control key itself: the stock ctrl+h is Control on Mac too, and
-       not ⌘ (Cmd+H has its own job there), so the caption has ⌃. */
-    function ctrlKeys(s) {
-        var mac = !!(window.Common && Common.Utils && Common.Utils.isMac);
-        return mac ? s.replace(/Ctrl\+/g, '\u2303') : keys(s);
-    }
-
     function kind() {
         var sel = PE.Views.SlideSelection;
         try { return sel && typeof sel.kind === 'function' ? sel.kind() || 'none' : 'none'; } catch (e) { return 'none'; }
@@ -172,16 +152,6 @@ define([], function () {
     function mode() {
         var m = PE.Views.CompactModes;
         try { return m && typeof m.mode === 'function' ? m.mode() : 'edit'; } catch (e) { return 'edit'; }
-    }
-
-    function node(tag, cls) {
-        var el = document.createElement(tag);
-        if (cls) el.setAttribute('class', cls);
-        return el;
-    }
-
-    function stop(e) {
-        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
     }
 
     /* Separators at the edges and in a row — traces of skipped items. */
@@ -217,9 +187,18 @@ define([], function () {
             var modes = PE.Views.CompactModes;
             nc.on((modes && modes.MODE_EVENT) || 'vo:mode', guard('menu: mode', function () { me.refreshMenu(); }));
             nc.on('editing:disable', guard('menu: editing lock', function () { me.refreshMenu(); }));
+            nc.on('api:disconnect', guard('menu: connection lost', function () { me.refreshMenu(); }));
+            /* Edit request (Main.markEditRequest): the indicator and the host reply go
+               to the message area of the menu row, "Edit" is disabled and enabled again
+               together with the indicator. */
+            nc.on('editrequest:status', guard('menu: edit request status', function (text) {
+                me.showRequestStatus(text);
+                me.refreshMenu();
+            }));
             nc.on('shell:advanced', guard('menu: stock interface', function () { me.closeMenu(); }));
+            nc.on('shell:toolbar', guard('menu: rows', function () { me.closeMenu(); }));
             var host = shell && typeof shell.rowEl === 'function' ? shell.rowEl('menubar') : null;
-            if (host) this.renderMenuBar(host);
+            if (host) this.buildMenuBar(host);
         },
 
         /* Whether the current slide is hidden — from the slide properties in the engine selection. */
@@ -282,34 +261,34 @@ define([], function () {
 
             return [
                 {label: stock('Toolbar.textTabFile'), items: [
-                    /* Request of the edit right from the host — the stock handler of the "File"
-                       item (LeftMenu.clickMenuFileItem, 'edit'). */
-                    {k: 'requestEdit', t: stock('FileMenu.btnToEditCaption'), i: 'rename', engine: 'LeftMenu.clickMenuFileItem', action: 'edit', when: 'requestEdit'},
+                    /* The edit rights request to the host is handled by Main.markEditRequest (requestEditRights);
+                       without it — the stock handler of the "File" item (LeftMenu.clickMenuFileItem, 'edit'). */
+                    {k: 'requestEdit', t: stock('FileMenu.btnToEditCaption'), i: 'rename', engine: 'LeftMenu.clickMenuFileItem', action: 'edit', when: 'requestEdit', request: true},
                     SEP,
-                    {k: 'save', t: stock('FileMenu.btnSaveCaption'), i: 'save', h: keys('Ctrl+S'), engine: 'LeftMenu.clickMenuFileItem', action: 'save', ref: 'FileMenu:miSave', edit: true, idle: 'textNoUnsavedChanges'},
+                    {k: 'save', t: stock('FileMenu.btnSaveCaption'), i: 'save', sc: 'Save', engine: 'LeftMenu.clickMenuFileItem', action: 'save', ref: 'FileMenu:miSave', edit: true, idle: 'textNoUnsavedChanges'},
                     /* Without the download right the whole item disappears, not only
                        the submenu rows. */
                     sub({k: 'download', t: this.textDownload, i: 'download', ref: 'FileMenu:miDownload', when: 'download'},
                         ['PPTX', 'PDF', 'ODP', 'PNG'].map(dl)),
-                    {k: 'print', t: stock('FileMenu.btnPrintCaption'), i: 'print', h: keys('Ctrl+P'), engine: 'LeftMenu.clickToolbarPrint', ref: 'FileMenu:miPrint', when: 'print'},
+                    {k: 'print', t: stock('FileMenu.btnPrintCaption'), i: 'print', sc: 'PrintPreviewAndPrint', engine: 'LeftMenu.clickToolbarPrint', ref: 'FileMenu:miPrint', when: 'print'},
                     SEP,
                     {k: 'rename', t: stock('FileMenu.btnRenameCaption'), i: 'rename', engine: 'LeftMenu.clickMenuFileItem', action: 'rename', ref: 'FileMenu:miRename', when: 'rename', edit: true},
                     {k: 'info', t: this.textDocInfo, i: 'info', twin: 'FileMenu:miInfo', file: 'info', window: 'docInfo'},
                     {k: 'settings', t: this.textAdvancedSettings, i: 'settings', twin: 'FileMenu:miSettings', file: 'opts'}
                 ]},
                 {label: this.textEdit, items: [
-                    {k: 'undo', t: stock('Toolbar.tipUndo'), i: 'undo', h: keys('Ctrl+Z'), twin: 'Toolbar:btnUndo', edit: true, idle: 'textNothingToUndo'},
-                    {k: 'redo', t: stock('Toolbar.tipRedo'), i: 'redo', h: keys('Ctrl+Y'), twin: 'Toolbar:btnRedo', edit: true, idle: 'textNothingToRedo'},
+                    {k: 'undo', t: stock('Toolbar.tipUndo'), i: 'undo', sc: 'EditUndo', twin: 'Toolbar:btnUndo', edit: true, idle: 'textNothingToUndo'},
+                    {k: 'redo', t: stock('Toolbar.tipRedo'), i: 'redo', sc: 'EditRedo', twin: 'Toolbar:btnRedo', edit: true, idle: 'textNothingToRedo'},
                     SEP,
-                    {k: 'cut', t: stock('Toolbar.tipCut'), i: 'cut', h: keys('Ctrl+X'), twin: 'Toolbar:btnCut', edit: true, sel: OBJ},
-                    full ? {k: 'copy', t: stock('Toolbar.tipCopy'), i: 'copy', h: keys('Ctrl+C'), twin: 'Toolbar:btnCopy', idle: 'textSelectObjectOrText'}
-                         : {k: 'copy', t: stock('Toolbar.tipCopy'), i: 'copy', h: keys('Ctrl+C'), twin: 'DocumentHolder:menuViewCopy', idle: 'textSelectObjectOrText'},
-                    {k: 'paste', t: stock('Toolbar.tipPaste'), i: 'paste', h: keys('Ctrl+V'), twin: 'Toolbar:btnPaste', edit: true},
+                    {k: 'cut', t: stock('Toolbar.tipCut'), i: 'cut', sc: 'Cut', twin: 'Toolbar:btnCut', edit: true, sel: OBJ},
+                    full ? {k: 'copy', t: stock('Toolbar.tipCopy'), i: 'copy', sc: 'Copy', twin: 'Toolbar:btnCopy', idle: 'textSelectObjectOrText'}
+                         : {k: 'copy', t: stock('Toolbar.tipCopy'), i: 'copy', sc: 'Copy', twin: 'DocumentHolder:menuViewCopy', idle: 'textSelectObjectOrText'},
+                    {k: 'paste', t: stock('Toolbar.tipPaste'), i: 'paste', sc: 'Paste', twin: 'Toolbar:btnPaste', edit: true},
                     SEP,
-                    full ? {k: 'selectAll', t: stock('Toolbar.tipSelectAll'), i: 'selectAll', h: keys('Ctrl+A'), twin: 'Toolbar:btnSelectAll'}
-                         : {k: 'selectAll', t: stock('Toolbar.tipSelectAll'), i: 'selectAll', h: keys('Ctrl+A'), engine: 'asc_EditSelectAll'},
-                    {k: 'search', t: this.textFindReplace, i: 'search', h: ctrlKeys('Ctrl+H'), cmd: 'search'},
-                    {k: 'delete', t: stock('DocumentHolder.deleteText'), i: 'trash', h: 'Del', engine: 'asc_Remove', edit: true, sel: OBJ},
+                    full ? {k: 'selectAll', t: stock('Toolbar.tipSelectAll'), i: 'selectAll', sc: 'EditSelectAll', twin: 'Toolbar:btnSelectAll'}
+                         : {k: 'selectAll', t: stock('Toolbar.tipSelectAll'), i: 'selectAll', sc: 'EditSelectAll', engine: 'asc_EditSelectAll'},
+                    {k: 'search', t: this.textFindReplace, i: 'search', sc: 'OpenFindAndReplaceMenu', cmd: 'search'},
+                    {k: 'delete', t: stock('DocumentHolder.deleteText'), i: 'trash', hint: 'Del', engine: 'asc_Remove', edit: true, sel: OBJ},
                     SEP,
                     sub({k: 'spelling', t: this.textSpelling, i: 'spell', needRight: true}, [
                         {k: 'spellCheck', t: stock('Common.Views.ReviewChanges.txtSpelling'), twin: 'Review:btnsSpelling.0', check: 'twin'},
@@ -364,21 +343,21 @@ define([], function () {
                     {k: 'symbol', t: stock('Toolbar.capBtnInsSymbol'), i: 'symbol', twin: 'Toolbar:btnInsertSymbol.menu.items.2', ref: 'Toolbar:btnInsertSymbol', edit: true, idle: 'textPlaceCursor'},
                     SEP,
                     {k: 'animation', t: stock('Toolbar.textTabAnimation'), i: 'autoCorrect', cmd: 'slideSection', args: ['animation'], edit: true},
-                    {k: 'link', t: stock('Toolbar.capInsertHyperlink'), i: 'link', h: keys('Ctrl+K'), twin: 'Toolbar:btnInsertHyperlink', edit: true, idle: 'textPlaceCursor'},
+                    {k: 'link', t: stock('Toolbar.capInsertHyperlink'), i: 'link', sc: 'InsertHyperlink', twin: 'Toolbar:btnInsertHyperlink', edit: true, idle: 'textPlaceCursor'},
                     {k: 'comment', t: stock('Toolbar.capBtnComment'), i: 'comment', cmd: 'addComment', when: 'comment'},
                     SEP,
-                    {k: 'newSlide', t: stock('DocumentHolder.txtNewSlide'), i: 'newSlide', h: keys('Ctrl+M'), twin: 'Toolbar:btnAddSlide', edit: true},
+                    {k: 'newSlide', t: stock('DocumentHolder.txtNewSlide'), i: 'newSlide', sc: 'NewSlide', twin: 'Toolbar:btnAddSlide', edit: true},
                     {k: 'slideNum', t: stock('Toolbar.capBtnSlideNum'), i: 'pageNumber', twin: 'Toolbar:btnInsSlideNum', edit: true},
                     {k: 'dateTime', t: stock('Toolbar.capBtnDateTime'), i: 'dateTime', twin: 'Toolbar:btnInsDateTime', edit: true},
                     {k: 'headerFooter', t: stock('Toolbar.capBtnInsHeaderFooter'), i: 'header', twin: 'Toolbar:btnEditHeader', edit: true}
                 ]},
                 {label: this.textFormat, items: [
                     sub({k: 'text', t: this.textText, i: 'bold', edit: true, sel: TXT}, [
-                        {k: 'bold', t: stock('Toolbar.textBold'), i: 'bold', h: keys('Ctrl+B'), twin: 'Toolbar:btnBold', check: 'twin'},
-                        {k: 'italic', t: stock('Toolbar.textItalic'), i: 'italic', h: keys('Ctrl+I'), twin: 'Toolbar:btnItalic', check: 'twin'},
+                        {k: 'bold', t: stock('Toolbar.textBold'), i: 'bold', sc: 'Bold', twin: 'Toolbar:btnBold', check: 'twin'},
+                        {k: 'italic', t: stock('Toolbar.textItalic'), i: 'italic', sc: 'Italic', twin: 'Toolbar:btnItalic', check: 'twin'},
                         /* Underline, superscript, subscript — the same names
                            as in the tooltips of these buttons on the panel. */
-                        {k: 'underline', t: this.textUnderline, i: 'underline', h: keys('Ctrl+U'), twin: 'Toolbar:btnUnderline', check: 'twin'},
+                        {k: 'underline', t: this.textUnderline, i: 'underline', sc: 'Underline', twin: 'Toolbar:btnUnderline', check: 'twin'},
                         {k: 'strikeout', t: stock('Toolbar.textStrikeout'), i: 'strike', twin: 'Toolbar:btnStrikeout', check: 'twin'},
                         SEP,
                         {k: 'superscript', t: this.textSuperscript, i: 'sup', twin: 'Toolbar:btnSuperscript', check: 'twin'},
@@ -419,7 +398,7 @@ define([], function () {
                     {k: 'objectProperties', t: this.textObjectProperties, i: 'settings', cmd: 'objectProperties', needRight: true, check: 'rightPanel'}
                 ]},
                 {label: this.textSlide, items: [
-                    {k: 'newSlideSlide', t: stock('DocumentHolder.txtNewSlide'), i: 'newSlide', h: keys('Ctrl+M'), twin: 'Toolbar:btnAddSlide', edit: true},
+                    {k: 'newSlideSlide', t: stock('DocumentHolder.txtNewSlide'), i: 'newSlide', sc: 'NewSlide', twin: 'Toolbar:btnAddSlide', edit: true},
                     {k: 'duplicateSlide', t: stock('DocumentHolder.txtDuplicateSlide'), i: 'duplicate', twin: 'DocumentHolder:mnuDuplicateSlide', edit: true},
                     {k: 'deleteSlide', t: stock('DocumentHolder.txtDeleteSlide'), i: 'trash', twin: 'DocumentHolder:mnuDeleteSlide', edit: true},
                     {k: 'hideSlide', t: stock('DocumentHolder.txtSlideHide'), i: 'eyeOff', twin: 'DocumentHolder:mnuSlideHide', edit: true, check: 'slideHidden'},
@@ -461,7 +440,7 @@ define([], function () {
                     {k: 'commentRemove', t: stock('Common.Views.ReviewChanges.tipCommentRem'), i: 'trash', twin: 'Review:btnCommentRemove', sub: true, edit: true}
                 ]},
                 {label: stock('FileMenu.btnHelpCaption'), items: [
-                    {k: 'help', t: stock('FileMenu.btnHelpCaption'), i: 'help', h: 'F1', twin: 'FileMenu:miHelp', file: 'help'},
+                    {k: 'help', t: stock('FileMenu.btnHelpCaption'), i: 'help', sc: 'OpenHelpMenu', twin: 'FileMenu:miHelp', file: 'help'},
                     {k: 'about', t: stock('LeftMenu.tipAbout'), i: 'info', twin: 'LeftMenu:btnAbout', window: 'about'}
                 ]}
             ];
@@ -483,28 +462,38 @@ define([], function () {
         },
 
         /* --- Item state ----------------------------------------------------- */
-        /* {disabled, reason, checked?, hidden?}. The order of reasons: the shell mode
-           (CompactModes.reason), the edit right, the stock editing lock
-           (itemLocked — without a reason), the selection, then the counterpart: its
-           availability and visibility are stock. A command without an owner is inactive.
-           An editing item without the right and in "Viewing" is not hidden by the stock hiding:
-           it is visible but disabled, with a reason. */
-        itemState: function (it, shell) {
+        /* {disabled, reason, checked?, hidden?}; reason is a reason code (reasonText gives
+           its text). The order of reasons: the shell mode (CompactModes.reason, code viewMode),
+           the edit right (rights), the stock editing lock (itemLocked — without a reason),
+           the selection, then the counterpart: its availability and visibility are stock. The reason
+           for the selection and for a disabled counterpart is the name of its text in the catalog (why, idle).
+           A command without an owner is inactive. An editing item without the right and in "Viewing"
+           is not hidden by the stock hiding: it is visible but disabled, with a reason. */
+        itemCode: function (it, shell) {
             var st = {disabled: false, reason: null};
             if (!it || it.sep) return st;
             shell = shell || this.shell || PE.Views.CompactShell;
             if (it.check) st.checked = this.checked(it);
 
+            /* "Edit" for a reader: without a connection the request cannot be sent (offline), and while
+               a request is on its way a second one is not needed (no reason: the wait is short). */
+            if (it.request) {
+                if (offline()) return {disabled: true, reason: 'offline'};
+                if (this.editRequestWaiting()) return {disabled: true, reason: null};
+            }
+
             var modes = PE.Views.CompactModes, why = null;
-            try { why = modes && typeof modes.reason === 'function' ? modes.reason(it) : null; } catch (e) { why = null; }
+            try { why = modes && typeof modes.reason === 'function' && modes.reason(it) ? 'viewMode' : null; } catch (e) { why = null; }
+            /* Without the edit right — "no permission"; for a user who can request it —
+               how to start editing (rightsRequest). */
             if (!why && (it.edit || it.needRight) && shell && typeof shell.editRight === 'function' && !shell.editRight())
-                why = this.textNoEditRight;
+                why = CAN.requestEdit(options()) ? 'rightsRequest' : 'rights';
             if (!why && this.itemLocked(it, shell)) {
                 st.disabled = true;
                 return st;
             }
             if (!why && it.sel && it.sel.indexOf(kind()) < 0)
-                why = this[it.why || selectionWhy(it.sel)];
+                why = it.why || selectionWhy(it.sel);
             if (why) {
                 st.disabled = true;
                 st.reason = why;
@@ -525,9 +514,52 @@ define([], function () {
                 st.hidden = true;
             } else if (s.disabled) {
                 st.disabled = true;
-                if (it.idle) st.reason = this[it.idle];
+                if (it.idle) st.reason = it.idle;
             }
             return st;
+        },
+
+        /* The same state with the reason as text — for surfaces outside the menu row. */
+        itemState: function (it, shell) {
+            var st = this.itemCode(it, shell);
+            if (st.reason) st.reason = this.reasonText(st.reason);
+            return st;
+        },
+
+        /* Reason text by code: viewMode — the mode reason (CompactModes.reason), rights —
+           no edit right, rightsRequest — it can be requested via "File → Edit",
+           offline — the shared menu row text, others — the name of a catalog text. No text — null. */
+        reasonText: function (code) {
+            if (typeof code !== 'string' || !code) return null;
+            var text = null;
+            if (code === 'viewMode') {
+                var modes = PE.Views.CompactModes;
+                try { text = modes && typeof modes.reason === 'function' ? modes.reason({edit: true}) : null; } catch (e) { text = null; }
+                text = text || (modes && modes.textModeLockedView);
+            } else if (code === 'rights') {
+                text = this.textNoEditRight;
+            } else if (code === 'rightsRequest') {
+                text = this.textNoEditRightRequest;
+            } else if (code === 'offline') {
+                var bar = window.Common && Common.UI && Common.UI.Compact && Common.UI.Compact.MenuBar;
+                text = bar && typeof bar.reasonText === 'function' ? bar.reasonText(null, code) : null;
+            } else if (/^text[A-Z]/.test(code)) {
+                text = this[code];
+            }
+            return typeof text === 'string' && text ? text : null;
+        },
+
+        /* Item caption at the moment the row is built. An item with liveCaption takes the current
+           caption of the counterpart: the macro record button changes it itself. An empty
+           caption or a missing counterpart — the t field. Built rows (an open list or
+           submenu) reread it only on a menu row refresh. */
+        label: function (it) {
+            if (it && it.liveCaption) {
+                var B = bridge();
+                var text = B && typeof B.controlCaption === 'function' ? B.controlCaption(it.twin) : '';
+                if (text) return text;
+            }
+            return it && it.t != null ? String(it.t) : '';
         },
 
         /* An item under the stock editing lock (CompactShell.lockState: version
@@ -581,7 +613,7 @@ define([], function () {
         exec: function (it, shell, anchor) {
             shell = shell || this.shell || PE.Views.CompactShell;
             if (!it || it.sep || Array.isArray(it.sub) || it.sub === true) return false;
-            if (this.itemState(it, shell).disabled) return false;
+            if (this.itemCode(it, shell).disabled) return false;
             /* Thumbnail strip: the engine's ShowThumbnails does not send asc_onThumbnailsShow —
                the mark after the choice is driven by the choice itself. */
             if (it.check === 'thumbs') {
@@ -602,7 +634,9 @@ define([], function () {
                 return true;
             }
             if (it.engine) {
+                if (it.request && this.requestEditRights()) return true;
                 B.engine.apply(B, [it.engine].concat(this.engineArgs(it)));
+                if (it.request) this.markEditRequest();
                 return true;
             }
             if (it.window && shell && typeof shell.hasCommand === 'function' && shell.hasCommand(it.window)) {
@@ -664,101 +698,114 @@ define([], function () {
         },
 
         /* --- Menu row ---------------------------------------------------------- */
-        /* Section buttons are built once, the section composition — on every
-           opening: rights, mode, selection and counterpart availability are read at
-           that moment. A submenu (▸) from catalog items — the same rows, a counterpart
-           submenu — a snapshot of its stock menu (StockBridge.mirror) at the moment of
-           opening, a choice in it is a stock item click (StockBridge.pick).
-           A gallery is the stock popup list of the counterpart at the row
-           (StockBridge.gallery). A disabled item — the class vo-locked and
-           aria-disabled, not the disabled attribute: the browser does not send click on a
-           disabled button, and on the click the availability is rechecked. The reason is in the
-           row tooltip before the press. Submenus live in the menu row itself, not
-           inside the scrollable section list: its overflow would clip them. */
+        /* The row mechanics are the shared layer (Common.UI.Compact.MenuBar): sections and their
+           lists, submenus ▸, the keyboard (F10, arrows, Home, End, Esc), "…" of a narrow window,
+           "Help" pinned on the right, the reason of a disabled item. The composition, state
+           and commands are handed to it by the presentation adapter (CompactMenuAdapter) from this catalog:
+           the section composition is read on every opening — rights, mode, selection and
+           counterpart availability are taken at that moment. */
 
         menu: null,
 
-        renderMenuBar: function (host) {
+        buildMenuBar: function (host) {
             if (!host) return null;
             var me = this;
-            this.closeMenu();
-            var prev = host.querySelector && host.querySelector('.vo-mn');
-            if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
-
-            var bar = node('div', 'vo-mn');
-            bar.setAttribute('role', 'menubar');
+            this.destroyMenuBar();
+            var C = window.Common && Common.UI && Common.UI.Compact;
+            var Adapter = PE.Views.CompactMenuAdapter;
+            if (!C || !C.MenuBar || typeof C.MenuBar.create !== 'function' || !Adapter) return null;
+            var shell = this.shell || PE.Views.CompactShell;
+            var api = shell && typeof shell.engineApi === 'function' ? shell.engineApi() : null;
+            /* Row glyphs — the shared AIR set (Common.UI.Compact.Icons). */
+            this.menu = C.MenuBar.create(Adapter.create(shell, api), {pinned: 'help', icons: Common.UI.Compact.Icons});
+            var bar = this.menu.el;
             bar.setAttribute('aria-label', this.textMenuBar_ARIA);
-            this.menu = {bar: bar, sections: [], open: -1, flies: [], gallery: null, timer: null};
-
-            this.groups().forEach(function (g, index) {
-                var wrap = node('div', 'vo-mn-wrap');
-                wrap.setAttribute('role', 'none');
-                var btn = node('button', 'vo-mn-item');
-                btn.setAttribute('type', 'button');
-                btn.setAttribute('role', 'menuitem');
-                btn.setAttribute('aria-haspopup', 'menu');
-                btn.setAttribute('aria-expanded', 'false');
-                btn.setAttribute('tabindex', index === 0 ? '0' : '-1');
-                btn.textContent = g.label;
-                var drop = node('div', 'vo-mn-drop');
-                drop.setAttribute('role', 'menu');
-                drop.setAttribute('aria-label', g.label);
-                drop.setAttribute('data-level', '0');
-                me.bindWheel(drop);
-                btn.addEventListener('click', guard('menu: section', function (e) {
-                    stop(e);
-                    /* Openness is read before closing: a repeated click on the same
-                       button closes the section instead of blinking it. */
-                    var open = me.menu.open !== index;
-                    me.closeMenu();
-                    if (open) me.openSection(index);
-                }));
-                /* A section is already open — hovering a neighbor switches the section. */
-                btn.addEventListener('mouseenter', guard('menu: section hover', function () {
-                    if (!me.menu || me.menu.open < 0 || me.menu.open === index) return;
-                    me.closeMenu();
-                    me.openSection(index);
-                }));
-                wrap.appendChild(btn);
-                wrap.appendChild(drop);
-                bar.appendChild(wrap);
-                me.menu.sections.push({btn: btn, drop: drop});
+            /* The "File" screen lies under the menu row but above it on the stock layer
+               scale: the section would open invisible under it. A press that opens a section first
+               closes the screen with the same call as the stock Esc (controller/LeftMenu.js). */
+            var opening = guard('menu: file screen', function (e) {
+                if (e && e.type === 'keydown' && OPEN_KEYS.indexOf(e.key) < 0) return;
+                me.hideFileScreen();
             });
+            bar.addEventListener('mousedown', opening, true);
+            bar.addEventListener('keydown', opening, true);
             host.appendChild(bar);
-            this.bindDocument();
             return bar;
         },
 
-        isMenuOpen: function () {
-            return !!this.menu && this.menu.open >= 0;
+        /* Shell startup rollback (CompactShell.rollbackStartup): the menu row removes
+           its window listeners (F10, Esc, outside click) and its node. */
+        unbind: function () {
+            this.destroyMenuBar();
         },
 
-        openSection: function (index) {
-            var me = this, s = this.menu && this.menu.sections[index];
-            var g = s && this.groups()[index];
-            if (!g) return;
-            /* Open stock dropdown menus are closed, as on the opening
-               of any stock menu. */
-            var mm = Common.UI && Common.UI.Menu && Common.UI.Menu.Manager;
-            if (mm && typeof mm.hideAll === 'function') mm.hideAll();
-            this.primeStockMenus();
-            /* The "File" screen lies under the menu row but above it on the stock layer
-               scale: the section would open invisible under it. Opening a section
-               closes the screen with the same call as the stock Esc
-               (controller/LeftMenu.js). */
+        destroyMenuBar: function () {
+            var m = this.menu;
+            this.menu = null;
+            if (m && typeof m.destroy === 'function') m.destroy();
+        },
+
+        hideFileScreen: function () {
             var B = bridge();
-            var left = B.ROOTS && B.ROOTS.LeftMenu ? B.ROOTS.LeftMenu() : null;
+            var left = B && B.ROOTS && B.ROOTS.LeftMenu ? B.ROOTS.LeftMenu() : null;
             var screen = left && left.menuFile;
             if (screen && typeof screen.isVisible === 'function' && screen.isVisible() && typeof screen.hide === 'function') screen.hide();
-            s.drop.textContent = '';
-            this.visibleItems(g.items).forEach(function (it) {
-                s.drop.appendChild(it.sep ? me.sepNode() : me.menuRow(it, 0));
-            });
-            s.drop.scrollTop = 0;
-            s.drop.classList.add('open');
-            s.btn.classList.add('vo-open');
-            s.btn.setAttribute('aria-expanded', 'true');
-            this.menu.open = index;
+        },
+
+        isMenuOpen: function () {
+            return !!this.menu && this.menu.isOpen() === true;
+        },
+
+        closeMenu: function () {
+            if (this.menu) this.menu.close();
+        },
+
+        /* Recompute the states: of the sections in the row and of the open list (mode change,
+           stock editing lock). */
+        refreshMenu: function () {
+            if (this.menu) this.menu.refresh();
+        },
+
+        /* The rights request is handled by Main.markEditRequest, as in documents: one open
+           request, a waiting indicator and a shared text if the host is silent for 5 seconds, and
+           a host refusal in reply does not break the connection (controller/Main.js). There is no
+           caption in the stock status bar: its place is the indicator in the menu row. False —
+           there is no controller with this mechanism, the request goes through the stock handler. */
+        requestEditRights: function () {
+            var main = ctl('Main');
+            if (!main || typeof main.markEditRequest !== 'function') return false;
+            main.markEditRequest();
+            return true;
+        },
+
+        /* "Edit" waits for the host reply: the first 5 seconds after the choice. */
+        editRequestWaiting: function () {
+            var main = ctl('Main');
+            return !!this.editRequestTimer ||
+                !!(main && typeof main.isEditRequestWaiting === 'function' && main.isEditRequestWaiting());
+        },
+
+        /* The request indicator and the host reply go to the message area of the menu row (a live
+           region announced by screen readers). A message stays until the next one
+           replaces it; an empty one removes it. The host text is set as plain text only. */
+        showRequestStatus: function (text) {
+            var el = this.menu && typeof this.menu.status === 'function' ? this.menu.status() : null;
+            if (el) el.textContent = typeof text === 'string' ? text : '';
+        },
+
+        /* Without the request mechanism in Main: "Edit" is disabled for the waiting time
+           (EDIT_REQUEST_WAIT) and enabled again if the host has not reloaded
+           the editor into editing by then. */
+        editRequestTimer: null,
+
+        markEditRequest: function () {
+            var me = this;
+            clearTimeout(this.editRequestTimer);
+            this.editRequestTimer = setTimeout(guard('menu: edit request', function () {
+                me.editRequestTimer = null;
+                me.refreshMenu();
+            }), EDIT_REQUEST_WAIT);
+            this.refreshMenu();
         },
 
         /* The stock context menus of a slide, table and image set the visibility
@@ -799,88 +846,12 @@ define([], function () {
             if (p.imgProps || p.shapeProps || p.chartProps) init(view.pictureMenu, p);
         },
 
-        /* Close the section, the submenu and the gallery at the row. */
-        closeMenu: function () {
-            var m = this.menu;
-            if (!m) return;
-            clearTimeout(m.timer);
-            this.closeFlies(1);
-            m.sections.forEach(function (s) {
-                s.drop.classList.remove('open');
-                s.btn.classList.remove('vo-open');
-                s.btn.setAttribute('aria-expanded', 'false');
-            });
-            m.open = -1;
-        },
-
-        /* Recompute the states of the open section (mode change). */
-        refreshMenu: function () {
-            if (!this.isMenuOpen()) return;
-            var index = this.menu.open;
-            this.closeMenu();
-            this.openSection(index);
-        },
-
         /* Items that the stock editor does not hide; separators cleaned. */
         visibleItems: function (items) {
             var me = this;
             return cleanSeps((items || []).filter(function (it) {
-                return it.sep || !me.itemState(it).hidden;
+                return it.sep || !me.itemCode(it).hidden;
             }));
-        },
-
-        /* Row caption at the moment of opening. An item with liveCaption takes the current
-           caption of the counterpart: the macro record button changes it itself. An empty
-           caption or a missing counterpart — the t field. An already open row does not
-           reread this caption. */
-        label: function (it) {
-            if (it && it.liveCaption) {
-                var B = bridge();
-                var text = B && typeof B.controlCaption === 'function' ? B.controlCaption(it.twin) : '';
-                if (text) return text;
-            }
-            return it && it.t != null ? String(it.t) : '';
-        },
-
-        /* Catalog item row. On click — the other end of the check: the state
-           is reread, and an item disabled in the meantime does not close the menu (in
-           the stock menu a click on a disabled item does not close it either). */
-        menuRow: function (it, level) {
-            var me = this, st = this.itemState(it);
-            var hasSub = !!(it.sub || it.gallery);
-            var row = this.rowNode(this.label(it), glyph(it.i), hasSub, it.h, it.check ? !!st.checked : null);
-            row.setAttribute('data-k', it.k || '');
-            row.setAttribute('data-level', String(level));
-            this.rowState(row, st);
-            var act = guard('menu: item', function (e) {
-                stop(e);
-                var now = me.itemState(it);
-                me.rowState(row, now);
-                if (now.disabled) return;
-                if (Array.isArray(it.sub)) { me.openFly(row, me.catalogRows(it, level + 1), level + 1); return; }
-                if (it.sub) { me.openFly(row, me.mirrorRows(it, me.mirrorList(it), level + 1), level + 1); return; }
-                if (it.gallery) { me.openGallery(row, it.twin, level + 1); return; }
-                me.closeMenu();
-                me.exec(it, me.shell);
-            });
-            row.addEventListener('click', act);
-            row.addEventListener('mouseenter', guard('menu: hover', function () {
-                me.hoverRow(row, level, hasSub ? act : null);
-            }));
-            return row;
-        },
-
-        /* Submenu rows from catalog items; an inline item — a snapshot of the menu of its
-           counterpart right in this submenu (two stock alignment menus — as one). */
-        catalogRows: function (it, level) {
-            var me = this, out = [];
-            this.visibleItems(it.sub).forEach(function (x) {
-                if (x.sep) { out.push({sep: true}); return; }
-                if (!x.inline) { out.push({row: me.menuRow(x, level)}); return; }
-                if (me.itemState(x).disabled) return;
-                me.mirrorRows(x, me.mirrorList(x), level).forEach(function (r) { out.push(r); });
-            });
-            return cleanSeps(out);
         },
 
         /* Snapshot of the stock menu of the counterpart; ids — only these items of the stock menu. */
@@ -888,215 +859,6 @@ define([], function () {
             var list = bridge().mirror(it.twin) || [];
             if (it.ids) list = list.filter(function (e) { return e.sep || it.ids.indexOf(String(e.id)) >= 0; });
             return cleanSeps(list);
-        },
-
-        mirrorRows: function (root, list, level) {
-            var me = this;
-            return (list || []).map(function (e) {
-                return e.sep ? {sep: true} : {row: me.mirrorRow(e, root, level)};
-            });
-        },
-
-        /* Snapshot row: icon by the icons table of the catalog item, caption,
-           availability and mark of the stock item. Before the choice the availability
-           of the parent item is reread: the stock menu of a disabled control
-           cannot be opened. */
-        mirrorRow: function (entry, root, level) {
-            var me = this;
-            var hasSub = !!(entry.sub || entry.gallery);
-            var row = this.rowNode(entry.caption, mirrorGlyph(root, entry), hasSub, '', entry.checked ? true : null);
-            row.setAttribute('data-id', entry.id);
-            row.setAttribute('data-level', String(level));
-            this.rowState(row, {disabled: entry.disabled});
-            var act = guard('menu: submenu item', function (e) {
-                stop(e);
-                if (entry.disabled) return;
-                var parent = me.itemState(root);
-                if (parent.disabled) { me.rowState(row, parent); return; }
-                if (entry.sub) { me.openFly(row, me.mirrorRows(root, entry.sub, level + 1), level + 1); return; }
-                if (entry.gallery) { me.openGallery(row, bridge().itemRef(root.twin, entry.id), level + 1); return; }
-                me.closeMenu();
-                bridge().pick(root.twin, entry.id);
-            });
-            row.addEventListener('click', act);
-            row.addEventListener('mouseenter', guard('menu: submenu hover', function () {
-                me.hoverRow(row, level, hasSub && !entry.disabled ? act : null);
-            }));
-            return row;
-        },
-
-        /* Submenu to the right of the row, its first row level with it; if it does not fit at
-           the window edge — to the left; vertically — within the window. */
-        openFly: function (row, rows, level) {
-            this.closeFlies(level);
-            if (!rows || !rows.length) return;
-            var me = this;
-            var fly = node('div', 'vo-mn-drop vo-mn-fly open');
-            fly.setAttribute('role', 'menu');
-            fly.setAttribute('data-level', String(level));
-            var cap = row.querySelector && row.querySelector('.vo-mn-t');
-            if (cap) fly.setAttribute('aria-label', cap.textContent);
-            this.bindWheel(fly);
-            rows.forEach(function (r) { fly.appendChild(r.sep ? me.sepNode() : r.row); });
-            this.menu.bar.appendChild(fly);
-            this.menu.flies.push({level: level, el: fly, row: row});
-            row.classList.add('vo-sub-open');
-            row.setAttribute('aria-expanded', 'true');
-            this.placeFly(fly, row);
-        },
-
-        placeFly: function (fly, row) {
-            var br = this.menu.bar.getBoundingClientRect(), rr = row.getBoundingClientRect();
-            var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
-            var w = fly.offsetWidth || 0, h = fly.offsetHeight || 0;
-            var left = rr.right - br.left - 2;
-            if (vw && br.left + left + w > vw - 4) left = rr.left - br.left - w + 2;
-            var top = rr.top - br.top - POP_PAD_Y;
-            if (vh && br.top + top + h > vh - 4) top = vh - 4 - h - br.top;
-            if (br.top + top < 4) top = 4 - br.top;
-            fly.style.left = Math.round(left) + 'px';
-            fly.style.top = Math.round(top) + 'px';
-        },
-
-        /* Stock gallery of the counterpart at the row, to the right of it. A choice in the gallery
-           closes the menu; the stock code removed the gallery itself — the row is closed again. */
-        openGallery: function (row, ref, level) {
-            var me = this;
-            this.closeFlies(level);
-            var ok = !!ref && bridge().gallery(ref, row, {align: 'tl-tr', onClose: function (how) {
-                row.classList.remove('vo-sub-open');
-                row.setAttribute('aria-expanded', 'false');
-                if (me.menu && me.menu.gallery && me.menu.gallery.row === row) me.menu.gallery = null;
-                if (how === 'pick') me.closeMenu();
-            }});
-            if (!ok) return false;
-            this.menu.gallery = {level: level, row: row};
-            row.classList.add('vo-sub-open');
-            row.setAttribute('aria-expanded', 'true');
-            return true;
-        },
-
-        closeFlies: function (fromLevel) {
-            var m = this.menu;
-            if (!m) return;
-            if (m.gallery && m.gallery.level >= fromLevel) bridge().closeGallery('close');
-            var keep = [];
-            m.flies.forEach(function (f) {
-                if (f.level < fromLevel) { keep.push(f); return; }
-                if (f.el.parentNode) f.el.parentNode.removeChild(f.el);
-                f.row.classList.remove('vo-sub-open');
-                f.row.setAttribute('aria-expanded', 'false');
-            });
-            m.flies = keep;
-        },
-
-        /* Hover: on an item with a submenu — open it after a delay, on the others —
-           close the submenus deeper than this level. */
-        hoverRow: function (row, level, open) {
-            var me = this;
-            clearTimeout(this.menu.timer);
-            this.menu.timer = setTimeout(guard('menu: hover delay', function () {
-                if (!me.menu) return;
-                if (open) {
-                    if (!row.classList.contains('vo-sub-open')) open();
-                } else {
-                    me.closeFlies(level + 1);
-                }
-            }), HOVER_DELAY);
-        },
-
-        /* List row: icon (no column if there is no icon), caption,
-           keyboard shortcut on the right, mark, ▸. */
-        rowNode: function (text, icon, hasSub, hint, checked) {
-            var row = node('button', 'vo-mn-sub' + (hasSub ? ' vo-has-sub' : ''));
-            row.setAttribute('type', 'button');
-            row.setAttribute('tabindex', '-1');
-            row.setAttribute('role', checked === null || checked === undefined ? 'menuitem' : 'menuitemcheckbox');
-            if (checked !== null && checked !== undefined) row.setAttribute('aria-checked', checked ? 'true' : 'false');
-            if (hasSub) {
-                row.setAttribute('aria-haspopup', 'menu');
-                row.setAttribute('aria-expanded', 'false');
-            }
-            var i = node('span', icon ? 'vo-mn-i' : 'vo-mn-i vo-mn-i-none');
-            if (icon) i.innerHTML = icon;
-            row.appendChild(i);
-            var t = node('span', 'vo-mn-t');
-            t.textContent = text || '';
-            row.appendChild(t);
-            if (hint) {
-                var h = node('span', 'vo-mn-h');
-                h.textContent = hint;
-                row.appendChild(h);
-            }
-            if (checked) {
-                var c = node('span', 'vo-mn-chk');
-                c.innerHTML = glyph('checkMenu');
-                row.appendChild(c);
-            }
-            if (hasSub) {
-                var a = node('span', 'vo-mn-arrow');
-                a.innerHTML = glyph('chevronR');
-                row.appendChild(a);
-            }
-            return row;
-        },
-
-        sepNode: function () {
-            var sep = node('div', 'vo-mn-sep');
-            sep.setAttribute('role', 'separator');
-            return sep;
-        },
-
-        /* Disabled row and its reason — before the press, as the row tooltip. */
-        rowState: function (row, st) {
-            var off = !!(st && st.disabled);
-            if (off) row.classList.add('vo-locked'); else row.classList.remove('vo-locked');
-            row.setAttribute('aria-disabled', off ? 'true' : 'false');
-            if (st && st.reason) {
-                row.setAttribute('title', st.reason);
-                row.setAttribute('aria-description', st.reason);
-            } else {
-                row.removeAttribute('title');
-                row.removeAttribute('aria-description');
-            }
-        },
-
-        /* Wheel over the list: the stock editor suppresses wheel scrolling on
-           the page, so a long list is scrolled by its own handler. */
-        bindWheel: function (el) {
-            el.addEventListener('wheel', guard('menu: wheel', function (e) {
-                var max = (el.scrollHeight || 0) - (el.clientHeight || 0);
-                if (!e || !(max > 0)) return;
-                var dy = (e.deltaMode === 1 ? WHEEL_LINE : 1) * (e.deltaY || 0);
-                el.scrollTop = Math.max(0, Math.min(max, (el.scrollTop || 0) + dy));
-                if (e.preventDefault) e.preventDefault();
-                stop(e);
-            }), {passive: false});
-        },
-
-        /* A click outside the menu and its gallery and Esc close the menu; once per
-           page. Esc with an open menu — only closes the menu. */
-        docBound: false,
-
-        bindDocument: function () {
-            if (this.docBound || typeof document.addEventListener !== 'function') return;
-            this.docBound = true;
-            var me = this;
-            document.addEventListener('mousedown', guard('menu: outside', function (e) {
-                if (!me.isMenuOpen()) return;
-                var t = e && e.target;
-                if (t && me.menu.bar.contains(t)) return;
-                var B = bridge();
-                if (t && B && typeof B.galleryOwns === 'function' && B.galleryOwns(t)) return;
-                me.closeMenu();
-            }), true);
-            document.addEventListener('keydown', guard('menu: escape', function (e) {
-                if (!e || !me.isMenuOpen() || (e.key !== 'Escape' && e.keyCode !== 27)) return;
-                if (e.preventDefault) e.preventDefault();
-                stop(e);
-                me.closeMenu();
-            }), true);
-            Common.NotificationCenter.on('shell:toolbar', guard('menu: rows', function () { me.closeMenu(); }));
         },
 
         /* --- Texts ------------------------------------------------------------- */
@@ -1123,6 +885,7 @@ define([], function () {
         textIgnoreAll: 'Ignore all',
         textMoveSlide: 'Move slide',
         textNoEditRight: 'No permission to edit',
+        textNoEditRightRequest: 'Viewing only — to edit, choose File → Edit Presentation',
         textNoMacroRecording: 'No macro is being recorded',
         textNotGroup: 'The selection is not a group',
         textNothingToRedo: 'Nothing to redo',

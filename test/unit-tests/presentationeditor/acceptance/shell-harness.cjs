@@ -8,6 +8,8 @@
  *    the engine api and the notification centre; every call the shell makes into
  *    a stock control or the engine is logged;
  *  - the stock ru locale applied before the shell modules load, as the editor does;
+ *  - the stock/shell split of app/view: stock files are the ones of the release
+ *    commit the fork starts from (STOCK, `--stock <ref>` to read another one);
  *  - a CSS cascade over the compiled compact-shell.less of the presentation editor;
  *  - a runner: `ok <name>` / `FAIL <name>: <reason>`, exit code 1 on any failure,
  *    `--only <name>` runs one test.
@@ -30,7 +32,10 @@ const DE_LESS = path.join(APPS, 'documenteditor/main/resources/less');
 const SHELL_NAMES = ['CompactShell', 'StockBridge', 'SlideActions', 'SlideSelection', 'CompactToolbar',
     'SlideSections', 'CompactLeft', 'CompactStatus', 'CompactModes', 'CompactWindows'];
 /* Modules the shell takes from the shared compact layer (common/main/lib/view/compact/<name>): name → file. */
-const SHARED_MODULES = {Icons: path.join(APPS, 'common/main/lib/view/compact/Icons.js')};
+const SHARED_COMPACT = path.join(APPS, 'common/main/lib/view/compact');
+const SHARED_MODULES = {Icons: path.join(SHARED_COMPACT, 'Icons.js'), MenuModel: path.join(SHARED_COMPACT, 'MenuModel.js'),
+    AdapterKit: path.join(SHARED_COMPACT, 'AdapterKit.js'), MenuBar: path.join(SHARED_COMPACT, 'MenuBar.js'),
+    Windows: path.join(SHARED_COMPACT, 'Windows.js')};
 
 /* ------------------------------------------------------------------------ */
 /* git                                                                       */
@@ -40,6 +45,18 @@ function git(args, cwd) {
 }
 
 const FORK_BRANCH = 'b24/9.4.0';
+/* Release commit of ONLYOFFICE web-apps v9.4.0.129 the fork history starts from:
+   it is in the history of every fork branch, and the fork branch itself may
+   already carry the shell, so the stock editor is read here and not there. */
+const STOCK = '1993a6d89731af0fcb5129ebf0ee380076fea5a9';
+
+/* Stock editor commit: --stock <ref> when given, otherwise STOCK. null — the
+   commit is not in this clone. */
+function stockBase() {
+    const given = argValue('--stock');
+    if (given) return git(['rev-parse', '--verify', given + '^{commit}']);
+    try { return git(['rev-parse', '--verify', STOCK + '^{commit}']); } catch (e) { return null; }
+}
 
 /* Fork base of HEAD: --base <ref> when given, otherwise the merge base with
    the fork branch under any remote name or as a local branch. Clones name the
@@ -64,13 +81,13 @@ function forkBase() {
 }
 
 let stockViewCache = null;
-/* View files of the stock editor: the ones present at the fork base. Everything
-   else in app/view is shell code. */
+/* View files of the stock editor: the ones present at the stock commit.
+   Everything else in app/view is shell code. */
 function stockViewNames() {
     if (stockViewCache) return stockViewCache;
     let names = null;
     try {
-        const base = forkBase();
+        const base = stockBase();
         if (base) names = git(['ls-tree', '--name-only', base, 'apps/presentationeditor/main/app/view/'])
             .split('\n').filter(Boolean).map(f => path.basename(f, '.js'));
     } catch (e) { names = null; }
@@ -1384,18 +1401,34 @@ const SHARED_COMPACT_LESS = path.join(APPS, 'common/main/resources/less/compact'
 const SHARED_AIR = path.join(APPS, 'common/main/resources/img/air');
 
 function documentsLayerSource() {
+    return layerSource(DE_APP_LESS);
+}
+
+/* The compact layer of the editor as app.less imports it: stock image paths, the shared layer
+   files in the app.less order and its own compact-shell.less. */
+function layerSource(appLess) {
     const vars = fs.readFileSync(STOCK_VARS, 'utf8');
     const paths = ['app-image-const-path', 'common-image-const-path'].map(name => {
         const m = new RegExp('^@' + name + ':[^;\\n]*;', 'm').exec(vars);
         if (!m) throw new Error('variables.less: @' + name + ' is not found');
         return m[0];
     });
-    const lines = fs.readFileSync(DE_APP_LESS, 'utf8').split('\n').map(l => l.trim());
+    const lines = fs.readFileSync(appLess, 'utf8').split('\n').map(l => l.trim());
     const own = lines.indexOf('@import "compact-shell.less";');
-    if (own < 0) throw new Error('documents app.less does not import compact-shell.less');
+    if (own < 0) throw new Error(path.relative(ROOT, appLess) + ' does not import compact-shell.less');
     let first = own;
     while (first > 0 && /^@import\s+"[^"]*common\/main\/resources\/less\/compact\/[\w-]+\.less";$/.test(lines[first - 1])) first--;
     return paths.concat(lines.slice(first, own + 1)).join('\n');
+}
+
+/* The presentation compact layer as their app.less imports it (the shared layer, then its own). */
+async function compilePresentationLess() {
+    const appLess = path.join(PE_LESS, 'app.less');
+    const key = appLess + '#compact';
+    if (cssCache.has(key)) return cssCache.get(key);
+    const p = lessCompiler().render(layerSource(appLess), {filename: appLess, javascriptEnabled: true}).then(out => out.css);
+    cssCache.set(key, p);
+    return p;
 }
 
 async function compileDocumentsLess() {
@@ -1406,8 +1439,8 @@ async function compileDocumentsLess() {
     return p;
 }
 
-/* Menu tokens of the shared layer (--vo-menu-* of compact/tokens.less): only the shared
-   menu bar rules read them, the presentation shell keeps a menu bar of its own. */
+/* Menu tokens of the shared layer (--vo-menu-* of compact/tokens.less): var() references to the
+   palette, compared by compact-parity on the compiled layers of both editors. */
 function sharedMenuTokens() {
     const text = fs.readFileSync(path.join(SHARED_COMPACT_LESS, 'tokens.less'), 'utf8');
     return new Set(Array.from(text.matchAll(/(--vo-menu-[\w-]+)\s*:/g), m => m[1]));
@@ -2620,7 +2653,8 @@ function signature(el) {
 
 async function prepareCss() {
     try {
-        const css = await compileLess(path.join(PE_LESS, 'compact-shell.less'));
+        /* As in app.less: the shared compact layer (tokens, menu bar, "About"), then its own. */
+        const css = await compilePresentationLess();
         return {css};
     } catch (e) {
         return {cssError: e};
@@ -2660,8 +2694,8 @@ function argValue(name) {
 
 module.exports = {
     ROOT, APPS, PE_MAIN, PE_VIEW, PE_LESS, DE_VIEW, DE_LESS, SHARED_AIR, SHELL_NAMES, SHARED_MODULES,
-    git, forkBase, stockViewNames, shellViewNames, ruLocale, readJson, norm, normCaption, scanJs,
-    parseHTML, Cascade, parseCss, compileLess, compileDocumentsLess, sharedMenuTokens, parseColor, colorHex, luminance, isWhite,
+    git, STOCK, stockBase, forkBase, stockViewNames, shellViewNames, ruLocale, readJson, norm, normCaption, scanJs,
+    parseHTML, Cascade, parseCss, compileLess, compileDocumentsLess, compilePresentationLess, sharedMenuTokens, parseColor, colorHex, luminance, isWhite,
     World, makeWorld, prepareCss, run, argValue, describe, isControl, controlsIn, signature, DomEvent,
     sectionLabels, openSection, closeSection, menuTexts,
     DARK_THEME_COLORS, LIGHT_THEME_COLORS

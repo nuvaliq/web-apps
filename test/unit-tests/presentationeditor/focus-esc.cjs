@@ -174,6 +174,9 @@ context.define = (deps, factory) => factory();
 /* Icons are the shared editor set (Common.UI.Compact.Icons): a module of the shared compact layer. */
 const SHARED_ICONS = path.join(ROOT, 'apps/common/main/lib/view/compact/Icons.js');
 vm.runInContext(fs.readFileSync(SHARED_ICONS, 'utf8'), context, {filename: SHARED_ICONS});
+/* The window mechanics of the CompactWindows zone are shared (Common.UI.Compact.Windows). */
+const SHARED_WINDOWS = path.join(ROOT, 'apps/common/main/lib/view/compact/Windows.js');
+vm.runInContext(fs.readFileSync(SHARED_WINDOWS, 'utf8'), context, {filename: SHARED_WINDOWS});
 for (const name of ['StockBridge']) {
     const file = path.join(VIEW, name + '.js');
     vm.runInContext(fs.readFileSync(file, 'utf8'), context, {filename: file});
@@ -461,6 +464,36 @@ check('esc_one_layer_per_press', () => {
         const e = doc.body.dispatch('keydown', props);
         assert.equal(e.defaultPrevented, false);
         assert.equal(shell.focusOn(), true, JSON.stringify(props) + ' exits the focus mode');
+    }
+});
+
+/* An open properties card: Esc in an input field outside it (search, comment) belongs to the field, the card
+   stays; in a field of the card itself and outside fields it closes the card. */
+check('esc_in_a_field_outside_the_card_leaves_the_card_open', () => {
+    boot();
+    const card = doc.createElement('div');
+    doc.body.appendChild(card);
+    const inCard = doc.createElement('input');
+    card.appendChild(inCard);
+    let open = true;
+    card.contains = n => { for (let x = n; x; x = x.parentNode) if (x === card) return true; return false; };
+    PE.Views.SlideSections = {isOpen: () => open, card: () => card, close: how => { calls.push(['sections', 'close', how]); open = false; }};
+    try {
+        const closes = () => calls.filter(c => c[0] === 'sections').length;
+        for (const tag of ['input', 'textarea']) {
+            const field = doc.createElement(tag);
+            doc.body.appendChild(field);
+            const ev = esc(field);
+            assert.equal(closes(), 0, 'Esc in a ' + tag + ' outside the card closes the card');
+            assert.equal(ev.defaultPrevented, false, 'Esc in a ' + tag + ' outside the card is taken');
+        }
+        esc(inCard);
+        assert.equal(closes(), 1, 'Esc in a field of the card does not close the card');
+        open = true;
+        esc(area());
+        assert.equal(closes(), 2, 'Esc outside fields does not close the card');
+    } finally {
+        delete PE.Views.SlideSections;
     }
 });
 

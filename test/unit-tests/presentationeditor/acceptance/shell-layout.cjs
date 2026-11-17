@@ -82,6 +82,9 @@ async function shellRowsReplaceStockChromeTopToBottom() {
     rowsInPlace(w, 'after start');
 
     const deTokens = documentTokens(await H.compileDocumentsLess());
+    /* Menu bar tokens of the shared layer (--vo-menu-*) are var() references to the palette: the world
+       cascade resolves them to colors, while for documents they are raw text. compact-parity checks them
+       against the built layers of both editors. */
     const sharedMenu = H.sharedMenuTokens();
     const names = Object.keys(deTokens).filter(n => !sharedMenu.has(n));
     assert.ok(names.length > 10, 'documents tokens are not found');

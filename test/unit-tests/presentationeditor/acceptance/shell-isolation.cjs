@@ -6,7 +6,10 @@
  *
  * Out of scope here: the engine repositories (sdkjs, sdkjs-forms) are other
  * repositories, a web-apps branch cannot change them; and apps/common, where
- * the shell takes the shared compact layer from.
+ * the shell takes the shared compact layer from. The windows of the document
+ * editor stand on the same shared window layer (mechanics and template), so
+ * its window module and window styles are the only files of another editor
+ * that may differ (SHARED_WINDOW_FILES).
  */
 'use strict';
 
@@ -15,14 +18,17 @@ const assert = require('node:assert/strict');
 const H = require('./shell-harness.cjs');
 
 const OTHER_EDITORS = ['apps/documenteditor', 'apps/spreadsheeteditor'];
+const SHARED_WINDOW_FILES = ['apps/documenteditor/main/app/view/CompactWindows.js',
+    'apps/documenteditor/main/resources/less/compact-windows.less'];
+const PATHS = OTHER_EDITORS.concat(SHARED_WINDOW_FILES.map(f => ':(exclude)' + f));
 
 async function otherEditorsUntouchedAgainstBase() {
     const base = H.forkBase();
     assert.ok(base, 'no fork base: no copy of b24/9.4.0 in this clone, pass --base <ref>');
-    const r = cp.spawnSync('git', ['diff', '--quiet', base, '--'].concat(OTHER_EDITORS), {cwd: H.ROOT, encoding: 'utf8'});
+    const r = cp.spawnSync('git', ['diff', '--quiet', base, '--'].concat(PATHS), {cwd: H.ROOT, encoding: 'utf8'});
     if (r.status !== 0 && r.status !== 1) throw new Error('git diff failed: ' + String(r.stderr).trim());
     if (r.status === 1) {
-        const stat = H.git(['diff', '--stat', base, '--'].concat(OTHER_EDITORS)).split('\n');
+        const stat = H.git(['diff', '--stat', base, '--'].concat(PATHS)).split('\n');
         assert.fail('diff against ' + base.slice(0, 10) + ' is not empty: ' + stat.slice(-1)[0].trim() + ' (' + stat.slice(0, 3).map(s => s.trim()).join('; ') + ')');
     }
     const untracked = H.git(['ls-files', '--others', '--exclude-standard', '--'].concat(OTHER_EDITORS));
