@@ -2388,6 +2388,7 @@
   "PE.Views.CompactShell.textDownloadOdp": "Download ODP",
   "PE.Views.CompactShell.textDownloadPdf": "Download PDF",
   "PE.Views.CompactShell.textDownloadPptx": "Download PPTX",
+  "PE.Views.CompactShell.textEdit": "Edit",
   "PE.Views.CompactShell.textModeEdit": "Editing",
   "PE.Views.CompactShell.textModeEditHint": "Changes are applied immediately",
   "PE.Views.CompactShell.textModeView": "Viewing",

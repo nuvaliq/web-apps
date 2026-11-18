@@ -875,11 +875,13 @@ define([
            before the prohibition. */
 
         applyEditingLock: function (ev) {
+            if (ev) this.editRequestLockType = ev.disable ? ev.type : null;
             /* We remember EXACTLY the event, not the outcome: the fallback path (arguments
                instead of the stack) is needed only while there is no stack at all, and lockState
                adds the right to the event — once and in one place. */
-            var evt = this.lockTop() ||
-                      ((ev && ev.disable) ? {on: true, options: ev.options || {}} : {on: false, options: {}});
+            var fallback = ev ? {on: !!ev.disable, options: ev.disable ? ev.options || {} : {}} :
+                                {on: !!this.lockOn, options: this.lockOpts || {}};
+            var evt = this.lockTop() || fallback;
             this.lockOn = evt.on;
             this.lockOpts = evt.options;
 
@@ -942,6 +944,7 @@ define([
            hide or rebuild the items: the composition and availability are decided by the snapshot. */
         refreshMenuLocks: function () {
             if (this.menu && this.menu.refresh) this.menu.refresh();
+            this.applyEditButtonLock();
         },
 
         /* Triggers to re-read the menu, except the editing prohibition and protection (these are led by
@@ -950,6 +953,7 @@ define([
            zoom, undo and redo, the clipboard, a connection break. */
         bindMenuRefresh: function () {
             var me = this, api = this.api;
+            this.bindHeaderDisconnect();
             var refresh = guarded('оболочка: обновление меню', function () { me.refreshMenuLocks(); });
             Common.NotificationCenter.on('doc:mode-changed', refresh);
             Common.NotificationCenter.on('api:disconnect', refresh);
@@ -979,9 +983,91 @@ define([
                 }));
         },
 
+        canRequestEdit: function () {
+            var main = DE.getController('Main'), o = main && main.appOptions;
+            if (!this.wanted() || !o || typeof main.markEditRequest !== 'function' ||
+                typeof main.isEditRequestWaiting !== 'function') return false;
+            var type = String((main.document || {}).fileType || '').toLowerCase();
+            return !o.isEdit && !!o.canEdit && !!o.canRequestEditRights && !o.canSwitchMode &&
+                !o.isPDFForm && !o.isOForm && ['pdf', 'djvu', 'xps', 'oxps', 'docxf', 'oform'].indexOf(type) < 0;
+        },
+
+        editRequestItem: function () {
+            var adapter = this.menuAdapter;
+            if (!adapter || typeof adapter.groups !== 'function') return null;
+            var items = adapter.groups('file') || [];
+            for (var i = 0; i < items.length; i++) if (items[i].k === 'file.edit') return items[i];
+            return null;
+        },
+
+        buildEditButton: function () {
+            this.$editRequest = null;
+            if (!this.canRequestEdit()) return null;
+            var me = this, keys = function (action) {
+                var k = me.menuAdapter && me.menuAdapter.keys;
+                if (k && typeof k[action] === 'function') k[action]();
+            };
+            this.$editRequest = $('<button type="button" class="vo-mode accent canfocused"></button>')
+                .text(this.textEdit).attr('title', DE.Views.DocumentActions.textEditDoc)
+                .on('mousedown focus', function () { keys('hold'); })
+                .on('focusout', function () { keys('release'); })
+                .on('click', function (e) { e.stopPropagation(); me.runEditRequest(); });
+            this.applyEditButtonLock();
+            return this.$editRequest;
+        },
+
+        editButtonLocked: function () {
+            var adapter = this.menuAdapter, item = this.editRequestItem();
+            if (!this.canRequestEdit() || !item || typeof adapter.itemState !== 'function') return true;
+            var state = adapter.itemState(item);
+            if (!state || !state.visible || state.disabled) return true;
+            var main = DE.getController('Main'), stack = main && main.stackDisableActions;
+            if (stack && typeof stack.length === 'function' && typeof stack.get === 'function') {
+                for (var i = 0, n = stack.length(); i < n; i++) {
+                    var entry = stack.get(i);
+                    if (entry && entry.disable === true && entry.type !== 'view') return true;
+                }
+                return false;
+            }
+            return !!this.lockOn && this.editRequestLockType !== 'view';
+        },
+
+        applyEditButtonLock: function () {
+            if (!this.$editRequest) return;
+            var locked = this.editButtonLocked();
+            this.$editRequest.toggleClass('vo-locked', locked).attr('aria-disabled', locked ? 'true' : 'false');
+        },
+
+        runEditRequest: function () {
+            var adapter = this.menuAdapter, ran = false;
+            if (!this.advanced && !this.startupFailed && document.body.classList.contains('vo-compact') &&
+                adapter && !adapter.blocked() && !this.editButtonLocked()) {
+                this.closeSurfaces();
+                DE.Views.DocumentActions.requestEditRights();
+                ran = true;
+            }
+            this.applyEditButtonLock();
+            if (this.$editRequest && document.activeElement === this.$editRequest[0] && adapter && adapter.keys)
+                adapter.keys.hold();
+            return ran;
+        },
+
+        bindHeaderDisconnect: function () {
+            var me = this, api = this.api;
+            if (!api || !api.asc_registerCallback || this.headerDisconnectApi === api) return;
+            this.headerDisconnectApi = api;
+            api.asc_registerCallback('asc_onCoAuthoringDisconnect', function () {
+                setTimeout(guarded('shell: header disconnect', function () {
+                    me.applyDocModeLock();
+                    me.applyEditButtonLock();
+                }), 0);
+            });
+        },
+
         /* --- Header --------------------------------------------------------- */
 
         buildHeader: function () {
+            this.$editRequest = null;
             var $h = $('<div class="vo-hd"></div>');
 
             /* There is no burger here anymore. It had no menu of its own: the handler
@@ -1073,6 +1159,7 @@ define([
                sets only the mode look and returns nothing. */
             var $mode = this.buildDocMode();
             if ($mode) $right.append($mode);
+            else $right.append(this.buildEditButton());
 
             /* There is no avatar here deliberately: on the portal it is drawn by the host wrapper
                OUTSIDE the editor, and a second
@@ -1789,14 +1876,7 @@ define([
         bindDocModeLock: function ($wrap) {
             var me = this;
             this.$docModeWrap = $wrap;
-            /* The SDK reports a disconnect also directly, without api:disconnect.
-               Main updates the state in the same delivery: we wait for its end. */
-            if (this.api && this.api.asc_registerCallback) {
-                this.api.asc_registerCallback('asc_onCoAuthoringDisconnect',
-                    function () {
-                        setTimeout(guarded('оболочка: отключение режима', function () { me.applyDocModeLock(); }), 0);
-                    });
-            }
+            this.bindHeaderDisconnect();
 
             var btn = this.stockModeBtn();
             var el  = btn && btn.cmpEl && btn.cmpEl[0];
@@ -2013,6 +2093,18 @@ define([
                 tb.closeOverflow && tb.closeOverflow();
                 tb.closePopovers && tb.closePopovers();
             }), true);
+            this.menu.el.addEventListener('focusout', function (e) {
+                var button = me.$editRequest && me.$editRequest[0];
+                if (!button || e.relatedTarget !== button) return;
+                // The menu releases SDK input before the native Tab transfer completes.
+                setTimeout(guarded('shell: edit focus handoff', function () {
+                    var active = document.activeElement;
+                    if (me.advanced || !me.wanted() || me.menuAdapter.blocked() ||
+                        !document.body.contains(button) || !active || active.id !== 'area_id') return;
+                    button.focus();
+                }), 0);
+            }, true);
+            this.applyEditButtonLock();
             return this.menu.el;
         },
 
@@ -3594,6 +3686,7 @@ define([
 
         textCompact: 'Compact view',
         textDocument: 'Document',
+        textEdit: 'Edit',
         textFitPage: 'Fit page',
         textFitWidth: 'Fit width',
         textHeaderHint: 'Press Esc or double-click the text to return to the document',

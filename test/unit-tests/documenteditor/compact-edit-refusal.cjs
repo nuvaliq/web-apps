@@ -111,7 +111,7 @@ G.$ = () => new Proxy({length: 0}, {get: (t, k) => (k in t ? t[k] : () => t)});
 G.document = G.document || {body: {classList: {add() {}, remove() {}, contains: () => false, toggle() {}}},
     getElementById: () => null};
 vm.runInContext(fs.readFileSync(SHELL, 'utf8'), G, {filename: SHELL});
-G.DE.Views.CompactShell.bindMenuRefresh.call({api: null, refreshMenuLocks: () => world.refreshes++});
+G.DE.Views.CompactShell.bindMenuRefresh.call({api: null, bindHeaderDisconnect() {}, refreshMenuLocks: () => world.refreshes++});
 
 /* A view session of a user with the edit right whose host takes edit requests. Main is the stand-in of
  * the catalog tests with the request methods of Main.js on it. */
@@ -148,6 +148,132 @@ function sessionKept(w) {
     assert.equal(w.main._state.lostEditingRights, false, 'the rights are not marked as lost');
     assert.deepEqual(w.tips, [], 'no stock tip over the toolbar');
 }
+
+function headerSession() {
+    const w = session(), shell = G.DE.Views.CompactShell;
+    w.ctx.reasons = [];
+    w.main.editorConfig = {ui: {shell: 'modern'}};
+    w.main.document = {fileType: 'docx'};
+    G.document.body.classList.contains = name => name === 'vo-compact';
+    G.document.querySelectorAll = () => [];
+    shell.advanced = false;
+    shell.startupFailed = false;
+    shell.menuAdapter = w.adapter;
+    shell.closeSurfaces = () => {};
+    shell.$editRequest = {toggleClass() { return this; }, attr(name, value) { w.aria = value; return this; }};
+    w.header = () => shell.runEditRequest();
+    shell.applyEditButtonLock();
+    return w;
+}
+
+check('header_and_file_share_open_request', () => {
+    for (const headerFirst of [true, false]) {
+        const w = headerSession();
+        assert.equal(headerFirst ? w.header() : choose(w), true);
+        assert.equal(headerFirst ? choose(w) : w.header(), false);
+        assert.equal(w.sent, 1);
+        G.DE.Views.CompactShell.applyEditButtonLock();
+        assert.equal(w.aria, 'true');
+        clock.advance(5000);
+        assert.equal(status(w), GENERAL);
+        assert.equal(w.header(), true);
+        assert.equal(w.sent, 1);
+        refuse(w, HOST_LIMIT);
+        sessionKept(w);
+        assert.equal(w.header(), true);
+        assert.equal(w.sent, 2);
+    }
+});
+
+check('header_request_rechecks_current_locks_and_owner', () => {
+    const shell = G.DE.Views.CompactShell;
+    for (const reason of ['reconnect', 'refresh-file', 'disconnect', 'not-loaded', 'history']) {
+        const w = headerSession();
+        w.ctx.stack = [{disable: true, type: reason}, {disable: true, type: 'view'}];
+        assert.equal(w.header(), false, reason);
+        assert.equal(w.sent, 0);
+        assert.equal(w.aria, 'true');
+        w.ctx.stack = [];
+        assert.equal(w.header(), true);
+    }
+    for (const key of ['markEditRequest', 'isEditRequestWaiting']) {
+        const w = headerSession();
+        delete w.main[key];
+        assert.equal(w.header(), false);
+        assert.equal(w.sent, 0);
+    }
+    for (const flag of ['advanced', 'startupFailed']) {
+        const w = headerSession();
+        shell[flag] = true;
+        assert.equal(w.header(), false);
+        assert.equal(w.sent, 0);
+    }
+    const w = headerSession();
+    w.ctx.editRight = false;
+    assert.equal(w.header(), false);
+    assert.equal(w.sent, 0);
+});
+
+check('reader_sdk_disconnect_updates_button_without_mode_switch', () => {
+    const w = headerSession(), shell = G.DE.Views.CompactShell;
+    shell.api = w.ctx.api;
+    shell.bindHeaderDisconnect();
+    shell.bindHeaderDisconnect();
+    assert.equal(w.ctx.callbacks.asc_onCoAuthoringDisconnect.length, 1);
+    assert.equal(w.aria, 'false');
+    w.ctx.fire('asc_onCoAuthoringDisconnect');
+    w.ctx.disconnected = true;
+    clock.advance(0);
+    assert.equal(w.aria, 'true');
+    assert.equal(w.header(), false);
+    assert.equal(w.sent, 0);
+    w.ctx.disconnected = false;
+    shell.applyEditButtonLock();
+    assert.equal(w.aria, 'false');
+});
+
+check('fallback_lock_keeps_external_reason_separate_from_view_right', () => {
+    const w = headerSession(), shell = G.DE.Views.CompactShell;
+    delete w.main.stackDisableActions;
+    shell.syncHeaderHint = () => {};
+    shell.applyEditingLock({disable: true, type: 'history'});
+    assert.equal(w.header(), false);
+    assert.equal(w.sent, 0);
+    shell.applyEditingLock();
+    assert.equal(w.header(), false, 'an unrelated protection refresh must preserve the external lock');
+    assert.equal(w.sent, 0);
+    shell.applyEditingLock({disable: true, type: 'view'});
+    assert.equal(w.header(), true);
+    refuse(w, HOST_LIMIT);
+    shell.applyEditingLock({disable: false, type: 'history'});
+    assert.equal(w.header(), true);
+});
+
+check('fallback_unlock_drops_released_surface_restrictions', () => {
+    const w = headerSession(), shell = G.DE.Views.CompactShell;
+    delete w.main.stackDisableActions;
+    w.ctx.editMode = true;
+    shell.applyEditingLock({disable: true, options: {navigation: {disable: true}}, type: 'history'});
+    shell.applyEditingLock({disable: false, options: {navigation: {disable: true}}, type: 'history'});
+    const state = shell.lockState();
+    assert.equal(!!(state.options.navigation && state.options.navigation.disable), false);
+});
+
+check('header_request_keeps_view_on_refusal_and_unload', () => {
+    for (const text of [HOST_LIMIT, '', '<img src=x onerror=alert(1)>', undefined]) {
+        const w = headerSession();
+        w.header();
+        clock.advance(5000);
+        refuse(w, text);
+        sessionKept(w);
+        assert.equal(status(w), text || GENERAL);
+        assert.deepEqual(clock.timers, []);
+    }
+    const w = headerSession();
+    w.header();
+    w.listeners.beforeunload.forEach(fn => fn());
+    assert.deepEqual(clock.timers, []);
+});
 
 /* ---- Checks -------------------------------------------------------------------------------------------- */
 
@@ -411,7 +537,7 @@ pending.push(async () => {
                 });
                 ctx.main._state.lostEditingRights = false;
                 ctx.shell.menu = menu;
-                DE.Views.CompactShell.bindMenuRefresh.call({api: null, refreshMenuLocks() { menu.refresh(); }});
+                DE.Views.CompactShell.bindMenuRefresh.call({api: null, bindHeaderDisconnect() {}, refreshMenuLocks() { menu.refresh(); }});
             }, {wait: WAIT, general: GENERAL});
             const place = () => p.evaluate(() => {
                 const s = menu.status(), bar = menu.el.getBoundingClientRect(), r = s.getBoundingClientRect();

@@ -202,6 +202,26 @@ define([
     var MOTION_SLACK = 120;
     var HOLD_CAP = 1500;
 
+    function transitionStyles(el) {
+        var styles = [];
+        for (var i = 0; i < el.style.length; i++) {
+            var name = el.style.item(i);
+            if (name === 'transition' || name.indexOf('transition-') === 0) {
+                styles.push({name: name, value: el.style.getPropertyValue(name),
+                             priority: el.style.getPropertyPriority(name)});
+            }
+        }
+        return styles;
+    }
+
+    function restoreTransitions(el, styles) {
+        // A shorthand write also clears separately declared transition properties.
+        el.style.removeProperty('transition');
+        styles.forEach(function (style) {
+            el.style.setProperty(style.name, style.value, style.priority);
+        });
+    }
+
     /* Keyboard: how long to keep focus on our node after a layer closes against
        the stock's deferred focus (DocumentHolder.focus — _.defer). */
     var KEEP_FOCUS_MS = 80;
@@ -2450,12 +2470,11 @@ define([
             return {h0: el.getBoundingClientRect().height, base: null};
         },
 
-        /* The row height that the grid area is laid out for now: its top by the layout
-           (offsetTop without the shift) from the top of #toolbar. */
+        // The layout position includes the margin; only the toolbar height belongs in the animation base.
         rowsLaidOut: function (L) {
             var el = L && L.toolbar && L.toolbar.el && L.toolbar.el[0], mid = this.middle(L);
             if (!el || !mid) return null;
-            return mid.offsetTop - el.offsetTop;
+            return mid.offsetTop - el.offsetTop - (parseFloat(window.getComputedStyle(mid).marginTop) || 0);
         },
 
         /* FLIP: the initial state without a transition, a forced read, the final one — under
@@ -2468,25 +2487,36 @@ define([
             var el = L.toolbar.el[0], mid = this.middle(L), h1 = L.toolbar.height;
             if (!mid || !this.canMove() || Math.abs(h1 - h0) < 0.5) { this.relayout(); return; }
             var grow = h1 > h0;
-            var shift = function (px) { return Math.abs(px) >= 0.01 ? 'translateY(' + px + 'px)' : ''; };
             var m = {el: el, mid: mid, deferred: grow, timer: null, onEnd: null,
-                     transform: mid.style.transform || '', transition: el.style.transition || ''};
-            el.style.transition = 'none';
+                     margin: mid.style.getPropertyValue('margin-top'),
+                     marginPriority: mid.style.getPropertyPriority('margin-top'),
+                     marginBase: parseFloat(window.getComputedStyle(mid).marginTop) || 0,
+                     transitions: transitionStyles(el), midTransitions: transitionStyles(mid)};
+            el.style.setProperty('transition', 'none', 'important');
+            mid.style.setProperty('transition', 'none', 'important');
             var lay = base;
-            if (grow) {
-                /* The layout and the grid recalculation — at the end of the transition. */
-                this.holdResize();
-            } else {
-                this.relayout();
-                lay = h1;
+            try {
+                if (grow) {
+                    this.holdResize();
+                } else {
+                    // Merge the layout notification and window resize into one engine call.
+                    this.batch(this.relayout);
+                    lay = h1;
+                }
+            } catch (error) {
+                restoreTransitions(el, m.transitions);
+                restoreTransitions(mid, m.midTransitions);
+                throw error;
             }
             el.style.height = h0 + 'px';
-            mid.style.transform = shift(h0 - lay);
+            // A transform would make the engine's fixed text input relative to this area.
+            mid.style.setProperty('margin-top', (m.marginBase + h0 - lay) + 'px', 'important');
             void el.offsetHeight;
-            el.style.transition = m.transition;
+            restoreTransitions(el, m.transitions);
+            restoreTransitions(mid, m.midTransitions);
             mid.classList.add(ROWS_FOLLOW);
             el.style.height = h1 + 'px';
-            mid.style.transform = shift(h1 - lay);
+            mid.style.setProperty('margin-top', (m.marginBase + h1 - lay) + 'px', 'important');
             this.motion = m;
             m.onEnd = guarded('shell: rows transition end', function (e) {
                 if (e && (e.target !== el || e.propertyName !== 'height')) return;
@@ -2512,14 +2542,13 @@ define([
             clearTimeout(m.timer);
             m.el.removeEventListener('transitionend', m.onEnd);
             m.el.removeEventListener('transitioncancel', m.onEnd);
-            var midTransition = m.mid.style.transition || '';
-            m.el.style.transition = 'none';
-            m.mid.style.transition = 'none';
+            m.el.style.setProperty('transition', 'none', 'important');
+            m.mid.style.setProperty('transition', 'none', 'important');
             m.mid.classList.remove(ROWS_FOLLOW);
-            m.mid.style.transform = m.transform;
+            m.mid.style.setProperty('margin-top', m.margin, m.marginPriority);
             void m.el.offsetHeight;
-            m.el.style.transition = m.transition;
-            m.mid.style.transition = midTransition;
+            restoreTransitions(m.el, m.transitions);
+            restoreTransitions(m.mid, m.midTransitions);
             if (!m.deferred) return;
             try {
                 this.relayout();

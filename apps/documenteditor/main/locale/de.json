@@ -2314,6 +2314,7 @@
   "DE.Views.CompactBookmarks.textDeleteName_ARIA": "„{0}“ löschen",
   "DE.Views.CompactShell.textCompact": "Zur Kompaktansicht wechseln",
   "DE.Views.CompactShell.textDocument": "Dokument",
+  "DE.Views.CompactShell.textEdit": "Bearbeiten",
   "DE.Views.CompactShell.textFitPage": "Seite anpassen",
   "DE.Views.CompactShell.textFitWidth": "Breite anpassen",
   "DE.Views.CompactShell.textModeEdit": "Bearbeitung",

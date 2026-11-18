@@ -90,6 +90,15 @@ body.vo-compact .asc-window.vo-win.vo-win--print {
         border: none;
     }
 
+    .flex-settings {
+        position: relative;
+        // The stock panel measures the hidden File screen and sets overflow inline.
+        overflow: visible !important;
+
+        // These settings size to their content; dropdowns keep their own scrollbars.
+        > .ps-scrollbar-y-rail { display: none !important; }
+    }
+
     .main-header,
     #print-preview-box,
     tr.fms-btn-apply {

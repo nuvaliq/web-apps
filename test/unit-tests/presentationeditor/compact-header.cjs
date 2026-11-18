@@ -183,6 +183,10 @@ function boot(rights, opts) {
     };
     main = {editorConfig: {ui: {shell: 'modern'}}, appOptions: Object.assign({}, FULL, rights || {}), api,
         document: {title: 'Отчёт.pptx'}, _state: {}};
+    if (opts.requestOwner !== false) {
+        main.markEditRequest = () => {};
+        main.isEditRequestWaiting = () => false;
+    }
     const fileMenu = {
         miDownload: item(opts.twinDownload !== false),
         miPrint: item(opts.twinPrint !== false),
@@ -248,6 +252,7 @@ function kind(e) {
     if (e.classList.contains('vo-download')) return 'download';
     if (e.classList.contains('vo-hd-sharing')) return 'sharing';
     if (e.classList.contains('vo-docmode')) return 'mode';
+    if (e.localName === 'button' && e.classList.contains('vo-mode')) return 'edit';
     return e.localName + '.' + e.className;
 }
 
@@ -285,6 +290,38 @@ check('mode_switch_only_with_edit_right', () => {
     /* the edit right is revoked: there is no switch any more */
     context.Common.NotificationCenter.trigger('collaboration:sharingdeny');
     assert.equal(find('vo-docmode').length, 0, 'the switch stays after sharingdeny');
+});
+
+const READER = {isEdit: false, canEdit: true, canRequestEditRights: true};
+
+check('reader_header_offers_edit_request', () => {
+    boot(READER);
+    assert.deepEqual(right().children.map(kind), ['show', 'history', 'download', 'sharing', 'edit']);
+    const button = shell.hdr.edit;
+    assert.equal(button, right().children.at(-1));
+    assert.equal(button.getAttribute('type'), 'button');
+    assert.equal(button.getAttribute('aria-disabled'), 'false');
+    assert.equal(button.hasAttribute('aria-haspopup'), false);
+    assert.equal(button.textContent, 'Edit');
+    assert.equal(find('vo-docmode').length, 0);
+});
+
+check('editor_view_keeps_mode_switch', () => {
+    boot({canEdit: true, canRequestEditRights: true});
+    main.appOptions.isEdit = false;
+    context.Common.NotificationCenter.trigger('vo:mode', {mode: 'view'});
+    assert.equal(shell.editRight(), true);
+    assert.equal(one('vo-docmode'), right().children.at(-1));
+    assert.equal(right().children.some(e => kind(e) === 'edit'), false);
+});
+
+check('reader_without_request_right_has_no_edit_button', () => {
+    for (const rights of [{canEdit: false}, {canRequestEditRights: false}]) {
+        boot({...READER, ...rights});
+        assert.equal(right().children.some(e => kind(e) === 'edit'), false);
+    }
+    boot(READER, {requestOwner: false});
+    assert.equal(right().children.some(e => kind(e) === 'edit'), false);
 });
 
 check('download_items_follow_rights_empty_hides_button', () => {

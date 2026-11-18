@@ -2333,6 +2333,7 @@
   "DE.Views.CompactBookmarks.textDeleteName_ARIA": "Удалить «{0}»",
   "DE.Views.CompactShell.textCompact": "Включить компактный вид",
   "DE.Views.CompactShell.textDocument": "Документ",
+  "DE.Views.CompactShell.textEdit": "Редактировать",
   "DE.Views.CompactShell.textFitPage": "Страница целиком",
   "DE.Views.CompactShell.textFitWidth": "По ширине страницы",
   "DE.Views.CompactShell.textHeaderHint": "Esc или двойной щелчок по тексту — вернуться к документу",

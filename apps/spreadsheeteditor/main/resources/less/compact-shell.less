@@ -618,7 +618,10 @@ body.vo-boot {
     transition: height .3s @vo-ease;
 }
 
-.vo-compact .vo-rows-follow { transition: transform .3s @vo-ease; }
+.vo-compact .vo-rows-follow { transition: margin-top .3s @vo-ease; }
+
+// Caret scrolling belongs to the inner editors; the shell must stay fixed to the frame.
+.vo-compact #viewport { overflow: clip; }
 
 /* Side column slide-in: the right properties panel and the left area
    (comments, search, chat, spelling) appear with the same shell motion: 0.3 s with the

@@ -239,6 +239,11 @@ const menuModel = compactContext.Common.UI.Compact.MenuModel;
 const actions = compactContext.DE.Views.DocumentActions;
 const compactShell = compactContext.DE.Views.CompactShell;
 
+compactContext.PE = {Views: {}, getController: name => name === 'Main' ? compactMain : null};
+compactContext.window.PE = compactContext.PE;
+vm.runInContext(read('apps/presentationeditor/main/app/view/CompactShell.js'), compactContext);
+const presentationShell = compactContext.PE.Views.CompactShell;
+
 /* Rows of the compact menu built on these options: every SDK method is there and returns nothing, the shell
    offers nothing, the only common reason is the one of a session opened for viewing. The menu shows what the
    shared model shows: items whose rights hold, separators tidied. */
@@ -286,6 +291,34 @@ function sameOptions(type, a, b, label) {
 
 const VIEW_SESSION = shell => session({config: withShell(shell)});
 const WITHOUT_SHELL = (extra = {}) => session(Object.assign({}, extra, {config: Object.assign({ui: undefined}, extra.config)}));
+
+check('document_compact_header_uses_actual_main_options', () => {
+    for (const shell of [undefined, 'standard', 'modern', 'other']) {
+        const r = run('docx', shell === undefined ? WITHOUT_SHELL() : VIEW_SESSION(shell));
+        compactMain = {appOptions: r.seen.final, editorConfig: r.editorConfig,
+            document: {fileType: 'docx'}, markEditRequest() {}, isEditRequestWaiting() { return false; }};
+        assert.equal(compactShell.canRequestEdit(), shell === 'modern', String(shell));
+        for (const type of ['PDF', 'djvu', 'xps', 'oxps', 'docxf', 'OFORM']) {
+            compactMain.document.fileType = type;
+            assert.equal(compactShell.canRequestEdit(), false, type);
+        }
+        compactMain.document.fileType = 'docx';
+        delete compactMain.markEditRequest;
+        assert.equal(compactShell.canRequestEdit(), false);
+    }
+});
+
+check('presentation_compact_header_uses_actual_main_options', () => {
+    for (const shell of [undefined, 'standard', 'modern', 'other']) {
+        const r = run('pptx', shell === undefined ? WITHOUT_SHELL() : VIEW_SESSION(shell));
+        compactMain = {appOptions: r.seen.final, editorConfig: r.editorConfig,
+            markEditRequest() {}, isEditRequestWaiting() { return false; }};
+        presentationShell.rightSnapshot = false;
+        assert.equal(presentationShell.canRequestEdit(), shell === 'modern', String(shell));
+        delete compactMain.isEditRequestWaiting;
+        assert.equal(presentationShell.canRequestEdit(), false);
+    }
+});
 
 /* ---- Raised edit right in a view session ------------------------------------------------------------------ */
 

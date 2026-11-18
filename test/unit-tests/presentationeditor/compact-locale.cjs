@@ -28,7 +28,7 @@ const SHELL_MODULES = ['CompactShell', 'StockBridge', 'CompactWindows', 'SlideSe
    then modes and focus. */
 const SCOPE = {
     CompactShell: [
-        'textCompact', 'textDownloadOdp', 'textDownloadPdf', 'textDownloadPptx', 'textModeEdit',
+        'textCompact', 'textDownloadOdp', 'textDownloadPdf', 'textDownloadPptx', 'textEdit', 'textModeEdit',
         'textModeEditHint', 'textModeView', 'textModeViewHint', 'textPresentation', 'textPrint',
         'textSaved', 'textSaving', 'textShowMenu_ARIA', 'textShowSettings', 'textSlideShow', 'textUnsaved',
         'tipBackToCompact', 'tipDownload', 'tipHistory', 'tipRename', 'tipRenameDisabled', 'tipSharing',
@@ -69,6 +69,7 @@ const OWN_RU = {
     'CompactShell.textDownloadOdp': 'Скачать ODP',
     'CompactShell.textDownloadPdf': 'Скачать PDF',
     'CompactShell.textDownloadPptx': 'Скачать PPTX',
+    'CompactShell.textEdit': 'Редактировать',
     'CompactShell.textModeEdit': 'Редактирование',
     'CompactShell.textModeEditHint': 'Правки применяются сразу',
     'CompactShell.textModeView': 'Просмотр',

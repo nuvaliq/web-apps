@@ -89,7 +89,7 @@ const HTML = (css, motion, stock) => `<!doctype html><style>${css}</style><style
 
 /* A new page with the shell built. context — overrides of the editor state (documents-editor.cjs). */
 async function open(browser, {context = {}, width = 1280, height = 720, motion = false, docHeight = 3000,
-    reducedMotion = 'no-preference', stockLayout = false} = {}) {
+    reducedMotion = 'no-preference', stockLayout = false, realHeader = false, appOptions = {}, sdkFocusCapture = false} = {}) {
     const page = await browser.newPage({viewport: {width, height}, reducedMotion});
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -118,7 +118,7 @@ async function open(browser, {context = {}, width = 1280, height = 720, motion =
         .concat(['apps/documenteditor/main/app/view/OutlineRail.js', 'apps/documenteditor/main/app/view/CompactTopScroll.js',
             'apps/documenteditor/main/app/view/CompactShell.js']))
         await page.addScriptTag({content: fs.readFileSync(path.join(ROOT, file), 'utf8')});
-    await page.evaluate(({context, docHeight, stockLayout}) => {
+    await page.evaluate(({context, docHeight, stockLayout, realHeader, appOptions, sdkFocusCapture}) => {
         window.log = [];
 
         /* Vertical scroll of the engine: the range is the document height less the area, taken on a resize. */
@@ -243,7 +243,15 @@ async function open(browser, {context = {}, width = 1280, height = 720, motion =
         window.actions = DE.Views.DocumentActions;
         window.rail = DE.Views.OutlineRail;
         /* The api of the stand-in with the scroll of the engine. */
-        const api = new Proxy(ctx.api, {get: (target, name) => (name === 'WordControl' ? wordControl : target[name])});
+        const api = new Proxy(ctx.api, {get: (target, name) => {
+            if (name === 'WordControl') return wordControl;
+            if (name === 'asc_enableKeyEvents' && sdkFocusCapture) return on => {
+                target[name](on);
+                window.sdkKeysEnabled = !!on;
+                if (on) focusText();
+            };
+            return target[name];
+        }});
         shell.api = api;
         shell.tb = {
             el: $('#vo-tb'), ctrl: {focus: $('#tb-focus')},
@@ -252,9 +260,33 @@ async function open(browser, {context = {}, width = 1280, height = 720, motion =
             setCommentsOpen() {}, relayout() {}
         };
         actions.init(api, shell);
-        shell.menuAdapter = DE.Views.CompactMenuAdapter.create(shell, api);
-        shell.menu = Common.UI.Compact.MenuBar.create(shell.menuAdapter, {pinned: 'help', icons: Icons});
-        $('#menu-host').replaceWith(shell.menu.el);
+        if (realHeader) {
+            const main = DE.getController('Main');
+            Object.defineProperty(main, 'appOptions', {value: Object.assign({}, main.appOptions, appOptions), configurable: true});
+            main.editorConfig = {ui: {shell: 'modern'}};
+            main.document = {fileType: 'docx', title: 'A long document title '.repeat(20)};
+            window.headerSent = 0;
+            main.markEditRequest = () => { window.headerSent++; window.headerWaiting = true;
+                Common.NotificationCenter.trigger('editrequest:status', 'Waiting'); return true; };
+            main.isEditRequestWaiting = () => !!window.headerWaiting;
+            shell.textEdit = 'Редактировать';
+            $('.vo-hd').replaceWith(shell.buildHeader());
+            window.initialHeaderDisabled = shell.$editRequest && shell.$editRequest.attr('aria-disabled');
+            window.sdkKeysEnabled = true;
+            if (sdkFocusCapture) document.addEventListener('focus', e => {
+                if (!window.sdkKeysEnabled) return;
+                const target = e.target;
+                if (target !== document.getElementById('area_id') && !target.closest('.canfocused')) focusText();
+            }, true);
+        }
+        if (realHeader) {
+            $('#menu-host').replaceWith(shell.buildMenu());
+            shell.bindMenuRefresh();
+        } else {
+            shell.menuAdapter = DE.Views.CompactMenuAdapter.create(shell, api);
+            shell.menu = Common.UI.Compact.MenuBar.create(shell.menuAdapter, {pinned: 'help', icons: Icons});
+            $('#menu-host').replaceWith(shell.menu.el);
+        }
         shell.bindTopScroll();
         rail.create(api);
         shell.reserveLeft = () => true;
@@ -262,7 +294,7 @@ async function open(browser, {context = {}, width = 1280, height = 720, motion =
         shell.watchSelection();
         shell.bindChromeEscape();
         shell.applyLayout(true);
-    }, {context, docHeight, stockLayout});
+    }, {context, docHeight, stockLayout, realHeader, appOptions, sdkFocusCapture});
     page.errors = errors;
     return page;
 }

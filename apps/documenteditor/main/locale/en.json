@@ -2321,6 +2321,7 @@
   "DE.Views.CompactBookmarks.textDeleteName_ARIA": "Delete “{0}”",
   "DE.Views.CompactShell.textCompact": "Switch to compact view",
   "DE.Views.CompactShell.textDocument": "Document",
+  "DE.Views.CompactShell.textEdit": "Edit",
   "DE.Views.CompactShell.textFitPage": "Fit to page",
   "DE.Views.CompactShell.textFitWidth": "Fit to width",
   "DE.Views.CompactShell.textHeaderHint": "Press Esc or double-click the text to return to the document",

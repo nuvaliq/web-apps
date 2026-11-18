@@ -418,6 +418,7 @@ define([
         rows: null,          // row name → {owner: true}
         commands: null,      // command name → its owner
         rightSnapshot: null, // edit right at startup; null — no snapshot yet
+        editRequestRevoked: false,
         skinTimer: null,     // canvas palette retry
 
         /* ------------------------------------------------------------------ */
@@ -485,8 +486,10 @@ define([
                stock locks (connection loss, "Viewing") do not take the right away. */
             nc.on('collaboration:sharingdeny', guarded('shell: sharingdeny', function () {
                 me.rightSnapshot = false;
+                me.editRequestRevoked = true;
                 me.setRow('toolbar', false, 'right');
                 me.dropEditRightControls();
+                me.applyEditButtonLock();
             }));
             /* The stock theme handler (controller/Viewport.js onThemeChanged)
                writes its ribbon height into the areas. It is subscribed earlier than us, so
@@ -714,7 +717,7 @@ define([
            and "Review → Comments". The portal controls
            (history, access, rename) — only when the portal provides them:
            without the capability there is no control at all, no stubs. */
-        hdr: null,           // header nodes: root, right, title, state, collab {kind: button}, download, mode
+        hdr: null,           // header nodes: root, right, title, state, collab {kind: button}, download, mode, edit
         pops: null,          // lists at the header buttons (popover)
         saveFlags: null,
         saveKey: null,
@@ -723,7 +726,7 @@ define([
         titleWas: '',
 
         buildHeader: function () {
-            this.hdr = {collab: {}, mode: null, download: null};
+            this.hdr = {collab: {}, mode: null, edit: null, download: null};
             this.pops = [];
             var hd = el('div', 'vo-hd');
             hd.appendChild(this.buildTitle());
@@ -735,7 +738,7 @@ define([
             var download = this.buildDownload();
             if (download) right.appendChild(download);
             if (this.canSharing()) right.appendChild(this.buildCollabButton('sharing'));
-            var mode = this.buildModeSwitch();
+            var mode = this.buildModeSwitch() || this.buildEditButton();
             if (mode) right.appendChild(mode);
             hd.appendChild(right);
 
@@ -773,16 +776,27 @@ define([
                 me.applyRenameRight();
                 me.applyCollabLock();
                 me.applyModeLock();
+                me.applyEditButtonLock();
             }));
             /* The stock editing lock (version history, connection loss) locks
                the mode switcher and is lifted together with the reason. */
             nc.on('editing:disable', guarded('shell: header editing:disable', function () {
                 me.applyModeLock();
+                me.applyEditButtonLock();
             }));
+            nc.on('editrequest:status', guarded('shell: header edit request status', function () {
+                me.applyEditButtonLock();
+            }));
+            this.onApi('asc_onCoAuthoringDisconnect', function () {
+                // Main updates the connection state during the same callback delivery.
+                setTimeout(guarded('shell: header SDK disconnect', function () { me.applyEditButtonLock(); }), 0);
+            });
             onDocument('click', guarded('shell: header outside click', function (e) {
                 me.closeHeaderPops(e && e.target);
             }));
             this.applyCollabLock();
+            this.bindEditButtonFocus();
+            this.applyEditButtonLock();
             this.syncSaveState();
         },
 
@@ -1243,6 +1257,94 @@ define([
             return wrap;
         },
 
+        canRequestEdit: function () {
+            if (this.editRequestRevoked || this.editRight() || !this.wanted()) return false;
+            var main = controller('Main'), o = this.stockOptions();
+            return !!main && typeof main.markEditRequest === 'function' && typeof main.isEditRequestWaiting === 'function' &&
+                !o.isEdit && !!o.canEdit && !!o.canRequestEditRights;
+        },
+
+        editRequestItem: function () {
+            var actions = PE.Views.SlideActions;
+            var groups = actions && typeof actions.groups === 'function' && actions.groups();
+            return (groups && groups[0] && _.find(groups[0].items, function (it) {
+                return it && it.k === 'requestEdit';
+            })) || null;
+        },
+
+        buildEditButton: function () {
+            if (!this.canRequestEdit()) return null;
+            var me = this, actions = PE.Views.SlideActions, item = this.editRequestItem();
+            var button = el('button', 'vo-mode accent canfocused', {type: 'button'});
+            button.textContent = this.textEdit;
+            if (item && typeof actions.label === 'function') button.setAttribute('title', actions.label(item));
+            button.addEventListener('mousedown', function () { me.engineKeys(false); });
+            button.addEventListener('focus', function () { me.engineKeys(false); });
+            button.addEventListener('focusout', function (e) {
+                if (!me.inHeader(e.relatedTarget)) me.engineKeys(true);
+            });
+            button.addEventListener('click', guarded('shell: header edit request', function (e) {
+                e.stopPropagation();
+                me.runEditRequest();
+            }));
+            this.hdr.edit = button;
+            this.applyEditButtonLock();
+            return button;
+        },
+
+        bindEditButtonFocus: function () {
+            var me = this, menu = PE.Views.SlideActions && PE.Views.SlideActions.menu;
+            if (!menu || !menu.el || this.editFocusMenu === menu.el) return;
+            this.editFocusMenu = menu.el;
+            menu.el.addEventListener('focusout', function (e) {
+                var button = me.hdr && me.hdr.edit;
+                if (!button || e.relatedTarget !== button) return;
+                // The menu releases SDK input before the native Tab transfer completes.
+                setTimeout(guarded('shell: edit focus handoff', function () {
+                    var active = document.activeElement;
+                    if (me.advanced || !me.wanted() || me.showRunning() || me.modalOpen() ||
+                        !document.body.contains(button) || !active || active.id !== 'area_id') return;
+                    button.focus();
+                }), 0);
+            }, true);
+        },
+
+        editButtonLocked: function (item) {
+            var actions = PE.Views.SlideActions;
+            if (!this.canRequestEdit() || this.modeLocked() || !actions || typeof actions.itemState !== 'function' ||
+                typeof actions.exec !== 'function' || typeof actions.closeMenu !== 'function') return true;
+            if (item === undefined) item = this.editRequestItem();
+            return !item || actions.itemState(item, this).disabled;
+        },
+
+        applyEditButtonLock: function () {
+            var button = this.hdr && this.hdr.edit;
+            if (!button) return;
+            var lock = this.showRunning() || this.editButtonLocked();
+            button.classList.toggle('vo-locked', lock);
+            button.setAttribute('aria-disabled', lock ? 'true' : 'false');
+        },
+
+        runEditRequest: function () {
+            var button = this.hdr && this.hdr.edit;
+            if (!button) return false;
+            var active = !this.advanced && !this.startupFailed && document.body.classList.contains('vo-compact');
+            try {
+                if (!active || this.showRunning() || this.modalOpen()) return false;
+                var actions = PE.Views.SlideActions, item = this.editRequestItem();
+                if (this.editButtonLocked(item)) return false;
+                actions.closeMenu();
+                this.closeHeaderPops();
+                this.closeToolbarLayer();
+                if (document.activeElement === button) this.engineKeys(false);
+                return actions.exec(item, this, button);
+            } finally {
+                this.applyEditButtonLock();
+                if (!this.advanced && !this.startupFailed && document.body.classList.contains('vo-compact') &&
+                    document.activeElement === button) this.engineKeys(false);
+            }
+        },
+
         currentMode: function () {
             var m = modes();
             return m && typeof m.mode === 'function' && m.mode() === 'view' ? 'view' : 'edit';
@@ -1560,8 +1662,14 @@ define([
            over a modal window and in the "Stock interface" Esc is stock. */
         bindEscape: function () {
             var me = this, nc = Common.NotificationCenter;
-            nc.on('preview:show', guarded('shell: preview:show', function () { me.showing = true; }));
-            nc.on('preview:hide', guarded('shell: preview:hide', function () { me.showing = false; }));
+            nc.on('preview:show', guarded('shell: preview:show', function () {
+                me.showing = true;
+                me.applyEditButtonLock();
+            }));
+            nc.on('preview:hide', guarded('shell: preview:hide', function () {
+                me.showing = false;
+                me.applyEditButtonLock();
+            }));
             if (typeof document.addEventListener === 'function')
                 document.addEventListener('keydown', guarded('shell: escape', function (e) { me.onEscape(e); }), true);
         },
@@ -1834,12 +1942,14 @@ define([
            stock heights. The zones learn about the change from shell:advanced. */
         toggleMode: function () {
             this.advanced = !this.advanced;
+            if (this.advanced && this.hdr && this.hdr.edit && document.activeElement === this.hdr.edit) this.engineKeys(true);
             document.body.classList.toggle('vo-compact', !this.advanced);
             document.body.classList.toggle('vo-advanced', this.advanced);
             this.applyLayout(!this.advanced);
             this.applyCanvasSkin();
             this.ensureBackButton();
             Common.NotificationCenter.trigger('shell:advanced', this.advanced);
+            if (!this.advanced) this.applyEditButtonLock();
         },
 
         /* Return from the "Stock interface" — a button in the right group of the stock
@@ -1871,6 +1981,7 @@ define([
         textDownloadOdp: 'Download ODP',
         textDownloadPdf: 'Download PDF',
         textDownloadPptx: 'Download PPTX',
+        textEdit: 'Edit',
         textModeEdit: 'Editing',
         textModeEditHint: 'Changes are applied immediately',
         textModeView: 'Viewing',
