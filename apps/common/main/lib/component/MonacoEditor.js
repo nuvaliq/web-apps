@@ -39,6 +39,32 @@ if (Common === undefined)
 define(['common/main/lib/component/BaseView'], function () {
     'use strict';
 
+    function isObject(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function owns(value, key) {
+        return Object.prototype.hasOwnProperty.call(value, key);
+    }
+
+    function isPosition(value) {
+        return isObject(value) && owns(value, 'row') && owns(value, 'column') &&
+            Number.isSafeInteger(value.row) && value.row >= 0 &&
+            Number.isSafeInteger(value.column) && value.column >= 0;
+    }
+
+    function isCommand(cmd, id) {
+        if (!isObject(cmd) || !owns(cmd, 'referer') || cmd.referer !== 'monaco-editor-' + id ||
+            !owns(cmd, 'command')) return false;
+
+        if (cmd.command === 'monacoEditorReady') {
+            return !owns(cmd, 'data') || (isObject(cmd.data) && Object.keys(cmd.data).length === 0);
+        }
+        return cmd.command === 'changeValue' && owns(cmd, 'data') && isObject(cmd.data) &&
+            owns(cmd.data, 'value') && typeof cmd.data.value === 'string' &&
+            owns(cmd.data, 'pos') && isPosition(cmd.data.pos);
+    }
+
     Common.UI.MonacoEditor = Common.UI.BaseView.extend({
         initialize : function(options) {
             Common.UI.BaseView.prototype.initialize.call(this, options);
@@ -51,6 +77,21 @@ define(['common/main/lib/component/BaseView'], function () {
 
         render: function (parentEl) {
             this.parentEl = typeof parentEl === 'string' ? $(parentEl) : parentEl;
+            this._active = false;
+
+            var src = '../../../vendor/monaco/MonacoEditor.html';
+            src += '?editorType=' + (window.SSE ? 'cell' : window.PE ? 'slide' : window.PDFE ? 'pdf' : 'word');
+            src += '&language=' + this.language;
+            src += '&id=' + this.id;
+
+            var url;
+            try {
+                url = new URL(src, document.baseURI);
+            } catch (e) {
+                return;
+            }
+            if ((url.protocol !== 'https:' && url.protocol !== 'http:') ||
+                url.origin !== window.location.origin) return;
 
             this.iframe = document.createElement("iframe");
             this.iframe.width        = '100%';
@@ -64,12 +105,13 @@ define(['common/main/lib/component/BaseView'], function () {
             this.loadMask = new Common.UI.LoadMask({owner: this.parentEl});
             this.loadMask.show();
 
-            var src = '../../../vendor/monaco/MonacoEditor.html';
-            src += '?editorType=' + (window.SSE ? 'cell' : window.PE ? 'slide' : window.PDFE ? 'pdf' : 'word');
-            src += '&language=' + this.language;
-            src += '&id=' + this.id;
-
-            this.iframe.src = src;
+            this._frameWindow = this.iframe.contentWindow;
+            if (!this._frameWindow) {
+                this.loadMask.hide();
+                return;
+            }
+            this._origin = url.origin;
+            this._active = true;
 
             var me = this;
             this._eventfunc = function(msg) {
@@ -79,6 +121,7 @@ define(['common/main/lib/component/BaseView'], function () {
                 me.updateTheme();
             };
             this._bindWindowEvents.call(this);
+            this.iframe.src = url.href;
         },
 
         _bindWindowEvents: function() {
@@ -100,18 +143,21 @@ define(['common/main/lib/component/BaseView'], function () {
         },
 
         _postMessage: function(wnd, msg) {
-            if (wnd && wnd.postMessage && window.JSON) {
+            if (this._active && wnd === this._frameWindow && wnd.postMessage && window.JSON) {
                 msg.referer = 'monaco-editor-' + this.id;
-                wnd.postMessage(window.JSON.stringify(msg), "*");
+                wnd.postMessage(window.JSON.stringify(msg), this._origin);
             }
         },
 
         _onMessage: function(msg) {
-            var data = msg.data;
-            if (Object.prototype.toString.apply(data) !== '[object String]' || !window.JSON) {
+            if (!this._active || !msg || msg.source !== this._frameWindow || msg.origin !== this._origin) {
                 return;
             }
-            var cmd, handler;
+            var data = msg.data;
+            if (typeof data !== 'string' || !window.JSON) {
+                return;
+            }
+            var cmd;
 
             try {
                 cmd = window.JSON.parse(data)
@@ -119,27 +165,28 @@ define(['common/main/lib/component/BaseView'], function () {
                 cmd = '';
             }
 
-            if (cmd && cmd.referer == 'monaco-editor-' + this.id) {
+            if (isCommand(cmd, this.id)) {
                 switch (cmd.command) {
                     case 'changeValue':
-                        data = cmd.data || {};
+                        data = cmd.data;
                         this.fireEvent('change', data.value, data.pos);
                         break;
                     case 'monacoEditorReady':
-                        this.fireEvent('ready', cmd.data);
+                        this.fireEvent('ready');
                         break;
                 }
             }
         },
 
         _onLoad: function() {
+            if (!this._active) return;
             this.updateTheme();
             if (this.loadMask)
                 this.loadMask.hide();
         },
 
         setValue: function(value, currentPos, readonly) {
-            this._postMessage(this.iframe.contentWindow, {
+            this._postMessage(this.iframe && this.iframe.contentWindow, {
                 command: 'setValue',
                 data: {
                     value: value,
@@ -150,35 +197,35 @@ define(['common/main/lib/component/BaseView'], function () {
         },
 
         updateTheme: function() {
-            this._postMessage(this.iframe.contentWindow, {
+            this._postMessage(this.iframe && this.iframe.contentWindow, {
                 command: 'setTheme',
                 data: Common.UI.Themes.getThemeColors()
             });
         },
 
         disableDrop: function(disable) {
-            this._postMessage(this.iframe.contentWindow, {
+            this._postMessage(this.iframe && this.iframe.contentWindow, {
                 command: 'disableDrop',
                 data: disable
             });
         },
 
         revealPositionInCenter: function() {
-            this._postMessage(this.iframe.contentWindow, {
+            this._postMessage(this.iframe && this.iframe.contentWindow, {
                 command: 'revealPositionInCenter',
                 data: {}
             });
         },
 
         undo: function() {
-            this._postMessage(this.iframe.contentWindow, {
+            this._postMessage(this.iframe && this.iframe.contentWindow, {
                 command: 'undo',
                 data: {}
             });
         },
 
         redo: function() {
-            this._postMessage(this.iframe.contentWindow, {
+            this._postMessage(this.iframe && this.iframe.contentWindow, {
                 command: 'redo',
                 data: {}
             });
@@ -189,7 +236,11 @@ define(['common/main/lib/component/BaseView'], function () {
         },
 
         destroyEditor: function() {
-            this._unbindWindowEvents();
+            this._active = false;
+            if (this._eventfunc) this._unbindWindowEvents();
+            this._eventfunc = null;
+            this._updatebind = null;
+            this._frameWindow = null;
         }
     });
 });

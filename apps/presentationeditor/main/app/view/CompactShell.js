@@ -43,6 +43,10 @@ define([
        20 build attempts 150 ms apart. */
     var BOOT_CLASS = 'vo-boot';
 
+    /* The loading skeleton (index.html, class sk-shell) during the claim: a different
+       id, so that the stock code does not remove it. */
+    var COVER_ID = 'vo-loading';
+
     /* The AI plugin of the stock editor: the compact shell does not show its "AI"
        context menu item (hideAiItem). */
     var AI_PLUGIN = 'asc.{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007}';
@@ -263,8 +267,9 @@ define([
         /* The stock editor removes the loading mask already on app:face, while the shell
            is built on app:ready. So that the stock ribbon and title do not flash,
            on Gateway init the request class vo-boot is set, and on app:face the areas
-           get the shell heights. boot — what was done to the layout for the
-           frame; booted — the request was already there, a second subscription is not needed. */
+           get the shell heights. The loading skeleton is kept until the build, see
+           announce. boot — what was done to the layout for the frame; booted — the
+           request was already there, a second subscription is not needed. */
         boot: null,
         booted: false,
 
@@ -275,6 +280,32 @@ define([
             this.boot = {heights: null};
             this.tuneConfig(config);
             document.body.classList.add(BOOT_CLASS);
+            /* The loading skeleton stays until the shell is built. The stock code removes
+               it by id on app:face, before the presentation is loaded, and would then show
+               the slides in the colours of the interface theme (dark on a dark system)
+               and its own loading plate. Under a different id the skeleton stays, and
+               endBoot removes it together with the claim: when the shell is built this
+               is the same frame, on a failure the stock interface returns, on an engine
+               error see below. The stock password window lies above the skeleton by
+               z-index, and loading goes on after it. */
+            var mask = byId('loading-mask');
+            if (mask) mask.id = COVER_ID;
+            /* An engine error before the shell is built removes the skeleton and the
+               claim at once. The stock code removes its own mask on it (Main.onError →
+               hidePreloader) and opens the error window, while app:ready never comes
+               after an opening error: nothing would call endBoot, and the loading band
+               would keep running under the window and after OK. Under the window the
+               stock interface belongs, as in the stock editor. An error after which
+               loading still reaches app:ready gets the shell from the regular start,
+               as without the early start. The stock onError is registered earlier
+               (Main.onLaunch) and the engine calls its callbacks in order, so the stock
+               window is already open by our call. guarded, because an exception here
+               would cut off the remaining error callbacks. */
+            var api = this.engineApi();
+            if (api && api.asc_registerCallback)
+                api.asc_registerCallback('asc_onError', guarded('shell: error before the build', function () {
+                    if (me.boot) me.endBoot(true);
+                }));
             /* The subscription is later than the stock one (which was set up at controller startup):
                by our call the stock has already laid out the areas by its flags. */
             Common.NotificationCenter.on('app:face', guarded('shell: boot frame', function (opts) {
@@ -367,6 +398,8 @@ define([
             if (!b) return;
             this.boot = null;
             document.body.classList.remove(BOOT_CLASS);
+            var cover = byId(COVER_ID);
+            if (cover && cover.parentNode) cover.parentNode.removeChild(cover);
             (b.heights || []).forEach(function (x) {
                 if (x.panel.height !== x.ours) return;
                 x.panel.height = x.stock;

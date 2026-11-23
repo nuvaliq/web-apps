@@ -945,25 +945,72 @@ define([
             }
         },
 
+        canShowSearchPanel: function () {
+            var menu = this.leftMenu,
+                mode = this.mode || {};
+            return !!(menu && menu.btnSearchBar && !menu.btnSearchBar.isDisabled() &&
+                Common.UI.LayoutManager.isElementVisible('leftMenu') &&
+                (!mode.canBrandingExt || !mode.customization || mode.customization.leftMenu !== false));
+        },
+
+        restoreSearchBar: function (findText) {
+            var viewport = this.getApplication().getController('Viewport'),
+                bar = viewport.searchBar;
+            if (bar && typeof findText === 'string') {
+                var results = this.getApplication().getController('Search').getResultsNumber();
+                viewport.header.btnSearch.toggle(true, true);
+                bar.show(findText);
+                bar.updateResultsNumber(results[0], results[1]);
+                viewport.updateSearchPanelAvailability();
+            }
+        },
+
         onShowHideSearch: function (state, findText) {
             if (state) {
+                if (!this.canShowSearchPanel()) {
+                    this.restoreSearchBar(findText);
+                    return;
+                }
                 Common.UI.Menu.Manager.hideAll();
                 this.tryToShowLeftMenu();
                 this.leftMenu.showMenu('advancedsearch', undefined, true);
-                this.leftMenu.fireEvent('search:aftershow', this.leftMenu, findText);
-            } else {
+                if (this.isSearchPanelVisible()) {
+                    this.leftMenu.fireEvent('search:aftershow', [findText]);
+                    if (typeof findText === 'string') {
+                        this.leftMenu.panelSearch.setFindText(findText);
+                        if (findText === '') {
+                            var search = this.getApplication().getController('Search');
+                            search.onInputSearchChange('');
+                            search.removeResultItems('no-results');
+                            search.api.asc_endFindText();
+                        }
+                    }
+                } else {
+                    this.restoreSearchBar(findText);
+                }
+            } else if (this.leftMenu && this.leftMenu.btnSearchBar) {
                 this.leftMenu.btnSearchBar.toggle(false, true);
                 this.leftMenu.onBtnMenuClick(this.leftMenu.btnSearchBar);
             }
         },
 
-        onShowHideRedactSearch: function (state) {
+        onShowHideRedactSearch: function (state, findText) {
             if (state) {
-                Common.UI.Menu.Manager.hideAll();
-                this.tryToShowLeftMenu();
-                this.leftMenu.showMenu('advancedsearch', undefined, true);
-                this.leftMenu.panelSearch.setSearchMode('redact');
-            } else {
+                if (!this.canShowSearchPanel()) {
+                    this.restoreSearchBar(findText);
+                    return;
+                }
+                if (typeof findText === 'string') {
+                    this.onShowHideSearch(true, findText);
+                } else {
+                    Common.UI.Menu.Manager.hideAll();
+                    this.tryToShowLeftMenu();
+                    this.leftMenu.showMenu('advancedsearch', undefined, this.isSearchPanelVisible());
+                }
+                if (this.isSearchPanelVisible()) {
+                    this.leftMenu.panelSearch.setSearchMode('redact');
+                }
+            } else if (this.leftMenu && this.leftMenu.btnSearchBar) {
                 this.leftMenu.btnSearchBar.toggle(false, true);
                 this.leftMenu.onBtnMenuClick(this.leftMenu.btnSearchBar);
             }
@@ -971,6 +1018,10 @@ define([
 
         onMenuSearchBar: function(obj, show) {
             if (show) {
+                if (!this.canShowSearchPanel()) {
+                    obj.toggle(this.isSearchPanelVisible(), true);
+                    return;
+                }
                 this.onSetDefaultSearchMode();
             }
         },

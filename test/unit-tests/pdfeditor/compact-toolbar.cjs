@@ -502,6 +502,38 @@ const zoomLabel = page => page.evaluate(() => document.querySelector('[data-vo="
             await page.close();
         });
 
+        await check('menu uses the PDF right anchor again after a constrained position', async () => {
+            const page = await H.open(browser, {width: 640, height: 940});
+            try {
+                await page.evaluate(() => {
+                    const more = document.querySelector('#vo-tb .vo-more');
+                    more.style.position = 'relative';
+                    more.style.left = '-500px';
+                });
+                await page.click('#vo-tb [data-vo="more"]');
+                for (const width of [640, 800, 1280]) {
+                    await page.setViewportSize({width, height: 940});
+                    await page.waitForFunction(() => {
+                        const drop = document.querySelector('#vo-tb .vo-mn-drop.open');
+                        const r = drop.getBoundingClientRect();
+                        const anchor = drop.parentElement.getBoundingClientRect();
+                        return r.left >= 3 && r.right <= document.documentElement.clientWidth - 3 &&
+                            Math.abs(r.right - Math.max(anchor.right, 4 + r.width)) <= 1;
+                    });
+                }
+                const result = await page.evaluate(() => {
+                    const drop = document.querySelector('#vo-tb .vo-mn-drop.open');
+                    return {right: drop.getBoundingClientRect().right,
+                        anchor: drop.parentElement.getBoundingClientRect().right,
+                        inlineLeft: drop.style.left, extra: !!document.querySelector('.vo-mn-more-row')};
+                });
+                assert.ok(Math.abs(result.right - result.anchor) <= 1, JSON.stringify(result));
+                assert.equal(result.inlineLeft, '', 'the native PDF right anchor is restored');
+                assert.equal(result.extra, false, 'the single PDF menu does not acquire more sections');
+                assert.deepEqual(page.errors, []);
+            } finally { await page.close(); }
+        });
+
         /* ⋮ is lighter than the icons next to it (base-3); hover is the grey of the other buttons of the
            bar, and the open menu a grey pressed plate, not the blue of a pressed toggle. */
         await check('⋮ is base-3 at rest, grey on hover and while open, never blue', async () => {

@@ -59,11 +59,11 @@ define([
                     'search:back': _.bind(this.onSearchNext, this, 'back'),
                     'search:next': _.bind(this.onSearchNext, this, 'next'),
                     'search:input': _.bind(function (text) {
+                        this.onInputSearchChange(text);
                         if (this._state.searchText === text) {
                             Common.NotificationCenter.trigger('search:updateresults', this._state.currentResult, this._state.resultsNumber);
                             return;
                         }
-                        this.onInputSearchChange(text);
                     }, this),
                     'search:keydown': _.bind(this.onSearchNext, this, 'keydown'),
                     'show': _.bind(this.onSelectSearchingResults, this, true),
@@ -173,6 +173,12 @@ define([
 
         onInputSearchChange: function (text) {
             var me = this;
+            if (this._state.searchText === text) {
+                clearInterval(this.searchTimer);
+                this.searchTimer = undefined;
+                this._state.newSearchText = text;
+                return;
+            }
             if ((text && this._state.searchText !== text) || (!text && this._state.newSearchText)) {
                 this._state.newSearchText = text;
                 this._lastInputChange = (new Date());

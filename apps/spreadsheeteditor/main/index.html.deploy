@@ -319,6 +319,303 @@
         .pixel-ratio__1_5 {
             --scaled-one-px-value: calc(1px / 1.5);
         }
+        /* Compact shell skeleton. Drawn instead of the stock one (nested editors,
+           internal=true, keep the stock skeleton): the rows of the shell (name row 46px,
+           menu row 30px, the plate at 80px with the toolbar row 44px and the formula
+           row 36px), the grid where the editor draws it at 100% zoom and the sheet tabs
+           row, so the shell takes the place of the skeleton without a jump. View mode
+           has no toolbar row; a formula bar hidden in the stock interface is not drawn.
+           The colours are literals of the shell palette and do not follow the
+           interface theme: the shell has no dark palette, and a dark skeleton before
+           a light editor reads as a flash. The shell keeps the skeleton (under another
+           id) until it is built, so the rules do not rely on the id.
+           The page does not know yet whether the shell will start: that is decided
+           by editorConfig.ui.shell, which arrives after the first paint. Every open
+           of a spreadsheet through the platform carries the shell, so the skeleton is
+           drawn for all sessions; a session without it (the platform and the image
+           disagree on the shell value) shows this skeleton and then the stock
+           interface. */
+        body > .loadmask.sk-shell {
+            background: #fff;                       /* bg-content-primary */
+        }
+
+        .loadmask.sk-shell > .brendpanel,
+        .loadmask.sk-shell > .sktoolbar,
+        .loadmask.sk-shell > .skformula,
+        .loadmask.sk-shell > .placeholder {
+            display: none !important;
+        }
+
+        .loadmask > .skc {
+            display: none;
+        }
+
+        .loadmask.sk-shell > .skc {
+            display: block;
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            overflow: hidden;
+        }
+
+        .rtl .loadmask.sk-shell > .skc {
+            transform: scaleX(-1);
+        }
+
+        /* A right-to-left interface does not turn the sheet: its direction is a setting
+           of the sheet, and the stock sheet tabs row keeps the left-to-right order. The
+           grid and the tabs row are turned back. */
+        .rtl .loadmask.sk-shell .skc-grid,
+        .rtl .loadmask.sk-shell .skc-status {
+            transform: scaleX(-1);
+        }
+
+        /* One light band runs over all the bars at once: the gradient is fixed to
+           the viewport, so it does not restart in every bar. */
+        .skc i {
+            position: absolute;
+            display: block;
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, .1);
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, .55) 50%, rgba(255, 255, 255, 0) 65%);
+            background-size: 200vw 100%;
+            background-attachment: fixed;
+            animation: skc-flow 2.4s linear infinite;
+        }
+
+        .skc .skc-title {
+            top: 18px;
+            left: 20px;
+            width: 168px;
+            height: 14px;
+        }
+
+        .skc .skc-icon {
+            top: 15px;
+            right: 205px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc .skc-mode {
+            top: 9px;
+            right: 20px;
+            width: 164px;
+            height: 32px;
+            border-radius: 8px;
+        }
+
+        .sk-view .skc .skc-mode {
+            display: none;
+        }
+
+        .sk-view .skc .skc-icon {
+            right: 22px;
+        }
+
+        .skc-menu {
+            position: absolute;
+            top: 51px;
+            left: 20px;
+            display: flex;
+            gap: 22px;
+        }
+
+        .skc .skc-menu i {
+            position: relative;
+            flex: none;
+            height: 10px;
+        }
+
+        /* The plate: a card with a hairline frame, the toolbar row on top and the
+           formula row under it. */
+        .skc-plate {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            left: 20px;
+            height: 80px;
+            border-radius: 12px;
+            box-shadow: inset 0 0 0 1px #edeef0;    /* border-subtle */
+            overflow: hidden;
+        }
+
+        .skc-tb,
+        .skc-fx {
+            position: absolute;
+            right: 0;
+            left: 0;
+        }
+
+        .skc-tb {
+            top: 0;
+            height: 44px;
+        }
+
+        .skc-fx {
+            top: 44px;
+            height: 36px;
+        }
+
+        .skc .skc-tb i {
+            top: 12px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc .skc-tb i.skc-field {
+            top: 17px;
+            height: 10px;
+        }
+
+        .skc .skc-tb i.skc-end {
+            right: 12px;
+        }
+
+        /* The formula row: the cell name, the function button and the formula. */
+        .skc .skc-fx i {
+            top: 13px;
+            height: 10px;
+        }
+
+        .skc .skc-fx i.skc-fn {
+            top: 10px;
+            width: 16px;
+            height: 16px;
+        }
+
+        .sk-view .skc-plate {
+            height: 36px;
+        }
+
+        .sk-view .skc-tb,
+        .sk-nofx .skc-fx {
+            display: none;
+        }
+
+        .sk-view .skc-fx {
+            top: 0;
+        }
+
+        .sk-nofx .skc-plate {
+            height: 44px;
+        }
+
+        /* The grid at 100% zoom: the column and row headers (19px and 26px) and the
+           gridlines of the default cell (64 x 20px), down to the sheet tabs row. */
+        .skc-grid {
+            position: absolute;
+            top: 168px;
+            right: 0;
+            bottom: 32px;
+            left: 0;
+            overflow: hidden;
+        }
+
+        .sk-view .skc-grid {
+            top: 124px;
+        }
+
+        .sk-nofx .skc-grid {
+            top: 132px;
+        }
+
+        .skc-cols,
+        .skc-rows {
+            position: absolute;
+            box-sizing: border-box;
+            background-color: #f7f7f7;
+        }
+
+        .skc-cols {
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 19px;
+            border-bottom: 1px solid #d8d8d8;
+            background-image: linear-gradient(90deg, rgba(0, 0, 0, .1) 12px, transparent 12px);
+            background-size: 64px 8px;
+            background-position: 52px 5px;
+            background-repeat: repeat-x;
+        }
+
+        .skc-rows {
+            top: 19px;
+            bottom: 0;
+            left: 0;
+            width: 26px;
+            border-right: 1px solid #d8d8d8;
+            background-image: linear-gradient(rgba(0, 0, 0, .1) 8px, transparent 8px);
+            background-size: 8px 20px;
+            background-position: 9px 6px;
+            background-repeat: repeat-y;
+        }
+
+        .skc-cells {
+            position: absolute;
+            top: 19px;
+            right: 0;
+            bottom: 0;
+            left: 26px;
+            background-image: linear-gradient(90deg, #dadcdd 1px, transparent 1px), linear-gradient(#dadcdd 1px, transparent 1px);
+            background-size: 64px 20px;
+            background-position: 63px 0, 0 19px;
+        }
+
+        /* Text in the cells: one bar per row from the second column, cut into cells
+           by a mask. */
+        .skc .skc-cells i {
+            left: 72px;
+            height: 8px;
+            border-radius: 0;
+            -webkit-mask-image: repeating-linear-gradient(90deg, #000 0, #000 44px, transparent 44px, transparent 64px);
+            mask-image: repeating-linear-gradient(90deg, #000 0, #000 44px, transparent 44px, transparent 64px);
+        }
+
+        /* The sheet tabs row: navigation, the sheet list, the tabs and the zoom. */
+        .skc-status {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            height: 32px;
+            box-shadow: inset 0 1px 0 rgba(0, 0, 0, .08);
+        }
+
+        .skc .skc-status i {
+            top: 6px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc .skc-status i.skc-field {
+            top: 11px;
+            height: 10px;
+        }
+
+        /* View mode has no buttons to add and to list the sheets: the tabs move left. */
+        .sk-view .skc .skc-status i.skc-sheets {
+            display: none;
+        }
+
+        .sk-view .skc .skc-status i.skc-tab {
+            margin-left: -66px;
+        }
+
+        @keyframes skc-flow {
+            from { background-position: -100vw 0; }
+            to   { background-position: 100vw 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .skc i {
+                animation: none;
+                background-image: none;
+            }
+        }
+
     </style>
 
     <script>
@@ -394,7 +691,8 @@
     <div class="inlined-svg"></div>
     <script src="../../../../../apps/common/main/lib/util/htmlutils.js?__inline=true"></script>
     <script src="../../../../../apps/common/main/lib/util/docserviceworker.js?__inline=true"></script>
-    <div id="loading-mask" class="loadmask">
+    <div id="loading-mask" class="loadmask sk-shell">
+        <div class="skc"><i class="skc-title"></i><i class="skc-icon"></i><i class="skc-mode"></i><div class="skc-menu"><i style="width:33px"></i><i style="width:46px"></i><i style="width:24px"></i><i style="width:50px"></i><i style="width:50px"></i><i style="width:49px"></i><i style="width:124px"></i><i style="width:53px"></i></div><div class="skc-plate"><div class="skc-tb"><i style="left:12px"></i><i style="left:50px"></i><i style="left:88px"></i><i style="left:126px"></i><i class="skc-field" style="left:166px;width:34px"></i><i style="left:257px"></i><i style="left:295px"></i><i style="left:333px"></i><i style="left:371px"></i><i style="left:409px"></i><i class="skc-field" style="left:456px;width:39px"></i><i class="skc-field" style="left:574px;width:16px"></i><i style="left:657px"></i><i style="left:695px"></i><i style="left:733px"></i><i style="left:771px"></i><i style="left:809px"></i><i style="left:854px"></i><i style="left:892px"></i><i style="left:930px"></i><i style="left:987px"></i><i style="left:1037px"></i><i style="left:1087px"></i><i style="left:1144px"></i><i style="left:1194px"></i><i style="left:1239px"></i><i style="left:1296px"></i><i class="skc-end"></i></div><div class="skc-fx"><i style="left:14px;width:40px"></i><i class="skc-fn" style="left:115px"></i><i style="left:146px;width:240px"></i></div></div><div class="skc-grid"><div class="skc-cols"></div><div class="skc-rows"></div><div class="skc-cells"><i style="top:26px;width:364px"></i><i style="top:46px;width:364px"></i><i style="top:66px;width:236px"></i><i style="top:86px;width:364px"></i><i style="top:106px;width:300px"></i><i style="top:126px;width:364px"></i><i style="top:146px;width:172px"></i><i style="top:166px;width:364px"></i><i style="top:186px;width:364px"></i><i style="top:206px;width:236px"></i><i style="top:226px;width:364px"></i><i style="top:246px;width:300px"></i><i style="top:266px;width:364px"></i></div></div><div class="skc-status"><i style="left:14px"></i><i style="left:38px"></i><i class="skc-sheets" style="left:83px"></i><i class="skc-sheets" style="left:107px"></i><i class="skc-field skc-tab" style="left:148px;width:71px"></i><i class="skc-field skc-tab" style="left:241px;width:33px"></i><i style="right:121px"></i><i class="skc-field" style="right:34px;width:85px"></i><i style="right:12px"></i></div></div>
         <div class="brendpanel" style="display: none;"><div>
             <div class="spacer"></div></div><div><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><div class="spacer"></div></div>
         </div>
@@ -421,12 +719,17 @@
             compact = params["compact"] == 'true',
             view = params["mode"] == 'view',
             tabBackground = params["tabBackground"],
-            visible = true,
-            // Compact shell: neutral skeleton for spreadsheets. The editor config (and with it
-            // ui.shell) is not known yet, so the stock title, ribbon and formula bar
-            // silhouettes would flash before the compact shell. Only the loader
-            // (background and grid placeholder) is drawn, as in documenteditor.
-            neutral = true;
+            visible = true;
+
+        // Compact shell skeleton (see the sk-shell rules): nested editors keep the stock
+        // skeleton, view mode has no toolbar row, and a formula bar the editing user hid
+        // in the stock interface (the stock key sse-hidden-formula) is not drawn.
+        if (internal)
+            document.getElementById('loading-mask').classList.remove('sk-shell');
+        else if (view)
+            document.getElementById('loading-mask').classList.add('sk-view');
+        else if (checkLocalStorage && (function (v) { return v !== null && parseInt(v) != 0; })(localStorage.getItem('sse-hidden-formula')))
+            document.getElementById('loading-mask').classList.add('sk-nofx');
 
         if (internal) {
             let child = document.querySelector('.brendpanel');
@@ -474,9 +777,9 @@
                 document.querySelector('.fat').style.left = '944px';
         }
 
-        visible && !neutral && (document.querySelector('.brendpanel').style.display = 'block');
-        !neutral && !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
-        !neutral && (document.querySelector('.skformula').style.display = 'block');
+        visible && (document.querySelector('.brendpanel').style.display = 'block');
+        !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
+        document.querySelector('.skformula').style.display = 'block';
         document.querySelector('.placeholder').style.display = 'block';
 
         if (stopLoading) {

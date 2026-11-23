@@ -80,6 +80,24 @@
         &.open { display: block; }
     }
 
+    /* Only an oversized root wraps; ordinary menus keep the editor's native row geometry. */
+    .vo-mn-drop.vo-mn-constrained {
+        .vo-mn-t, .vo-mn-grp-t {
+            min-width: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            overflow: visible;
+            text-overflow: clip;
+        }
+        .vo-mn-sub { height: auto; }
+        .vo-mn-h {
+            flex: 0 0 auto;
+            max-width: 40%;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+    }
+
     /* Submenu: position inline from MenuBar, ceiling is the window. */
     .vo-mn-fly {
         top: 0;

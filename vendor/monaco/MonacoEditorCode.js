@@ -30,6 +30,18 @@
  *
  */
 
+var _messageOrigin = window.location.origin;
+var _messageParent = window.parent;
+var _messageActive = _messageParent && _messageParent !== window &&
+    /^https?:\/\//.test(_messageOrigin);
+
+var _postMessage = function(msg) {
+    if (_messageActive && window.JSON) {
+        msg.referer = 'monaco-editor-' + window.id;
+        _messageParent.postMessage(window.JSON.stringify(msg), _messageOrigin);
+    }
+};
+
 var codeEditor = new window.MonacoEditor();
 codeEditor.create("editor", window.editorTheme === "dark" ? "vs-dark" : "vs-light", "", {
     minimap: {
@@ -49,15 +61,45 @@ if(window.language == 'javascript') {
     });
 }
 
-var _postMessage = function(msg) {
-    if(window.parent && window.JSON) {
-        msg.referer = 'monaco-editor-' + window.id;
-        window.parent.postMessage(window.JSON.stringify(msg), "*");
-    }
-};
-
 (function (window, undefined) {
     var _dropDisabled = undefined;
+
+    function isObject(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function owns(value, key) {
+        return Object.prototype.hasOwnProperty.call(value, key);
+    }
+
+    function isPosition(value) {
+        return isObject(value) && owns(value, 'row') && owns(value, 'column') &&
+            Number.isSafeInteger(value.row) && value.row >= 0 &&
+            Number.isSafeInteger(value.column) && value.column >= 0;
+    }
+
+    function isCommand(cmd) {
+        if (!isObject(cmd) || !owns(cmd, 'referer') || cmd.referer !== 'monaco-editor-' + window.id ||
+            !owns(cmd, 'command')) return false;
+
+        switch (cmd.command) {
+            case 'setValue':
+                return owns(cmd, 'data') && isObject(cmd.data) && owns(cmd.data, 'value') &&
+                    typeof cmd.data.value === 'string' &&
+                    (!owns(cmd.data, 'readonly') || typeof cmd.data.readonly === 'boolean') &&
+                    (!owns(cmd.data, 'currentPos') || cmd.data.currentPos === null || isPosition(cmd.data.currentPos));
+            case 'setTheme':
+                return owns(cmd, 'data') && isObject(cmd.data) && owns(cmd.data, 'type') &&
+                    typeof cmd.data.type === 'string';
+            case 'disableDrop':
+                return owns(cmd, 'data') && typeof cmd.data === 'boolean';
+            case 'revealPositionInCenter':
+            case 'undo':
+            case 'redo':
+                return !owns(cmd, 'data') || (isObject(cmd.data) && Object.keys(cmd.data).length === 0);
+        }
+        return false;
+    }
 
     codeEditor.on('onDidChangeModelContent', function(event) {
         if (window.isDisable) return;
@@ -115,11 +157,14 @@ var _postMessage = function(msg) {
     };
 
     var _onMessage = function(msg) {
-        var data = msg.data;
-        if (Object.prototype.toString.apply(data) !== '[object String]' || !window.JSON) {
+        if (!_messageActive || !msg || msg.source !== _messageParent || msg.origin !== _messageOrigin) {
             return;
         }
-        var cmd, handler;
+        var data = msg.data;
+        if (typeof data !== 'string' || !window.JSON) {
+            return;
+        }
+        var cmd;
 
         try {
             cmd = window.JSON.parse(data)
@@ -127,7 +172,7 @@ var _postMessage = function(msg) {
             cmd = '';
         }
 
-        if (cmd && cmd.referer == "monaco-editor-" + window.id) {
+        if (isCommand(cmd)) {
             if (cmd.command==='setValue') {
                 editorSetValue(cmd.data);
             } else if (cmd.command==='setTheme') {

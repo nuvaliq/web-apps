@@ -48,6 +48,10 @@ define([
        body.vo-boot). The build attempts are as many as there were in the launch
        loop before the early start: 20 at 150 ms. */
     var BOOT_CLASS = 'vo-boot';
+
+    /* The loading skeleton (index.html, class sk-shell) during the claim: a different
+       id, so that the stock code does not remove it. */
+    var COVER_ID = 'vo-loading';
     var START_TRIES = 20, START_STEP = 150;
 
     /* The canvas skin retry: LESS in the browser (app_dev.js) compiles asynchronously,
@@ -342,7 +346,8 @@ define([
            is put on body, and the styles hide the stock chrome until the shell
            is built. On app:face, when the layout is already assembled, the toolbar area
            gets the skeleton height — of the rows that the shell will build; the formula
-           bar and the sheet row stay stock.
+           bar and the sheet row stay stock. The loading skeleton is kept until the
+           build, see announce.
 
            boot — what was done to the layout for the skeleton: {heights: [...]}. While
            it is not null, the request class stands. booted — the request has already been made: a repeated
@@ -356,6 +361,32 @@ define([
             this.booted = true;
             this.boot = {heights: null};
             document.body.classList.add(BOOT_CLASS);
+            /* The loading skeleton stays until the shell is built. The stock code removes
+               it by id on app:face, before the book is loaded, and would then show the
+               grid in the colours of the interface theme (dark on a dark system) and its
+               own loading plate. Under a different id the skeleton stays, and endBoot
+               removes it together with the claim: when the shell is built this is the
+               same frame, on a failure the stock interface returns, on an engine error
+               see below. The stock password window lies above the skeleton by z-index,
+               and loading goes on after it. */
+            var mask = document.getElementById('loading-mask');
+            if (mask) mask.id = COVER_ID;
+            /* An engine error before the shell is built removes the skeleton and the
+               claim at once. The stock code removes its own mask on it (Main.onError →
+               hidePreloader) and opens the error window, while app:ready never comes
+               after an opening error: nothing would call endBoot, and the loading band
+               would keep running under the window and after OK. Under the window the
+               stock interface belongs, as in the stock editor. An error after which
+               loading still reaches app:ready gets the shell from the regular start,
+               as without the early start. The stock onError is registered earlier
+               (Main.onLaunch) and the engine calls its callbacks in order, so the stock
+               window is already open by our call. guarded, because an exception here
+               would cut off the remaining error callbacks. */
+            var api = this.stockApi();
+            if (api)
+                api.asc_registerCallback('asc_onError', guarded('shell: error before the build', function () {
+                    if (me.boot) me.endBoot(true);
+                }));
             /* The subscription is made here, that is, later than the stock handlers of
                app:face (they are made at controller start): by our call
                stock has already laid out the areas under its flags and rendered the ribbon. */
@@ -419,6 +450,8 @@ define([
             document.body.classList.remove(BOOT_CLASS);
             document.body.classList.remove(BOOT_NO_TB);
             document.body.classList.remove(BOOT_NO_FX);
+            var cover = document.getElementById(COVER_ID);
+            if (cover && cover.parentNode) cover.parentNode.removeChild(cover);
             (b.heights || []).forEach(function (x) {
                 if (x.panel.height === x.ours) x.panel.height = x.stock;
             });
@@ -525,8 +558,10 @@ define([
             return cb;
         },
 
-        /* The same for engine callbacks. A direct asc_registerCallback is not used in the shell:
-           everything the engine calls on us goes through this wrapper. */
+        /* The same for engine callbacks. Everything the engine calls on us goes through this
+           wrapper, except the error subscription of the early start (announce): it is made
+           before the build, when there is no api and no subscription list yet, and has to
+           outlive a rollback. */
         onApi: function (name, fn) {
             var api = this.api;
             if (!api || typeof api.asc_registerCallback !== 'function') return null;

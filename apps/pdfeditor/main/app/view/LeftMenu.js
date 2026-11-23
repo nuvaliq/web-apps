@@ -72,6 +72,18 @@ define([
             this._state = {disabled: false};
         },
 
+        createSearchButton: function (options) {
+            var SearchButton = Common.UI.Button.extend({
+                toggle: function (state, suppressEvent) {
+                    var open = state === undefined ? !this.pressed : !!state;
+                    // Refuse before ToggleManager closes another panel in the group.
+                    if (open && !PDFE.getController('LeftMenu').canShowSearchPanel()) return;
+                    Common.UI.Button.prototype.toggle.call(this, state, suppressEvent);
+                }
+            });
+            return new SearchButton(options);
+        },
+
         render: function () {
             var $markup = $(this.template({scope: this}));
 
@@ -79,7 +91,7 @@ define([
             Common.UI.SideMenu.prototype.render.call(this);
             this.btnMore.menu.menuAlign = 'tl-tr';
 
-            this.btnSearchBar = new Common.UI.Button({
+            this.btnSearchBar = this.createSearchButton({
                 action: 'advancedsearch',
                 el: $markup.elementById('#left-btn-searchbar'),
                 hint: this.tipSearch,
@@ -202,13 +214,24 @@ define([
                 this.fireEvent('comments:hide', this);
         },
 
-        onBtnMenuClick: function(btn, e) {
+        onBtnMenuClick: function(btn, e, suspendAfter) {
+            var searchPanel = btn === this.btnSearchBar;
+            if (searchPanel && !PDFE.getController('LeftMenu').canShowSearchPanel() &&
+                (btn.pressed || !this.panelSearch.isVisible())) {
+                btn.toggle(this.panelSearch.isVisible(), true);
+                return;
+            }
+            if (searchPanel && btn.pressed) {
+                PDFE.getController('LeftMenu').onSetDefaultSearchMode();
+                $('body').hasClass('vo-compact') && $('body').addClass('vo-left-open');
+            }
             this.supressEvents = true;
             this.btnAbout.toggle(false);
 
             if (btn.pressed) {
-                if (!(this.$el.width() > SCALE_MIN)) {
-                    this.$el.width(parseInt(Common.localStorage.getItem('pdfe-mainmenu-width')) || MENU_SCALE_PART);
+                if (!(this.$el.width() > SCALE_MIN) || (searchPanel && this.$el.outerWidth() < MENU_SCALE_PART)) {
+                    var width = parseInt(Common.localStorage.getItem('pdfe-mainmenu-width')) || MENU_SCALE_PART;
+                    this.$el.width(searchPanel ? Math.max(width, MENU_SCALE_PART) : width);
                 }
             } else if (!this._state.pluginIsRunning) {
                 var width = this.$el.width();
@@ -219,7 +242,8 @@ define([
             this.supressEvents = false;
 
             this.onCoauthOptions();
-            btn.pressed && btn.options.action == 'advancedsearch' && this.fireEvent('search:aftershow', this);
+            if (!suspendAfter && btn.pressed && btn.options.action == 'advancedsearch')
+                this.fireEvent('search:aftershow');
             btn.options.type !== 'plugin' && $('.left-panel .plugin-panel').toggleClass('active', false);
             Common.NotificationCenter.trigger('layout:changed', 'leftmenu');
         },
@@ -401,12 +425,23 @@ define([
                         this.onBtnMenuClick(this.btnNavigation);
                     }
                 } else if (menu == 'advancedsearch') {
-                    if ((this.btnSearchBar.isVisible() || this.isButtonInMoreMenu(this.btnSearchBar)) &&
-                        !this.btnSearchBar.isDisabled() && !this.btnSearchBar.pressed) {
-                        this.btnSearchBar.toggle(true);
-                        this.onBtnMenuClick(this.btnSearchBar);
-                        this.panelSearch.focus();
-                        !suspendAfter && this.fireEvent('search:aftershow', this);
+                    var controller = PDFE.getController('LeftMenu');
+                    if (!controller.canShowSearchPanel()) return;
+                    // Compact chrome hides the stock button, not the search panel.
+                    if ((this.btnSearchBar.isVisible() || this.isButtonInMoreMenu(this.btnSearchBar) ||
+                        $('body').hasClass('vo-compact')) && !this.btnSearchBar.isDisabled()) {
+                        controller.onSetDefaultSearchMode();
+                        if (!this.btnSearchBar.pressed) {
+                            $('body').hasClass('vo-compact') && $('body').addClass('vo-left-open');
+                            this.btnSearchBar.toggle(true);
+                            this.onBtnMenuClick(this.btnSearchBar, undefined, true);
+                        } else if (this.$el.outerWidth() < MENU_SCALE_PART) {
+                            this.onBtnMenuClick(this.btnSearchBar, undefined, true);
+                        }
+                        if (this.panelSearch.isVisible()) {
+                            this.panelSearch.focus();
+                            !suspendAfter && this.fireEvent('search:aftershow');
+                        }
                     }
                 }
                 /** coauthoring end **/

@@ -116,7 +116,9 @@ define([
                     'Text': this.txtText,
                     'Dropdown': this.txtDropdown,
                     'Listbox': this.txtListbox,
-                    'Signature': this.txtSignature
+                    'Signature': this.txtSignature,
+                    'Some PDF content could not be displayed.': this.txtPdfDrawingWarning || 'Some PDF content could not be displayed.',
+                    'The editor stopped trying to display some PDF content after repeated errors.': this.txtPdfDrawingStoppedWarning || 'The editor stopped trying to display some PDF content after repeated errors.'
                 };
             },
 

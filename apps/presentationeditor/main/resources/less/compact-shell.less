@@ -498,6 +498,14 @@ body.vo-boot {
     }
 }
 
+/* The stock loading plate ("Loading presentation" with a percentage) is not needed during
+   the claim: the loading indicator is the shell skeleton, which CompactShell.announce keeps
+   until the shell is built. */
+body.vo-boot .asc-loadmask,
+body.vo-boot .asc-loadmask-body {
+    display: none !important;
+}
+
 /* --- "Stock interface" ------------------------------------------------------- */
 /* The modes are mutually exclusive: the shell nodes are hidden, except the back button. */
 body.vo-advanced [id^="vo-"]:not(#vo-back) {

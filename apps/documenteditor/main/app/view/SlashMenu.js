@@ -234,9 +234,12 @@ define([
                 if (me.open && !me.inEditor(e.target)) me.hide();
             }, true);
 
-            $(document).on('mousedown', function (e) {
+            /* Some SDK builds suppress mousedown after pointerdown; handle both before the SDK. */
+            var dismiss = function (e) {
                 if (me.open && !$(e.target).closest('#' + ID).length) me.hide();
-            });
+            };
+            window.addEventListener('pointerdown', dismiss, true);
+            window.addEventListener('mousedown', dismiss, true);
         },
 
         /* The shell mode. The field is public, but the shell itself may not yet
@@ -299,6 +302,7 @@ define([
             /* We do not intercept input — it goes into the document.
                The menu only tracks what was typed, to erase as much later. */
             if (k === 'Backspace') {
+                if (e.altKey || e.ctrlKey || e.metaKey) return this.hide();
                 if (!this.filter) { setTimeout(this.hide.bind(this), 0); return; }
                 this.filter = this.filter.slice(0, -1);
                 this.index = this.first();
@@ -482,6 +486,7 @@ define([
         },
 
         apply: function (i) {
+            if (!this.open) return;
             var list = this.visible();
             /* Safety net: from the keyboard an empty result no longer gets here —
                onKeyOpen on Enter/Tab closes the menu and gives the key to the document

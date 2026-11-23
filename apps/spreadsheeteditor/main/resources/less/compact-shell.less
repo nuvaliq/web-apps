@@ -579,10 +579,11 @@ body.vo-compact.theme-type-dark {
 }
 
 /* Early start: the early-start class is set from the moment the config arrives (Gateway init) until the
-   shell is built on app:ready (CompactShell.announce/start). By then the stock has already
-   removed the loading mask and would show its own title, ribbon and side menus: they are
-   hidden, and in place of the shell rows a frame is drawn: the area height is set by
-   bootLayout (132, 76 for a reader), here is the color. Below is the documents frame (a white
+   shell is built on app:ready (CompactShell.announce/start). The loading skeleton covers the
+   page during that time (CompactShell.announce keeps it under another id), but under it the
+   stock code shows its own title, ribbon and side menus after app:face: they are hidden, and
+   in place of the shell rows a frame is drawn: the area height is set by bootLayout (168; 132
+   without the formula row; 124 for a reader), here is the color. Below is the documents frame (a white
    header and menu bar over a strip of the canvas color); in spreadsheets its colors are moved to
    the spreadsheet top look: the "Spreadsheet top look" section at the end of the file. The formula bar and the sheet
    row are stock, as in compact. The class is removed by endBoot: after the build, after a create() failure or
@@ -607,6 +608,14 @@ body.vo-boot {
         background-size: 100% (@vo-h-header + @vo-h-menu);
         box-shadow: none;
     }
+}
+
+/* The stock loading plate ("Loading data" with a percentage) is not needed during the
+   claim: the loading indicator is the shell skeleton, which CompactShell.announce keeps
+   until the shell is built. */
+body.vo-boot .asc-loadmask,
+body.vo-boot .asc-loadmask-body {
+    display: none !important;
 }
 
 /* Smoothness of the shell and sheet area height change is as in documents: 0.3 s with the compact

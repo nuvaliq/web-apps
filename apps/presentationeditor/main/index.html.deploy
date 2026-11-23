@@ -264,6 +264,335 @@
         .pixel-ratio__1_5 {
             --scaled-one-px-value: calc(1px / 1.5);
         }
+        /* Compact shell skeleton. Drawn instead of the stock one: the rows of the shell
+           (name row 46px, menu row 30px, the toolbar card 44px at 80px), the slide
+           thumbnails, the slide where the editor fits it, the notes and the status row,
+           so the shell takes the place of the skeleton without a jump. View mode has no
+           toolbar card, and the slide show button moves to the name row.
+           The colours are literals of the shell palette and do not follow the
+           interface theme: the shell has no dark palette, and a dark skeleton before
+           a light editor reads as a flash. The shell keeps the skeleton (under another
+           id) until it is built, so the rules do not rely on the id.
+           The page does not know yet whether the shell will start: that is decided
+           by editorConfig.ui.shell, which arrives after the first paint. Every open
+           of a presentation through the platform carries the shell, so the skeleton is
+           drawn for all sessions; a session without it (the platform and the image
+           disagree on the shell value) shows this skeleton and then the stock
+           interface. */
+        body > .loadmask.sk-shell {
+            background: #eef2f4;                    /* bg-content-tertiary */
+        }
+
+        .loadmask.sk-shell > .brendpanel,
+        .loadmask.sk-shell > .sktoolbar,
+        .loadmask.sk-shell > .placeholder {
+            display: none !important;
+        }
+
+        .loadmask > .skc {
+            display: none;
+        }
+
+        .loadmask.sk-shell > .skc {
+            display: block;
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            overflow: hidden;
+        }
+
+        .rtl .loadmask.sk-shell > .skc {
+            transform: scaleX(-1);
+        }
+
+        /* One light band runs over all the bars at once: the gradient is fixed to
+           the viewport, so it does not restart in every bar. */
+        .skc i {
+            position: absolute;
+            display: block;
+            border-radius: 4px;
+            background-color: rgba(0, 0, 0, .1);
+            background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, .55) 50%, rgba(255, 255, 255, 0) 65%);
+            background-size: 200vw 100%;
+            background-attachment: fixed;
+            animation: skc-flow 2.4s linear infinite;
+        }
+
+        .skc-band {
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 76px;
+            background: #fff;                       /* bg-content-primary */
+            box-shadow: 0 1px 1px 0 rgba(0, 0, 0, .05);
+        }
+
+        .skc .skc-title {
+            top: 18px;
+            left: 20px;
+            width: 168px;
+            height: 14px;
+        }
+
+        .skc .skc-icon {
+            top: 15px;
+            right: 205px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc .skc-mode {
+            top: 9px;
+            right: 20px;
+            width: 164px;
+            height: 32px;
+            border-radius: 8px;
+        }
+
+        /* The slide show button: at the end of the toolbar card, in view mode in the
+           name row. */
+        .skc .skc-band i.skc-show,
+        .skc .skc-card i.skc-show {
+            width: 171px;
+            height: 32px;
+            border-radius: 8px;
+        }
+
+        .skc .skc-card i.skc-show {
+            top: 6px;
+            right: 44px;
+        }
+
+        .skc .skc-band i.skc-show {
+            display: none;
+            top: 9px;
+            right: 63px;
+        }
+
+        .sk-view .skc .skc-mode,
+        .sk-view .skc-card {
+            display: none;
+        }
+
+        .sk-view .skc .skc-band i.skc-show {
+            display: block;
+        }
+
+        .sk-view .skc .skc-icon {
+            right: 22px;
+        }
+
+        .skc-menu {
+            position: absolute;
+            top: 51px;
+            left: 20px;
+            display: flex;
+            gap: 30px;
+        }
+
+        .skc .skc-menu i {
+            position: relative;
+            flex: none;
+            height: 10px;
+        }
+
+        .skc-card {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            left: 20px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .9);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .15);
+            overflow: hidden;
+        }
+
+        .skc .skc-card i {
+            top: 12px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .skc .skc-card i.skc-field {
+            top: 17px;
+            height: 10px;
+        }
+
+        .skc .skc-card i.skc-end {
+            right: 12px;
+        }
+
+        /* The thumbnails: a white panel 255px wide down to the status row, 16:9
+           thumbnails of 201 x 113px every 134px with the slide number on the left. */
+        .skc-thumbs {
+            position: absolute;
+            top: 132px;
+            bottom: 42px;
+            left: 0;
+            width: 255px;
+            border-radius: 0 12px 0 0;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .sk-view .skc-thumbs {
+            top: 76px;
+        }
+
+        .skc .skc-thumbs i.skc-no {
+            left: 12px;
+            width: 8px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        .skc-thumb {
+            position: absolute;
+            left: 34px;
+            width: 201px;
+            height: 113px;
+            background: #fff;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, .1);
+        }
+
+        .skc .skc-thumb i {
+            left: 20px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        .skc .skc-thumb i.skc-sub {
+            height: 6px;
+        }
+
+        /* The area of the slide: right of the thumbnails, above the notes (notes the
+           user hid leave a 4px strip). The editor fits the slide into it with a 13.5px
+           margin and centres it; the skeleton draws a 16:9 slide, the size of a new
+           presentation. The height of the area is the viewport less the rows above and
+           below it (--skc-rest, with the margins). The editor zoom is a whole percent of
+           the 1280px slide, so where the browser can round, the width is floored to
+           12.8px. */
+        .skc-area {
+            position: absolute;
+            top: 132px;
+            right: 15px;
+            bottom: 98px;
+            left: 260px;
+        }
+
+        .sk-view .skc-area {
+            top: 76px;
+        }
+
+        .sk-nonotes .skc-area {
+            bottom: 64px;
+        }
+
+        .skc-slide {
+            --skc-rest: 257px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: min(calc(100% - 27px), calc((100vh - var(--skc-rest)) * 16 / 9));
+            aspect-ratio: 16 / 9;
+            transform: translate(-50%, -50%);
+            background: #fff;
+        }
+
+        .sk-view .skc-slide {
+            --skc-rest: 201px;
+        }
+
+        .sk-nonotes .skc-slide {
+            --skc-rest: 223px;
+        }
+
+        .sk-view.sk-nonotes .skc-slide {
+            --skc-rest: 167px;
+        }
+
+        @supports (width: round(down, 10px, 1px)) {
+            .skc-slide {
+                width: round(down, min(100% - 27px, (100vh - var(--skc-rest)) * 16 / 9), 12.8px);
+            }
+        }
+
+        .skc .skc-slide i {
+            left: 13%;
+            border-radius: 6px;
+        }
+
+        .skc .skc-slide i.skc-head {
+            top: 33%;
+            width: 50%;
+            height: 7%;
+        }
+
+        .skc .skc-slide i.skc-sub {
+            top: 45%;
+            width: 32%;
+            height: 3.2%;
+        }
+
+        .skc-notes {
+            position: absolute;
+            right: 1px;
+            bottom: 41px;
+            left: 260px;
+            height: 38px;
+            background: #fff;
+        }
+
+        .skc .skc-notes i {
+            top: 14px;
+            left: 20px;
+            width: 220px;
+            height: 10px;
+        }
+
+        .sk-nonotes .skc-notes {
+            height: 4px;
+        }
+
+        .sk-nonotes .skc .skc-notes i {
+            display: none;
+        }
+
+        .skc-status {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            height: 30px;
+            background: #fefefe;
+        }
+
+        .skc .skc-status i {
+            top: 10px;
+            height: 10px;
+        }
+
+        /* View mode has no text language and no spell checking in the status row. */
+        .sk-view .skc .skc-status i.skc-edit {
+            display: none;
+        }
+
+        @keyframes skc-flow {
+            from { background-position: -100vw 0; }
+            to   { background-position: 100vw 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .skc i {
+                animation: none;
+                background-image: none;
+            }
+        }
+
     </style>
 
     <script>
@@ -340,7 +669,8 @@
     <div class="inlined-svg"></div>
     <script src="../../../../../apps/common/main/lib/util/htmlutils.js?__inline=true"></script>
     <script src="../../../../../apps/common/main/lib/util/docserviceworker.js?__inline=true"></script>
-    <div id="loading-mask" class="loadmask">
+    <div id="loading-mask" class="loadmask sk-shell">
+        <div class="skc"><div class="skc-band"><i class="skc-title"></i><i class="skc-icon"></i><i class="skc-mode"></i><i class="skc-show"></i><div class="skc-menu"><i style="width:33px"></i><i style="width:46px"></i><i style="width:24px"></i><i style="width:50px"></i><i style="width:50px"></i><i style="width:39px"></i><i style="width:82px"></i><i style="width:124px"></i><i style="width:53px"></i></div></div><div class="skc-card"><i style="left:12px"></i><i style="left:50px"></i><i style="left:88px"></i><i style="left:126px"></i><i class="skc-field" style="left:166px;width:28px"></i><i style="left:257px"></i><i class="skc-field" style="left:280px;width:81px"></i><i style="left:390px"></i><i style="left:443px"></i><i style="left:496px"></i><i style="left:555px"></i><i class="skc-field" style="left:578px;width:26px"></i><i style="left:624px"></i><i class="skc-field" style="left:648px;width:38px"></i><i style="left:723px"></i><i class="skc-field" style="left:746px;width:31px"></i><i style="left:798px"></i><i class="skc-field" style="left:821px;width:53px"></i><i class="skc-show"></i><i class="skc-end"></i></div><div class="skc-thumbs"><i class="skc-no" style="top:21px"></i><div class="skc-thumb" style="top:17px"><i style="top:30px;width:110px"></i><i class="skc-sub" style="top:48px;width:70px"></i></div><i class="skc-no" style="top:155px"></i><div class="skc-thumb" style="top:151px"><i style="top:30px;width:110px"></i><i class="skc-sub" style="top:48px;width:70px"></i></div><i class="skc-no" style="top:289px"></i><div class="skc-thumb" style="top:285px"><i style="top:30px;width:110px"></i><i class="skc-sub" style="top:48px;width:70px"></i></div><i class="skc-no" style="top:423px"></i><div class="skc-thumb" style="top:419px"><i style="top:30px;width:110px"></i><i class="skc-sub" style="top:48px;width:70px"></i></div><i class="skc-no" style="top:557px"></i><div class="skc-thumb" style="top:553px"><i style="top:30px;width:110px"></i><i class="skc-sub" style="top:48px;width:70px"></i></div><i class="skc-no" style="top:691px"></i><div class="skc-thumb" style="top:687px"><i style="top:30px;width:110px"></i><i class="skc-sub" style="top:48px;width:70px"></i></div><i class="skc-no" style="top:825px"></i><div class="skc-thumb" style="top:821px"><i style="top:30px;width:110px"></i><i class="skc-sub" style="top:48px;width:70px"></i></div></div><div class="skc-area"><div class="skc-slide"><i class="skc-head"></i><i class="skc-sub"></i></div></div><div class="skc-notes"><i></i></div><div class="skc-status"><i style="left:20px;width:68px"></i><i class="skc-edit" style="left:118px;width:122px"></i><i class="skc-edit" style="right:247px;width:125px"></i><i style="right:156px;width:61px"></i><i style="right:20px;width:107px"></i></div></div>
         <div class="brendpanel" style="display: none;">
             <div><div class="spacer"></div></div><div><span class="rect"></span><span class="rect"></span><span class="rect"></span><span class="rect"></span><div class="spacer"></div></div>
         </div>
@@ -363,12 +693,14 @@
             compact = params["compact"] == 'true',
             view = params["mode"] == 'view',
             tabBackground = params["tabBackground"],
-            visible = true,
-            // Compact shell: neutral skeleton, the same with and without the shell. The editor
-            // config (and with it ui.shell) is not known yet, so the stock ribbon and title
-            // silhouettes would flash before the compact shell. Only the loader (background
-            // and slide placeholder) is drawn.
-            neutral = true;
+            visible = true;
+
+        // Compact shell skeleton (see the sk-shell rules): view mode has no toolbar card,
+        // and notes the user hid (the stock key pe-hidden-notes) are not drawn.
+        if (view)
+            document.getElementById('loading-mask').classList.add('sk-view');
+        if (checkLocalStorage && (function (v) { return v !== null && parseInt(v) != 0; })(localStorage.getItem('pe-hidden-notes')))
+            document.getElementById('loading-mask').classList.add('sk-nonotes');
 
         if (compact || view || notoolbar) {
             let child = document.querySelector('.brendpanel > :nth-child(2)');
@@ -409,8 +741,8 @@
                 document.querySelector('.fat').style.left = '865px';
         }
 
-        visible && !neutral && (document.querySelector('.brendpanel').style.display = 'block');
-        !neutral && !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
+        visible && (document.querySelector('.brendpanel').style.display = 'block');
+        !(view || notoolbar) && (document.querySelector('.sktoolbar').style.display = 'block');
         document.querySelector('.placeholder').style.display = 'flex';
 
          if (stopLoading) {

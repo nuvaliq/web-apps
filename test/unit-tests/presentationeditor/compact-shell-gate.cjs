@@ -40,6 +40,7 @@ class El {
     }
     get className() { return this.attrs.class || ''; }
     get id() { return this.attrs.id || ''; }
+    set id(v) { this.attrs.id = String(v); }
     get firstChild() { return this.childNodes[0] || null; }
     setAttribute(k, v) { this.attrs[k] = String(v); }
     getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
@@ -166,6 +167,20 @@ function boot(cfg, appOptions) {
     shell.start();
     drain();
     assert.ok(doc.getElementById('vo-shell'), 'the shell is not built' + (warnings.length ? ': ' + warnings[0] : ''));
+}
+
+/* The loading skeleton from index.html: the #loading-mask node the stock code removes by id. */
+function mask() {
+    const node = new El('div');
+    node.setAttribute('id', 'loading-mask');
+    doc.body.appendChild(node);
+    return node;
+}
+/* The engine error subscription of the api the shell finds (Main.api). */
+function engine() {
+    const errors = [];
+    main.api.asc_registerCallback = (name, fn) => { if (name === 'asc_onError') errors.push(fn); };
+    return (...args) => errors.slice().forEach(f => f(...args));
 }
 
 let passed = 0, failed = 0;
@@ -312,6 +327,73 @@ check('boot_heights_on_app_face_stock_back_on_end_boot', () => {
     tb.writes.length = 0;
     shell.endBoot(false);
     assert.deepEqual([tb.height, st.height, tb.writes.length], [88, 25, 0], 'hand-over restores the model only');
+});
+
+check('loading_skeleton_kept_under_another_id_until_end_boot', () => {
+    fresh({ui: {mode: 'compact'}});
+    const stock = mask();
+    shell.announce({ui: {mode: 'compact'}});
+    assert.equal(stock.id, 'loading-mask', 'without the shell the stock removes it as before');
+
+    fresh(SHELL);
+    const held = mask();
+    shell.announce(SHELL);
+    assert.equal(held.id, 'vo-loading', 'the skeleton keeps the stock id');
+    assert.equal(doc.getElementById('loading-mask'), null, 'the stock lookup finds it');
+    face();
+    assert.ok(held.parentNode, 'app:face took the skeleton');
+    shell.endBoot(false);
+    assert.ok(held.parentNode === null, 'the hand-over frame left the skeleton');
+
+    fresh(SHELL);
+    const failed = mask();
+    shell.announce(SHELL);
+    shell.endBoot(true);
+    assert.ok(failed.parentNode === null, 'the fail-safe left the skeleton');
+
+    fresh(SHELL);
+    shell.announce(SHELL);
+    assert.doesNotThrow(() => shell.endBoot(true), 'no skeleton on the page');
+});
+
+/* An opening error arrives before app:ready, and no app:ready follows it: the error itself
+   has to remove the skeleton and the claim, otherwise the stock window hangs over the
+   skeleton and the loading band keeps running after OK. */
+check('loading_skeleton_opening_error_before_the_shell_takes_it_and_the_claim', () => {
+    fresh(SHELL);
+    const fire = engine();
+    const late = mask();
+    shell.announce(SHELL);
+    face();
+    assert.notEqual(tb.height, 88, 'the skeleton heights are not on');
+    fire(-4, 2);
+    assert.ok(late.parentNode === null, 'the skeleton stays under the error window');
+    assert.equal(classes().includes('vo-boot'), false, 'the claim stays under the error window');
+    assert.equal(tb.height, 88, 'stock heights are not back');
+    assert.equal(st.height, 25);
+    assert.doesNotThrow(() => fire(-4, 2), 'a second error throws');
+
+    fresh(SHELL);
+    const fireEarly = engine();
+    const early = mask();
+    shell.announce(SHELL);
+    fireEarly(-4, 2);
+    assert.ok(early.parentNode === null, 'an error before app:face left the skeleton');
+    face();
+    assert.equal(tb.height, 88, 'a late app:face laid out the skeleton again');
+
+    fresh(SHELL);
+    const fireAfter = engine();
+    shell.announce(SHELL);
+    face();
+    shell.endBoot(false);
+    doc.body.classList.add('vo-compact');
+    fireAfter(-4, 2);
+    assert.equal(classes().includes('vo-compact'), true, 'after the build errors are the stock business');
+
+    fresh(SHELL);
+    assert.doesNotThrow(() => shell.announce(SHELL), 'an engine without callbacks');
+    assert.equal(classes().includes('vo-boot'), true);
 });
 
 check('start_twenty_attempts_then_stock', () => {

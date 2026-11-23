@@ -1680,6 +1680,8 @@
   "PDFE.Controllers.Main.titleUpdateVersion": "Версия изменилась",
   "PDFE.Controllers.Main.txtArt": "Введите ваш текст",
   "PDFE.Controllers.Main.txtButton": "Кнопка",
+  "PDFE.Controllers.Main.txtPdfDrawingWarning": "Часть содержимого PDF не удалось отобразить.",
+  "PDFE.Controllers.Main.txtPdfDrawingStoppedWarning": "Из-за повторных ошибок редактор прекратил попытки отобразить часть содержимого PDF.",
   "PDFE.Controllers.Main.txtCheckbox": "Флажок",
   "PDFE.Controllers.Main.txtChoose": "Выберите элемент",
   "PDFE.Controllers.Main.txtClickToLoad": "Нажмите для загрузки изображения",

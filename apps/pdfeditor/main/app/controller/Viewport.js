@@ -332,14 +332,12 @@ define([
                 return;
             }
             if (!this.searchBar) {
-                var hideLeftPanel = this.mode.canBrandingExt &&
-                    (!Common.UI.LayoutManager.isElementVisible('leftMenu') || this.mode.customization && this.mode.customization.leftMenu === false);
-                this.searchBar = new Common.UI.SearchBar( hideLeftPanel ? {
-                    showOpenPanel: false,
-                    width: 303,
-                } : {
+                this.searchBar = new Common.UI.SearchBar({
+                    showOpenPanel: true,
                     editMode: this.mode.isPDFEdit ? 'edit' : 'comment'
                 });
+                Common.NotificationCenter.on('pdf:mode-changed',
+                    _.bind(this.updateSearchPanelAvailability, this));
                 this.searchBar.on('hide', _.bind(function () {
                     this.header.btnSearch.toggle(false, true);
                     Common.NotificationCenter.trigger('edit:complete');
@@ -351,9 +349,18 @@ define([
                     resultsNumber = searchController.getResultsNumber();
                 this.searchBar.show(selectedText && selectedText.trim() || searchController.getSearchText());
                 this.searchBar.updateResultsNumber(resultsNumber[0], resultsNumber[1]);
+                this.updateSearchPanelAvailability();
             } else {
                 this.searchBar.hide();
             }
+        },
+
+        updateSearchPanelAvailability: function () {
+            var bar = this.searchBar;
+            if (!bar || !bar.btnOpenPanel || !bar.btnOpenPanelRedact) return;
+            var allowed = this.getApplication().getController('LeftMenu').canShowSearchPanel();
+            bar.btnOpenPanel.setVisible(allowed && bar.mode !== 'edit');
+            bar.btnOpenPanelRedact.setVisible(allowed && bar.mode === 'edit');
         },
 
         isSearchBarVisible: function () {

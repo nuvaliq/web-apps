@@ -169,6 +169,9 @@ define([
         var mac = typeof opts.mac === 'boolean' ? opts.mac : platformMac();
         var subs = [];
         var frame = 0;
+        var layoutFrame = 0;
+        var destroyed = false;
+        var observedClips = [];
 
         var m = {
             bar: null,
@@ -316,7 +319,7 @@ define([
             bar.addEventListener('keydown', guarded('menu keys', menuKey));
             bar.addEventListener('focusin', guarded('menu focus', function (e) {
                 var from = e && e.relatedTarget;
-                if (from && from.nodeType === 1 && !bar.contains(from)) m.opener = from;
+                if (from && from.nodeType === 1 && from !== document.body && !bar.contains(from)) m.opener = from;
                 var t = e && e.target;
                 if (tops().indexOf(t) >= 0) rove(t);
             }));
@@ -471,6 +474,7 @@ define([
             s.drop.classList.add('open');
             m.open = i;
             syncExpanded();
+            placeOpenLists();
             return true;
         }
 
@@ -481,14 +485,20 @@ define([
             m.more.drop.classList.add('open');
             m.more.open = true;
             syncExpanded();
+            placeOpenLists();
             return true;
         }
 
         function fillMore(hidden) {
             var drop = m.more.drop;
-            drop.textContent = '';
+            var existing = {}, rows = [], scroll = drop.scrollTop;
+            Array.prototype.forEach.call(drop.children, function (row) {
+                existing[row.getAttribute('data-k')] = row;
+            });
             hidden.forEach(function (s) {
-                var row = document.createElement('button');
+                var row = existing[s.k];
+                if (row) { rows.push(row); return; }
+                row = document.createElement('button');
                 row.setAttribute('type', 'button');
                 row.className = 'vo-mn-sub vo-has-sub vo-mn-more-row';
                 row.setAttribute('role', 'menuitem');
@@ -507,8 +517,10 @@ define([
                     openSection(i);
                 }));
                 row.addEventListener('mouseenter', guarded('menu hover', function () { hoverRow(row, 0, null); }));
-                drop.appendChild(row);
+                rows.push(row);
             });
+            place(drop, rows);
+            drop.scrollTop = scroll;
         }
 
         function syncExpanded() {
@@ -874,18 +886,142 @@ define([
             }), HOVER_DELAY);
         }
 
+        /* Keep rectangles in layout coordinates, like offset/client sizes, including SDK application scale. */
+        function layoutRect(node) {
+            var utils = Common.Utils;
+            return utils && typeof utils.getBoundingClientRect === 'function' ?
+                utils.getBoundingClientRect(node) : node.getBoundingClientRect();
+        }
+
+        /* The root stays in the editor window and in the client area of each clipping ancestor. */
+        function rootBounds(drop) {
+            var left = 0, right = document.documentElement.clientWidth || window.innerWidth || 0;
+            var clips = [];
+            for (var node = drop.parentElement; node; node = node.parentElement) {
+                var style = window.getComputedStyle(node);
+                if (!/^(hidden|clip|auto|scroll)$/.test(style.overflowX)) continue;
+                var rect = layoutRect(node);
+                var start = rect.left + (node.clientLeft || 0);
+                left = Math.max(left, start);
+                right = Math.min(right, start + node.clientWidth);
+                clips.push(node);
+            }
+            return {left: left + 4, right: right - 4, clips: clips};
+        }
+
+        function placeRoot(drop, keepFocusVisible) {
+            var bounds = rootBounds(drop), available = bounds.right - bounds.left;
+            watchClips(bounds.clips);
+            if (!shown(drop) || !drop.offsetWidth || available <= 0) return;
+            var parent = drop.offsetParent || drop.parentElement;
+            var rect = layoutRect(parent);
+            var signature = function () {
+                return [bounds.left, bounds.right, rect.left, rect.top,
+                    parent.clientWidth, parent.scrollLeft, drop.offsetWidth, drop.offsetHeight, drop.innerHTML].join('|');
+            };
+            var saved = drop._voPlacement;
+            if (saved && saved.signature === signature()) return;
+            if (keepFocusVisible === undefined) keepFocusVisible = focusedRowVisible();
+            if (!saved) {
+                saved = drop._voPlacement = {};
+                ['left', 'right', 'width', 'minWidth', 'maxWidth', 'boxSizing'].forEach(function (key) {
+                    saved[key] = drop.style[key];
+                });
+            }
+            var scroll = drop.scrollTop;
+            ['left', 'right', 'width', 'minWidth', 'maxWidth', 'boxSizing'].forEach(function (key) {
+                drop.style[key] = saved[key];
+            });
+            drop.classList.remove('vo-mn-constrained');
+            if (drop.offsetWidth > available) {
+                drop.style.boxSizing = 'border-box';
+                drop.style.minWidth = '0';
+                drop.style.width = available + 'px';
+                drop.style.maxWidth = available + 'px';
+                drop.classList.add('vo-mn-constrained');
+            }
+            /* offsetLeft/offsetWidth describe the final layout, unaffected by the opening animation. */
+            var preferred = rect.left + (parent.clientLeft || 0) + drop.offsetLeft - (parent.scrollLeft || 0);
+            var left = Math.min(Math.max(preferred, bounds.left), bounds.right - drop.offsetWidth);
+            if (Math.abs(left - preferred) > 0.01) {
+                drop.style.left = (drop.offsetLeft + left - preferred) + 'px';
+                drop.style.right = 'auto';
+            }
+            drop.scrollTop = scroll;
+            if (keepFocusVisible) revealFocusedRow(drop);
+            saved.signature = signature();
+        }
+
+        function focusedRowBounds(drop) {
+            var active = document.activeElement;
+            if (!active || !drop.contains(active)) return null;
+            var row = active.closest('.vo-mn-sub') || active;
+            var node = row, top = 0;
+            /* Layout offsets do not depend on the popup's opening animation. */
+            while (node && node !== drop) {
+                top += node.offsetTop;
+                node = node.offsetParent;
+                if (node && node !== drop) top += node.clientTop - node.scrollTop;
+            }
+            return node === drop ? {top: top, bottom: top + row.offsetHeight} : null;
+        }
+
+        function focusedRowVisible() {
+            var active = document.activeElement;
+            var drop = active && active.closest('.vo-mn-drop');
+            var bounds = drop && focusedRowBounds(drop);
+            return !!bounds && bounds.top >= drop.scrollTop && bounds.bottom <= drop.scrollTop + drop.clientHeight;
+        }
+
+        function revealFocusedRow(drop) {
+            var bounds = focusedRowBounds(drop);
+            if (!bounds) return;
+            if (bounds.top < drop.scrollTop) drop.scrollTop = bounds.top;
+            else if (bounds.bottom > drop.scrollTop + drop.clientHeight) {
+                drop.scrollTop = Math.min(bounds.top, bounds.bottom - drop.clientHeight);
+            }
+        }
+
+        function watchClips(clips) {
+            if (!ro) return;
+            observedClips.forEach(function (node) {
+                if (clips.indexOf(node) < 0) {
+                    if (node !== m.bar && node !== m.status) ro.unobserve(node);
+                    borderRo.unobserve(node);
+                }
+            });
+            clips.forEach(function (node) {
+                if (observedClips.indexOf(node) < 0) {
+                    ro.observe(node);
+                    borderRo.observe(node, {box: 'border-box'});
+                }
+            });
+            observedClips = clips;
+        }
+
+        function placeOpenLists(keepFocusVisible) {
+            if (m.open >= 0) placeRoot(m.sections[m.open].drop, keepFocusVisible);
+            else if (moreOpen()) placeRoot(m.more.drop, keepFocusVisible);
+            m.flies.forEach(function (f) { placeFly(f.el, f.row); });
+        }
+
         /* A submenu to the right of the item (right to left — on the left), its first row level with it;
            if it does not fit at the window edge — on the other side; vertically — within the window. */
         function placeFly(fly, row) {
             var bar = m.bar;
-            var br = bar.getBoundingClientRect(), rr = row.getBoundingClientRect();
-            var vw = window.innerWidth || 0, vh = window.innerHeight || 0;
+            var br = layoutRect(bar), rr = layoutRect(row);
+            var utils = Common.Utils;
+            var vh = utils && typeof utils.innerHeight === 'function' ? utils.innerHeight() : window.innerHeight || 0;
+            var bounds = rootBounds(fly);
             var w = fly.offsetWidth || 0, h = fly.offsetHeight || 0;
             var after = rr.right - br.left - 2, before = rr.left - br.left - w + 2;
             var r2l = rtl();
             var left = r2l ? before : after;
-            if (!r2l && vw && br.left + left + w > vw - 4) left = before;
-            if (r2l && br.left + left < 4) left = after;
+            if (!r2l && br.left + left + w > bounds.right) left = before;
+            if (r2l && br.left + left < bounds.left) left = after;
+            if (bounds.right - bounds.left >= w) {
+                left = Math.min(Math.max(left, bounds.left - br.left), bounds.right - br.left - w);
+            }
             /* Level — a shift by the actual top margin of the list (border and padding): each
                editor has its own. The margin is taken from the layout, not from the borders on
                the screen: the list is measured on the first frame of its appearance, still compressed. */
@@ -1272,11 +1408,11 @@ define([
            stays on the right, "…" is before it. The list of the open section that went there takes the place of
            "…" and stays open; when the section returns to the bar — the list returns to it. */
 
-        function applyVisible() {
+        function applyVisible(keepFocusVisible) {
             sections().forEach(function (s) {
                 s.wrap.style.display = s.visible ? '' : 'none';
             });
-            layout();
+            layout(keepFocusVisible);
         }
 
         /* The status is no wider than the rest of the bar: long text is clipped with an ellipsis (styles), the full one is
@@ -1302,10 +1438,15 @@ define([
             return ok;
         }
 
-        function layout() {
+        function layout(keepFocusVisible) {
             var bar = m.bar;
+            watchClips(rootBounds(m.more.drop).clips);
             if (!bar || !shown(bar) || !bar.clientWidth) return;
+            if (keepFocusVisible === undefined) keepFocusVisible = focusedRowVisible();
             var active = document.activeElement;
+            var moreRows = Array.prototype.slice.call(m.more.drop.children);
+            var moreRow = active && m.more.drop.contains(active) ? active.getAttribute('data-k') : null;
+            var moreButton = active === m.more.btn;
             sections().forEach(function (s) {
                 s.over = false;
                 s.wrap.style.display = s.visible ? '' : 'none';
@@ -1340,6 +1481,34 @@ define([
                 rove(m.more.btn);
                 focusNode(m.more.btn);
             }
+            if (moreRow) {
+                var section = sections().filter(function (s) { return s.k === moreRow && s.visible; })[0];
+                if (section && !section.over) {
+                    rove(section.btn);
+                    focusNode(section.btn);
+                } else if (section && document.activeElement !== active) {
+                    var row = Array.prototype.filter.call(m.more.drop.children, function (el) {
+                        return el.getAttribute('data-k') === moreRow;
+                    })[0];
+                    if (row) focusNode(row);
+                } else if (!section) {
+                    var at = moreRows.indexOf(active);
+                    var candidates = moreRows.slice(at + 1).concat(moreRows.slice(0, at).reverse());
+                    var target = candidates.filter(function (row) { return shown(row); })[0];
+                    if (target) focusNode(target);
+                    else {
+                        var index = sections().map(function (s) { return s.k; }).indexOf(moreRow);
+                        target = nearestTop(index);
+                        if (target) focusNode(target);
+                        else leave();
+                    }
+                }
+            } else if (moreButton && !shown(m.more.btn)) {
+                var visible = tops(), next = visible[visible.length - 1];
+                if (next) { rove(next); focusNode(next); }
+                else leave();
+            }
+            placeOpenLists(keepFocusVisible);
         }
 
         /* --- Refreshing the open menu ------------------------------------------ */
@@ -1363,6 +1532,7 @@ define([
         function update() {
             if (!m.bar) return;
             var active = document.activeElement;
+            var keepFocusVisible = focusedRowVisible();
             var inMenu = !!active && m.bar.contains(active);
             var pass = {};
             var snaps = sections().map(function (s) {
@@ -1379,10 +1549,10 @@ define([
 
             if (openS && !openS.visible) {
                 closeAll();
-                applyVisible();
+                applyVisible(keepFocusVisible);
                 if (wasInOpen) focusLost = nearestTop(openIdx);
             } else {
-                applyVisible();
+                applyVisible(keepFocusVisible);
                 if (openS) {
                     var rows = snaps[openIdx].rows;
                     var target = lostFocusTarget(openS.drop, openS.list, rows, active);
@@ -1396,6 +1566,7 @@ define([
                 if (s && !s.visible) focusLost = nearestTop(m.sections.indexOf(s));
             }
             if (focusLost) focusNode(focusLost);
+            placeOpenLists(keepFocusVisible);
         }
 
         /* Where to move focus if the focused row disappears: the next remaining row of the
@@ -1514,16 +1685,23 @@ define([
             if (t && t.nodeType === 1 && !m.bar.contains(t) && !inOwned(t)) giveBack();
         }), true);
         var relayout = guarded('menu width', function () {
-            layout();
-            statusTitle();
+            if (destroyed || layoutFrame) return;
+            var raf = window.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); };
+            layoutFrame = raf(guarded('menu layout', function () {
+                layoutFrame = 0;
+                if (destroyed) return;
+                layout();
+                statusTitle();
+            }));
         });
+        listen(window, 'resize', relayout);
         if (typeof window.ResizeObserver === 'function') {
             var ro = new window.ResizeObserver(relayout);
+            var borderRo = new window.ResizeObserver(relayout);
             ro.observe(m.bar);
             ro.observe(m.status);
-            subs.push(function () { ro.disconnect(); });
-        } else {
-            listen(window, 'resize', relayout);
+            watchClips(rootBounds(m.more.drop).clips);
+            subs.push(function () { ro.disconnect(); borderRo.disconnect(); });
         }
         /* The new status text of the same width does not change the size: the hint is updated by it too. */
         if (typeof window.MutationObserver === 'function') {
@@ -1550,11 +1728,16 @@ define([
             exec: guarded('menu own row', execOwn),
             ownClosed: guarded('menu own surface', ownClosed),
             destroy: function () {
+                destroyed = true;
                 closeAll();
                 clearTimeout(m.timer);
                 if (frame) {
                     (window.cancelAnimationFrame || clearTimeout)(frame);
                     frame = 0;
+                }
+                if (layoutFrame) {
+                    (window.cancelAnimationFrame || clearTimeout)(layoutFrame);
+                    layoutFrame = 0;
                 }
                 listeners.concat(subs).forEach(function (off) { off(); });
                 listeners = [];

@@ -2,13 +2,15 @@
  * The gate of the spreadsheet editor "Compact" shell and the early start (modeled on
  * test/unit-tests/documenteditor/compact-shell-gate.cjs): enabling strictly by
  * editorConfig.ui.shell === 'modern', the vo-boot claim class with Gateway init, the height
- * skeleton on app:face, a start with retries and a fail-safe, the neutral loading skeleton of
- * index.html.deploy. The module is loaded in node via vm on top of a fake stock, anew for each
- * case (the guarded journal writes each place once per module life). In the start
+ * skeleton on app:face, a start with retries and a fail-safe, the loading skeleton of
+ * index.html.deploy (the shell skeleton for every spreadsheet but nested editors). The
+ * module is loaded in node via vm on top of a fake stock, anew for each case (the
+ * guarded journal writes each place once per module life). In the start
  * cases create() is replaced: the start() cycle is checked, not the build - the build and the hand-over
  * of the skeleton by the real create() are covered by compact-shell-core.cjs.
  * The arguments are broken copies for the negative control: a copy with wanted() by
- * ui.mode must fail the first case, the stock index.html.deploy - the skeleton case.
+ * ui.mode must fail the first case, the index.html.deploy of the base (the neutral stock
+ * skeleton) - the skeleton case.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -45,13 +47,13 @@ function fresh(editorConfig, appOptions = {isEdit: true}, opt = {}) {
         getItem(alias) { return items.find(p => p.alias === alias); },
         doLayout() { this.layouts++; items.forEach(p => { if (p.alias) p.dom = p.height; }); }
     };
-    const state = {main: {editorConfig, appOptions}, shellNode: null, controllerThrows: false};
+    const state = {main: {editorConfig, appOptions}, shellNode: null, controllerThrows: false, mask: null, api: null};
     const SSE = {
         Views: {},
         getController(name) {
             if (state.controllerThrows) throw new Error('controller is not built yet');
             if (name === 'Main') return state.main;
-            if (name === 'Viewport') return {viewport: {vlayout, hlayout: {doLayout() {}}, celayout: {doLayout() {}}}, getApi: () => null};
+            if (name === 'Viewport') return {viewport: {vlayout, hlayout: {doLayout() {}}, celayout: {doLayout() {}}}, getApi: () => state.api};
             return null;
         }
     };
@@ -62,7 +64,7 @@ function fresh(editorConfig, appOptions = {isEdit: true}, opt = {}) {
                 add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c),
                 toggle: (c, on) => ((on === undefined ? !classes.has(c) : on) ? classes.add(c) : classes.delete(c))
             }},
-            getElementById: id => (id === 'vo-shell' ? state.shellNode : null)
+            getElementById: id => (id === 'vo-shell' ? state.shellNode : state.mask && state.mask.id === id ? state.mask : null)
         },
         setTimeout: (fn, ms) => { timers.push({fn, ms}); return timers.length; },
         clearTimeout() {},
@@ -89,6 +91,19 @@ function fresh(editorConfig, appOptions = {isEdit: true}, opt = {}) {
     env = {shell: SSE.Views.CompactShell, classes, handlers, timers, warnings, vlayout, state,
            item: alias => items.find(p => p.alias === alias)};
     return env.shell;
+}
+
+/* The loading skeleton from index.html: the #loading-mask node the stock code removes by id. */
+function mask() {
+    const node = {id: 'loading-mask', removed: false};
+    node.parentNode = {removeChild: n => { n.removed = true; if (env.state.mask === n) env.state.mask = null; }};
+    return env.state.mask = node;
+}
+/* The engine api of Viewport.getApi: only the error subscription is needed. */
+function engine() {
+    const errors = [];
+    env.state.api = {asc_registerCallback: (name, fn) => { if (name === 'asc_onError') errors.push(fn); }};
+    return (...args) => errors.slice().forEach(f => f(...args));
 }
 
 const heights = () => ({title: env.item('title').height, toolbar: env.item('toolbar').height,
@@ -277,6 +292,72 @@ test('handover_restores_model_only', () => {
     assert.equal(env.vlayout.layouts, layouts, 'second endBoot relaid the layout');
 });
 
+test('loading_skeleton_kept_under_another_id_until_end_boot', () => {
+    fresh({ui: {mode: 'compact'}});
+    const stock = mask();
+    env.shell.announce({ui: {mode: 'compact'}});
+    assert.equal(stock.id, 'loading-mask', 'without the shell the stock removes it as before');
+
+    fresh(SHELL);
+    const held = mask();
+    env.shell.announce(SHELL);
+    assert.equal(held.id, 'vo-loading', 'the skeleton keeps the stock id');
+    face({isEdit: true});
+    assert.equal(held.removed, false, 'app:face took the skeleton');
+    env.shell.endBoot(false);
+    assert.equal(held.removed, true, 'the hand-over frame left the skeleton');
+
+    fresh(SHELL);
+    const failed = mask();
+    env.shell.announce(SHELL);
+    env.shell.endBoot(true);
+    assert.equal(failed.removed, true, 'the fail-safe left the skeleton');
+
+    fresh(SHELL);
+    env.shell.announce(SHELL);
+    assert.doesNotThrow(() => env.shell.endBoot(true), 'no skeleton on the page');
+});
+
+/* An opening error arrives before app:ready, and no app:ready follows it: the error itself
+   has to remove the skeleton and the claim, otherwise the stock window hangs over the
+   skeleton and the loading band keeps running after OK. */
+test('loading_skeleton_opening_error_before_the_shell_takes_it_and_the_claim', () => {
+    fresh(SHELL);
+    const fire = engine();
+    const late = mask();
+    env.shell.announce(SHELL);
+    face({isEdit: true});
+    assert.notEqual(heights().toolbar, STOCK.toolbar, 'the skeleton heights are not on');
+    fire(-4, 2);
+    assert.equal(late.removed, true, 'the skeleton stays under the error window');
+    assert.equal(boot(), false, 'the claim stays under the error window');
+    assert.deepEqual(heights(), STOCK, 'stock heights are not back');
+    assert.doesNotThrow(() => fire(-4, 2), 'a second error throws');
+
+    fresh(SHELL);
+    const fireEarly = engine();
+    const early = mask();
+    env.shell.announce(SHELL);
+    fireEarly(-4, 2);
+    assert.equal(early.removed, true, 'an error before app:face left the skeleton');
+    face({isEdit: true});
+    assert.deepEqual(heights(), STOCK, 'a late app:face laid out the skeleton again');
+
+    fresh(SHELL);
+    const fireAfter = engine();
+    env.shell.announce(SHELL);
+    face({isEdit: true});
+    env.shell.endBoot(false);
+    env.classes.add('vo-compact');
+    fireAfter(-4, 2);
+    assert.equal(env.classes.has('vo-compact'), true, 'after the build errors are the stock business');
+
+    fresh(SHELL);
+    env.state.api = {Resize() {}};
+    assert.doesNotThrow(() => env.shell.announce(SHELL), 'an engine without callbacks');
+    assert.equal(boot(), true);
+});
+
 /* --- Start --------------------------------------------------------------------- */
 
 test('start_without_ui_shell_never_creates', () => {
@@ -359,25 +440,24 @@ test('start_success_on_third_attempt', () => {
 });
 
 /* --- Loading skeleton of index.html.deploy --------------------------------------- */
-/* The inline script of the built page decides by URL which loading mask silhouettes
-   to show. There is no config (and so no ui.shell) at this step yet, so the skeleton must
-   be neutral for all spreadsheets: no header (brendpanel), no ribbon (sktoolbar), no
-   formula bar (skformula) - only the placeholder grid. The script itself is taken
-   from the file and runs as is; the DOM is mask node stubs. Checking the built
-   statics is up to the build gate (grunt); here is the source they are built from. */
+/* The inline script of the built page lays out the loading mask by the URL. There is
+   no config (and so no ui.shell) at this step yet, so every spreadsheet starts with the
+   shell skeleton (class sk-shell in the markup), and the stock silhouettes under it are
+   hidden by the sk-shell rules; nested editors (internal=true) get the stock skeleton.
+   The script itself is taken from the file and runs as is; the DOM is mask node stubs.
+   The parity with index.html is held by compact-loading-skeleton.cjs. */
 function skeletonScript(file) {
     const html = fs.readFileSync(file, 'utf8');
     const found = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1])
         .filter(s => s.indexOf("document.querySelector('.placeholder').style.display = 'block'") >= 0);
     assert.equal(found.length, 1, 'skeleton script not found once in ' + path.basename(file));
-    return found[0];
+    return {html, src: found[0]};
 }
 
 function runSkeleton(src, params) {
-    const nodes = {};
-    const node = sel => nodes[sel] || (nodes[sel] = {
-        style: {display: 'none'}, classList: {add() {}}, parentNode: {removeChild() {}}
-    });
+    const classes = new Set(['loadmask', 'sk-shell']);
+    const node = () => ({style: {display: 'none'}, classList: {add() {}}, parentNode: {removeChild() {}}});
+    const mask = {style: {}, classList: {add: c => classes.add(c), remove: c => classes.delete(c)}};
     const sandbox = {
         getUrlParams: () => Object.assign({}, params),
         checkLocalStorage: false,
@@ -386,26 +466,25 @@ function runSkeleton(src, params) {
         document: {
             querySelector: node,
             querySelectorAll: () => [],
-            getElementById: id => node('#' + id),
+            getElementById: id => (id === 'loading-mask' ? mask : node()),
             body: {classList: {contains: () => false, add() {}}, removeChild() {}}
         }
     };
     vm.createContext(sandbox);
     vm.runInContext(src, sandbox, {filename: path.basename(DEPLOY_FILE)});
-    return sel => (nodes[sel] ? nodes[sel].style.display : 'none');
+    return classes;
 }
 
-test('deploy_skeleton_is_neutral_placeholder_only', () => {
-    const src = skeletonScript(DEPLOY_FILE);
+test('deploy_skeleton_is_the_shell_skeleton_but_for_nested_editors', () => {
+    const {html, src} = skeletonScript(DEPLOY_FILE);
+    assert.match(html, /<div id="loading-mask" class="loadmask sk-shell">/, 'the mask does not start with the shell skeleton');
+    ['.brendpanel', '.sktoolbar', '.skformula', '.placeholder'].forEach(sel =>
+        assert.ok(html.indexOf('.loadmask.sk-shell > ' + sel) >= 0, sel + ' silhouette is not hidden under the shell skeleton'));
     [{}, {mode: 'view'}, {mode: 'view', toolbar: 'true'}, {compact: 'true'}, {toolbar: 'false'},
-     {compact: 'true', toolbar: 'false'}, {mode: 'view', toolbar: 'false'}, {internal: 'true'}].forEach(params => {
-        const shown = runSkeleton(src, params);
-        const at = JSON.stringify(params);
-        ['.brendpanel', '.sktoolbar', '.skformula'].forEach(sel => {
-            assert.notEqual(shown(sel), 'block', sel + ' silhouette is shown for ' + at);
-        });
-        assert.equal(shown('.placeholder'), 'block', 'grid placeholder is not shown for ' + at);
+     {compact: 'true', toolbar: 'false'}, {mode: 'view', toolbar: 'false'}].forEach(params => {
+        assert.equal(runSkeleton(src, params).has('sk-shell'), true, 'no shell skeleton for ' + JSON.stringify(params));
     });
+    assert.equal(runSkeleton(src, {internal: 'true'}).has('sk-shell'), false, 'a nested editor got the shell skeleton');
 });
 
 console.log(`${passed} passed, ${failed} failed`);
