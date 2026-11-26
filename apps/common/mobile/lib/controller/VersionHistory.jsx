@@ -364,7 +364,10 @@ const VersionHistoryController = inject('storeAppOptions', 'storeVersionHistory'
                 hist.asc_SetUserColor(currentUserColor);
                 hist.asc_SetDateOfRevision(currentDateCreated);
 
-                api.asc_showRevision(hist);
+                const wasRefreshPending = Common.Gateway.cancelRefreshFile();
+                if (api.asc_showRevision(hist) === false && wasRefreshPending) {
+                    Common.Gateway.beginRefreshFile();
+                }
                 currentRev = data.version;
 
                 const selectedRev = revisions.find(revision => revision.selected);
@@ -450,7 +453,10 @@ const VersionHistoryController = inject('storeAppOptions', 'storeVersionHistory'
             hist.asc_SetUserColor(currentUserColor);
             hist.asc_SetDateOfRevision(currentDateCreated);
 
-            api.asc_showRevision(hist);
+            const wasRefreshPending = Common.Gateway.cancelRefreshFile();
+            if (api.asc_showRevision(hist) === false && wasRefreshPending) {
+                Common.Gateway.beginRefreshFile();
+            }
         }
     }
 

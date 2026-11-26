@@ -245,6 +245,7 @@ define([
                 this.api.asc_registerCallback('asc_onSpellCheckInit',        _.bind(this.loadLanguages, this));
                 this.api.asc_registerCallback('asc_onFrameEditorReady',        _.bind(this.onFrameEditorReady, this));
                 Common.NotificationCenter.on('api:disconnect',               _.bind(this.onCoAuthoringDisconnect, this));
+                Common.NotificationCenter.on('refreshfile:cancel',           _.bind(this.onRefreshFileCancel, this));
                 Common.NotificationCenter.on('goback',                       _.bind(this.goBack, this));
                 Common.NotificationCenter.on('suggest',                         _.bind(this.onSuggest, this));
                 Common.NotificationCenter.on('close',                        _.bind(this.closeEditor, this));
@@ -777,6 +778,12 @@ define([
             },
 
             onLongActionBegin: function(type, id) {
+                if (id === Asc.c_oAscAsyncAction['Disconnect'] && this._state) {
+                    if (!(Common.Gateway && Common.Gateway.isRefreshFilePending && Common.Gateway.isRefreshFilePending())) {
+                        this._state.refreshFileLicense = null;
+                    }
+                    this._state.pendingEditingAvailable = false;
+                }
                 if (type === Asc.c_oAscAsyncActionType.Information && id === Asc.c_oAscAsyncAction.Disconnect) {
                     Common.Gateway.reportTransportReconnecting();
                 }
@@ -844,6 +851,14 @@ define([
                     this.disableEditing(false, 'refresh-file');
                     Common.UI.TooltipManager.closeTip('refreshFile');
                     this.getApplication().getController('Statusbar').setStatusCaption('');
+                    if (this._state && this._state.pendingEditingAvailable) {
+                        this._state.pendingEditingAvailable = false;
+                        if (!this._state.isDisconnected && this.stackDisableActions.length() === 0 &&
+                            !(Common.Gateway && Common.Gateway.isRefreshFilePending && Common.Gateway.isRefreshFilePending()) &&
+                            (this.getSessionEditRight('isEdit') || this.appOptions.isRestrictedEdit)) {
+                            Common.Gateway.sendInfo({mode: this.getSessionEditRight('isEdit') ? 'edit' : 'view', b24EditingAvailable: true});
+                        }
+                    }
                 }
             },
 
@@ -989,9 +1004,40 @@ define([
                 }
             },
 
+            getSessionEditRight: function(field) {
+                if ((this._state && this._state.isDisconnected) ||
+                    (this.stackDisableActions && (
+                        this.stackDisableActions.get({type: 'disconnect'}) ||
+                        this.stackDisableActions.get({type: 'not-loaded'})
+                    ))) {
+                    return false;
+                }
+                var app = this.getApplication && this.getApplication();
+                var lm = app && app.getController && app.getController('LeftMenu');
+                var held = lm && lm.leftMenu && lm.leftMenu._state && lm.leftMenu._state.disabled === true;
+                var prevKey = field === 'canEdit' ? 'prevcanEdit' : 'previsEdit';
+                if (held && typeof lm[prevKey] === 'boolean') {
+                    return lm[prevKey];
+                }
+                return !!(this.appOptions && this.appOptions[field]);
+            },
+
             onDocumentContentReady: function() {
-                if (this._isDocReady)
+                if (this._isDocReady) {
+                    if (this._state && this._state.refreshFileLicense) {
+                        var license = this._state.refreshFileLicense;
+                        this._state.refreshFileLicense = null;
+                        this.onLicenseChanged(license, true);
+                    }
+                    Common.Gateway.completeRefreshFile({mode: this.getSessionEditRight('isEdit') ? 'edit' : 'view'});
                     return;
+                }
+
+                if (this._state && this._state.refreshFileLicense) {
+                    var pendingLicense = this._state.refreshFileLicense;
+                    this._state.refreshFileLicense = null;
+                    this.onLicenseChanged(pendingLicense, true);
+                }
 
                 Common.Gateway.internalMessage('documentReady', {});
 
@@ -1224,20 +1270,42 @@ define([
                 }
             },
 
-            onLicenseChanged: function(params) {
+            onLicenseChanged: function(params, ignoreRefreshPending) {
                 if (this.appOptions.isEditDiagram || this.appOptions.isEditMailMerge || this.appOptions.isEditOle) return;
 
+                if (!ignoreRefreshPending && (
+                    this.stackDisableActions.get({type: 'refresh-file'}) ||
+                    (this._isDocReady && Common.Gateway && Common.Gateway.isRefreshFilePending && Common.Gateway.isRefreshFilePending())
+                )) {
+                    // The temporary refresh lock or in-flight refresh masks the editor's permissions until ready.
+                    this._state.refreshFileLicense = params;
+                    return;
+                }
+                if (this._state && this._state.refreshFileLicense) {
+                    this._state.refreshFileLicense = null;
+                }
                 var licType = params.asc_getLicenseType();
-                if (licType !== undefined && (this.appOptions.canEdit || this.appOptions.isRestrictedEdit) && this.editorConfig.mode !== 'view' &&
+                var prevLicenseType = this._state.licenseType;
+                var isLimit = false;
+                var isDisconnected = (this._state && this._state.isDisconnected) ||
+                    (this.stackDisableActions && this.stackDisableActions.get && (
+                        this.stackDisableActions.get({type: 'disconnect'}) ||
+                        this.stackDisableActions.get({type: 'not-loaded'})
+                    ));
+                if (licType !== undefined && !isDisconnected && (this.getSessionEditRight('canEdit') || this.appOptions.isRestrictedEdit) && this.editorConfig.mode !== 'view' &&
                     (licType===Asc.c_oLicenseResult.Connections || licType===Asc.c_oLicenseResult.UsersCount || licType===Asc.c_oLicenseResult.ConnectionsOS || licType===Asc.c_oLicenseResult.UsersCountOS
-                    || licType===Asc.c_oLicenseResult.SuccessLimit && (this.appOptions.trialMode & Asc.c_oLicenseMode.Limited) !== 0))
+                    || licType===Asc.c_oLicenseResult.SuccessLimit && (this.appOptions.trialMode & Asc.c_oLicenseMode.Limited) !== 0)) {
                     this._state.licenseType = licType;
+                    isLimit = licType !== prevLicenseType;
+                }
 
                 if (licType !== undefined && this.appOptions.canLiveView && (licType===Asc.c_oLicenseResult.ConnectionsLive || licType===Asc.c_oLicenseResult.ConnectionsLiveOS||
-                                                                             licType===Asc.c_oLicenseResult.UsersViewCount || licType===Asc.c_oLicenseResult.UsersViewCountOS))
+                                                                             licType===Asc.c_oLicenseResult.UsersViewCount || licType===Asc.c_oLicenseResult.UsersViewCountOS)) {
                     this._state.licenseType = licType;
+                    isLimit = true;
+                }
 
-                if (this._isDocReady)
+                if (this._isDocReady && (isLimit || (!prevLicenseType && !isDisconnected)))
                     this.applyLicense();
             },
 
@@ -1283,7 +1351,12 @@ define([
                         modal = true;
                     }
 
-                    if (this._state.licenseType!==Asc.c_oLicenseResult.SuccessLimit && (this.appOptions.isEdit || this.appOptions.isRestrictedEdit)) {
+                    var isDisconnected = (this._state && this._state.isDisconnected) ||
+                        (this.stackDisableActions && this.stackDisableActions.get && (
+                            this.stackDisableActions.get({type: 'disconnect'}) ||
+                            this.stackDisableActions.get({type: 'not-loaded'})
+                        ));
+                    if (this._state.licenseType!==Asc.c_oLicenseResult.SuccessLimit && !isDisconnected && ((this.getSessionEditRight ? this.getSessionEditRight('isEdit') : this.appOptions.isEdit) || this.appOptions.isRestrictedEdit)) {
                         this.disableEditing(true);
                         this.api.asc_coAuthoringDisconnect();
                         Common.NotificationCenter.trigger('api:disconnect');
@@ -1325,9 +1398,17 @@ define([
                     });
                 }
 
-                if (licenseEditingAvailable && (this.appOptions.isEdit || this.appOptions.isRestrictedEdit) &&
-                    !this._state.isDisconnected && this.stackDisableActions.length()===0) {
-                    Common.Gateway.sendInfo({mode:this.appOptions.isEdit?'edit':'view', b24EditingAvailable:true});
+                var isSessionEdit = this.getSessionEditRight ? this.getSessionEditRight('isEdit') : this.appOptions.isEdit;
+                var canEditSession = isSessionEdit || this.appOptions.isRestrictedEdit;
+                if (licenseEditingAvailable && canEditSession && !this._state.isDisconnected) {
+                    if (this.stackDisableActions.length() === 0) {
+                        this._state.pendingEditingAvailable = false;
+                        Common.Gateway.sendInfo({mode: isSessionEdit ? 'edit' : 'view', b24EditingAvailable: true});
+                    } else if (this.stackDisableActions.get && this.stackDisableActions.get({type: 'refresh-file'})) {
+                        this._state.pendingEditingAvailable = true;
+                    }
+                } else if (this._state) {
+                    this._state.pendingEditingAvailable = false;
                 }
             },
 
@@ -1436,6 +1517,8 @@ define([
                 if ( params && !(this.appOptions.isEditDiagram || this.appOptions.isEditMailMerge || this.appOptions.isEditOle)) {
                     if (Asc.c_oLicenseResult.Expired === licType || Asc.c_oLicenseResult.Error === licType || Asc.c_oLicenseResult.ExpiredTrial === licType ||
                         Asc.c_oLicenseResult.NotBefore === licType || Asc.c_oLicenseResult.ExpiredLimited === licType) {
+                        Common.Gateway.cancelRefreshFile();
+                        if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
                         Common.UI.warning({
                             title: Asc.c_oLicenseResult.NotBefore === licType ? this.titleLicenseNotActive : this.titleLicenseExp,
                             msg: Asc.c_oLicenseResult.NotBefore === licType ? this.warnLicenseBefore : this.warnLicenseExp,
@@ -1449,7 +1532,12 @@ define([
                         return;
                     }
 
-                    if ( this.onServerVersion(params.asc_getBuildVersion()) || !this.onLanguageLoaded() ) return;
+                    if (this.onServerVersion(params.asc_getBuildVersion())) return;
+                    if (!this.onLanguageLoaded()) {
+                        Common.Gateway.cancelRefreshFile();
+                        if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
+                        return;
+                    }
                     if ( this._isDocReady || this._isPermissionsInited ) {
                         this.api.asc_LoadDocument();
                         return;
@@ -1821,6 +1909,10 @@ define([
             },
 
             onError: function(id, level, errData, callback) {
+                if (level === Asc.c_oAscError.Level.Critical) {
+                    Common.Gateway.cancelRefreshFile();
+                    if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
+                }
                 if (this.isFrameClosed) {
                     this.lastFrameError = {id: id, level: level, errData: errData, callback: callback};
                     return;
@@ -2414,6 +2506,15 @@ define([
                 this.getApplication().getController('Viewport').getView('Common.Views.Header').setCanRename(false);
                 this.appOptions.canRename = false;
                 this._state.isDisconnected = true;
+                this._state.refreshFileLicense = null;
+                this._state.pendingEditingAvailable = false;
+            },
+
+            onRefreshFileCancel: function() {
+                if (this._state) {
+                    this._state.refreshFileLicense = null;
+                    this._state.pendingEditingAvailable = false;
+                }
             },
 
             showTips: function(strings, options) {
@@ -2595,6 +2696,8 @@ define([
             },
 
             onUpdateVersion: function(callback) {
+                Common.Gateway.cancelRefreshFile();
+                if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
                 this.editorConfig && this.editorConfig.canUpdateVersion && console.log("Obsolete: The 'onOutdatedVersion' event is deprecated. Please use 'onRequestRefreshFile' event and 'refreshFile' method instead.");
 
                 var me = this;
@@ -2615,11 +2718,17 @@ define([
             },
 
             onServerVersion: function(buildVersion) {
-                if (this.changeServerVersion) return true;
+                if (this.changeServerVersion) {
+                    Common.Gateway.cancelRefreshFile();
+                    if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
+                    return true;
+                }
 
                 const cur_version = this.getApplication().getController('LeftMenu').leftMenu.getMenu('about').txtVersionNum;
                 const cropped_version = cur_version.match(/^(\d+.\d+.\d+)/);
                 if (!window.compareVersions && (!cropped_version || cropped_version[1] !== buildVersion)) {
+                    Common.Gateway.cancelRefreshFile();
+                    if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
                     this.changeServerVersion = true;
                     Common.UI.warning({
                         title: this.titleServerVersion,
@@ -3838,65 +3947,77 @@ define([
 
             onRequestRefreshFile: function() {
                 Common.Gateway.requestRefreshFile();
+                if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
                 console.log('Trying to refresh file');
             },
 
             onRefreshFile: function(data) {
-                if (data) {
-                    var docInfo = new Asc.asc_CDocInfo();
-                    if (data.document) {
-                        docInfo.put_Id(data.document.key);
-                        docInfo.put_Url(data.document.url);
-                        docInfo.put_Title(data.document.title);
-                        if (data.document.title) {
-                            //Common.Gateway.metaChange({title: data.document.title});
-                            this.headerView && this.headerView.setDocumentCaption(data.document.title);
-                            this.updateWindowTitle(true);
-                            this.appOptions.spreadsheet.title = data.document.title;
-                        }
-                        data.document.referenceData && docInfo.put_ReferenceData(data.document.referenceData);
-                    }
-                    if (data.editorConfig) {
-                        docInfo.put_CallbackUrl(data.editorConfig.callbackUrl);
-                    }
-                    if (data.token)
-                        docInfo.put_Token(data.token);
-
-                    var _user = new Asc.asc_CUserInfo(); // change for guest!!
-                    _user.put_Id(this.appOptions.user.id);
-                    _user.put_FullName(this.appOptions.user.fullname);
-                    _user.put_IsAnonymousUser(!!this.appOptions.user.anonymous);
-                    docInfo.put_UserInfo(_user);
-
-                    var _options = $.extend({}, this.appOptions.spreadsheet.options, this.editorConfig.actionLink || {});
-                    docInfo.put_Options(_options);
-
-                    docInfo.put_Format(this.appOptions.spreadsheet.fileType);
-                    docInfo.put_Lang(this.editorConfig.lang);
-                    docInfo.put_Mode(this.editorConfig.mode);
-                    docInfo.put_Permissions(this.appOptions.spreadsheet.permissions);
-                    docInfo.put_DirectUrl(data.document && data.document.directUrl ? data.document.directUrl : this.appOptions.spreadsheet.directUrl);
-                    docInfo.put_VKey(data.document && data.document.vkey ?  data.document.vkey : this.appOptions.spreadsheet.vkey);
-                    docInfo.put_EncryptedInfo(data.editorConfig && data.editorConfig.encryptionKeys ? data.editorConfig.encryptionKeys : this.editorConfig.encryptionKeys);
-
-                    var enable = !this.editorConfig.customization || (this.editorConfig.customization.macros!==false);
-                    docInfo.asc_putIsEnabledMacroses(!!enable);
-                    enable = !this.editorConfig.customization || (this.editorConfig.customization.plugins!==false);
-                    docInfo.asc_putIsEnabledPlugins(!!enable);
-
-                    if (this.editorConfig.customization) {
-                        if (this.editorConfig.customization.showVerticalScroll!==undefined && this.editorConfig.customization.showVerticalScroll!==null)
-                            docInfo.asc_putShowVerticalScroll(this.editorConfig.customization.showVerticalScroll);
-                        if (this.editorConfig.customization.showHorizontalScroll!==undefined && this.editorConfig.customization.showHorizontalScroll!==null)
-                            docInfo.asc_putShowHorizontalScroll(this.editorConfig.customization.showHorizontalScroll);
-                    }
-
-                    var coEditMode = !(this.editorConfig.coEditing && typeof this.editorConfig.coEditing == 'object') ? 'fast' : // fast by default
-                            this.editorConfig.mode === 'view' && this.editorConfig.coEditing.change!==false ? 'fast' : // if can change mode in viewer - set fast for using live viewer
-                            this.editorConfig.coEditing.mode || 'fast';
-                    docInfo.put_CoEditingMode(coEditMode);
-                    this.api.asc_refreshFile(docInfo);
+                if (!data || !data.document || !data.document.key) {
+                    return;
                 }
+                if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
+
+                var docInfo = new Asc.asc_CDocInfo();
+                docInfo.put_Id(data.document.key);
+                docInfo.put_Url(data.document.url);
+                docInfo.put_Title(data.document.title);
+                if (data.document.title) {
+                    //Common.Gateway.metaChange({title: data.document.title});
+                    this.headerView && this.headerView.setDocumentCaption(data.document.title);
+                    this.updateWindowTitle(true);
+                    this.appOptions.spreadsheet.title = data.document.title;
+                }
+                data.document.referenceData && docInfo.put_ReferenceData(data.document.referenceData);
+                if (data.editorConfig) {
+                    docInfo.put_CallbackUrl(data.editorConfig.callbackUrl);
+                }
+                if (data.token)
+                    docInfo.put_Token(data.token);
+
+                var _user = new Asc.asc_CUserInfo(); // change for guest!!
+                _user.put_Id(this.appOptions.user.id);
+                _user.put_FullName(this.appOptions.user.fullname);
+                _user.put_IsAnonymousUser(!!this.appOptions.user.anonymous);
+                docInfo.put_UserInfo(_user);
+
+                var _options = $.extend({}, this.appOptions.spreadsheet.options, this.editorConfig.actionLink || {});
+                docInfo.put_Options(_options);
+
+                docInfo.put_Format(this.appOptions.spreadsheet.fileType);
+                docInfo.put_Lang(this.editorConfig.lang);
+                docInfo.put_Mode(this.editorConfig.mode);
+                docInfo.put_Permissions(this.appOptions.spreadsheet.permissions);
+                docInfo.put_DirectUrl(data.document.directUrl ? data.document.directUrl : this.appOptions.spreadsheet.directUrl);
+                docInfo.put_VKey(data.document.vkey ?  data.document.vkey : this.appOptions.spreadsheet.vkey);
+                docInfo.put_EncryptedInfo(data.editorConfig && data.editorConfig.encryptionKeys ? data.editorConfig.encryptionKeys : this.editorConfig.encryptionKeys);
+
+                var enable = !this.editorConfig.customization || (this.editorConfig.customization.macros!==false);
+                docInfo.asc_putIsEnabledMacroses(!!enable);
+                enable = !this.editorConfig.customization || (this.editorConfig.customization.plugins!==false);
+                docInfo.asc_putIsEnabledPlugins(!!enable);
+
+                if (this.editorConfig.customization) {
+                    if (this.editorConfig.customization.showVerticalScroll!==undefined && this.editorConfig.customization.showVerticalScroll!==null)
+                        docInfo.asc_putShowVerticalScroll(this.editorConfig.customization.showVerticalScroll);
+                    if (this.editorConfig.customization.showHorizontalScroll!==undefined && this.editorConfig.customization.showHorizontalScroll!==null)
+                        docInfo.asc_putShowHorizontalScroll(this.editorConfig.customization.showHorizontalScroll);
+                }
+
+                var coEditMode = !(this.editorConfig.coEditing && typeof this.editorConfig.coEditing == 'object') ? 'fast' : // fast by default
+                        this.editorConfig.mode === 'view' && this.editorConfig.coEditing.change!==false ? 'fast' : // if can change mode in viewer - set fast for using live viewer
+                        this.editorConfig.coEditing.mode || 'fast';
+                docInfo.put_CoEditingMode(coEditMode);
+                Common.Gateway.beginRefreshFile();
+                try {
+                    this.api.asc_refreshFile(docInfo);
+                } catch (e) {
+                    Common.Gateway.cancelRefreshFile();
+                    if (this._state) { this._state.refreshFileLicense = null; this._state.pendingEditingAvailable = false; }
+                    throw e;
+                }
+
+                if (this.appOptions && this.appOptions.spreadsheet) this.appOptions.spreadsheet.key = data.document.key;
+                Common.Utils.InternalSettings.set("sse-doc-info-key", data.document.key);
             },
 
             onSaveDocumentBinary: function(data) {

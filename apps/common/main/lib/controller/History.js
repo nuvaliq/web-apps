@@ -186,7 +186,14 @@ define([
                 hist.asc_SetUserColor(this.currentUserColor);
                 hist.asc_SetDateOfRevision(this.currentDateCreated);
                 hist.asc_setDocumentSha256(this.currentDocumentSha256);
-                this.api.asc_showRevision(hist);
+                var wasRefreshPending = Common.Gateway.cancelRefreshFile();
+                if (this.api.asc_showRevision(hist) === false) {
+                    if (wasRefreshPending) {
+                        Common.Gateway.beginRefreshFile();
+                    }
+                } else {
+                    Common.NotificationCenter && Common.NotificationCenter.trigger('refreshfile:cancel');
+                }
 
                 var reviewController = this.getApplication().getController('Common.Controllers.ReviewChanges');
                 if (reviewController)
@@ -257,7 +264,14 @@ define([
                     hist.asc_SetUserColor(this.currentUserColor);
                     hist.asc_SetDateOfRevision(this.currentDateCreated);
                     hist.asc_setDocumentSha256(this.currentDocumentSha256);
-                    this.api.asc_showRevision(hist);
+                    var wasRefreshPending = Common.Gateway.cancelRefreshFile();
+                    if (this.api.asc_showRevision(hist) === false) {
+                        if (wasRefreshPending) {
+                            Common.Gateway.beginRefreshFile();
+                        }
+                    } else {
+                        Common.NotificationCenter && Common.NotificationCenter.trigger('refreshfile:cancel');
+                    }
                     this.currentRev = data.version;
 
                     var reviewController = this.getApplication().getController('Common.Controllers.ReviewChanges');

@@ -325,6 +325,8 @@ class MainController extends Component {
                     Asc.c_oLicenseResult.ExpiredTrial === licType ||
                     Asc.c_oLicenseResult.NotBefore === licType ||
                     Asc.c_oLicenseResult.ExpiredLimited === licType) {
+                    Common.Gateway.cancelRefreshFile();
+        if (this._state) this._state.refreshFileLicense = null;
                     f7.dialog.create({
                         title   : Asc.c_oLicenseResult.NotBefore === licType ? _t.titleLicenseNotActive : _t.titleLicenseExp,
                         text    : Asc.c_oLicenseResult.NotBefore === licType ? _t.warnLicenseBefore : _t.warnLicenseExp
@@ -379,8 +381,18 @@ class MainController extends Component {
             };
 
             const onDocumentContentReady = () => {
-                if (this._isDocReady)
+                if (this._isDocReady) {
+                    if (this._state && this._state.refreshFileLicense) {
+                        const license = this._state.refreshFileLicense;
+                        this._state.refreshFileLicense = null;
+                        if (Common.Gateway && Common.Gateway.isRefreshFilePending && Common.Gateway.isRefreshFilePending() &&
+                            !(this.props.users && this.props.users.isDisconnected)) {
+                            this.onLicenseChanged(license, true);
+                        }
+                    }
+                    Common.Gateway.completeRefreshFile({mode: this.props.storeAppOptions.isEdit && !(this.props.users && this.props.users.isDisconnected) ? 'edit' : 'view'});
                     return;
+                }
 
                 const { t } = this.props;
                 const appOptions = this.props.storeAppOptions;
@@ -728,20 +740,35 @@ class MainController extends Component {
             clearTimeout(this.continueSavingTimer);
     }
 
-    onLicenseChanged (params) {
+    onLicenseChanged (params, ignoreRefreshPending) {
+        if (this._isDocReady && !ignoreRefreshPending &&
+            Common.Gateway && Common.Gateway.isRefreshFilePending && Common.Gateway.isRefreshFilePending()) {
+            this._state.refreshFileLicense = params;
+            return;
+        }
+        if (this._state && this._state.refreshFileLicense) {
+            this._state.refreshFileLicense = null;
+        }
         const appOptions = this.props.storeAppOptions;
         const licType = params.asc_getLicenseType();
-    
-        if (licType !== undefined && (appOptions.canEdit || appOptions.isRestrictedEdit) && appOptions.config.mode !== 'view' &&
+        const prevLicenseType = this._state.licenseType;
+        const isDisconnected = !!(this.props.users && this.props.users.isDisconnected);
+        let isLimit = false;
+
+        if (licType !== undefined && !isDisconnected && (appOptions.canEdit || appOptions.isRestrictedEdit) && appOptions.config.mode !== 'view' &&
             (licType === Asc.c_oLicenseResult.Connections || licType === Asc.c_oLicenseResult.UsersCount || licType === Asc.c_oLicenseResult.ConnectionsOS || licType === Asc.c_oLicenseResult.UsersCountOS
-                || licType === Asc.c_oLicenseResult.SuccessLimit && (appOptions.trialMode & Asc.c_oLicenseMode.Limited) !== 0))
+                || licType === Asc.c_oLicenseResult.SuccessLimit && (appOptions.trialMode & Asc.c_oLicenseMode.Limited) !== 0)) {
             this._state.licenseType = licType;
+            isLimit = licType !== prevLicenseType;
+        }
 
         if (licType !== undefined && appOptions.canLiveView && (licType===Asc.c_oLicenseResult.ConnectionsLive || licType===Asc.c_oLicenseResult.ConnectionsLiveOS ||
-                                                                licType===Asc.c_oLicenseResult.UsersViewCount || licType===Asc.c_oLicenseResult.UsersViewCountOS))
+                                                                licType===Asc.c_oLicenseResult.UsersViewCount || licType===Asc.c_oLicenseResult.UsersViewCountOS)) {
             this._state.licenseType = licType;
+            isLimit = true;
+        }
 
-        if (this._isDocReady && this._state.licenseType)
+        if (this._isDocReady && isLimit)
             this.applyLicense();
     }
 
@@ -837,11 +864,17 @@ class MainController extends Component {
     }
 
     onServerVersion (buildVersion) {
-        if (this.changeServerVersion) return true;
+        if (this.changeServerVersion) {
+            Common.Gateway.cancelRefreshFile();
+        if (this._state) this._state.refreshFileLicense = null;
+            return true;
+        }
         const { t } = this.props;
         const _t = t('Main', {returnObjects:true});
 
         if (About.appVersion() !== buildVersion && !About.compareVersions()) {
+            Common.Gateway.cancelRefreshFile();
+        if (this._state) this._state.refreshFileLicense = null;
             this.changeServerVersion = true;
             f7.dialog.alert(
                 _t.errorServerVersion,
@@ -1445,6 +1478,8 @@ class MainController extends Component {
     }
 
     onUpdateVersion (callback) {
+        Common.Gateway.cancelRefreshFile();
+        if (this._state) this._state.refreshFileLicense = null;
         const { t } = this.props;
         const _t = t('Main', {returnObjects:true});
 
@@ -1648,60 +1683,72 @@ class MainController extends Component {
 
     onRequestRefreshFile () {
         Common.Gateway.requestRefreshFile();
+        if (this._state) this._state.refreshFileLicense = null;
     }
 
     onRefreshFile (data) {
-        if (data) {
-            let docInfo = new Asc.asc_CDocInfo();
-            if (data.document) {
-                docInfo.put_Id(data.document.key);
-                docInfo.put_Url(data.document.url);
-                docInfo.put_Title(data.document.title);
-                if (data.document.title) {
-                    const storeDocumentInfo = this.props.storeDocumentInfo;
-                    storeDocumentInfo.changeTitle(data.document.title);
-                    this.document.title = data.document.title;
-                    Common.Notifications.trigger('setdoctitle', data.document.title);
-                }
-                data.document.referenceData && docInfo.put_ReferenceData(data.document.referenceData);
-            }
-            if (data.editorConfig) {
-                docInfo.put_CallbackUrl(data.editorConfig.callbackUrl);
-            }
-            if (data.token)
-                docInfo.put_Token(data.token);
-
-            const _userOptions = this.props.storeAppOptions.user;
-            const _user = new Asc.asc_CUserInfo();
-            _user.put_Id(_userOptions.id);
-            _user.put_FullName(_userOptions.fullname);
-            _user.put_IsAnonymousUser(_userOptions.anonymous);
-            docInfo.put_UserInfo(_user);
-
-            const _options = Object.assign({}, this.document.options, this.editorConfig.actionLink || {});
-            docInfo.put_Options(_options);
-
-            docInfo.put_Format(this.document.fileType);
-            docInfo.put_Lang(this.editorConfig.lang);
-            docInfo.put_Mode(this.editorConfig.mode);
-            docInfo.put_Permissions(this.document.permissions);
-            docInfo.put_DirectUrl(data.document && data.document.directUrl ? data.document.directUrl : this.document.directUrl);
-            docInfo.put_VKey(data.document && data.document.vkey ?  data.document.vkey : this.document.vkey);
-            docInfo.put_EncryptedInfo(data.editorConfig && data.editorConfig.encryptionKeys ? data.editorConfig.encryptionKeys : this.editorConfig.encryptionKeys);
-
-            let enable = !this.editorConfig.customization || (this.editorConfig.customization.macros!==false);
-            docInfo.asc_putIsEnabledMacroses(!!enable);
-            enable = !this.editorConfig.customization || (this.editorConfig.customization.plugins!==false);
-            docInfo.asc_putIsEnabledPlugins(!!enable);
-
-            let type = /^(?:(pdf|djvu|xps|oxps))$/.exec(this.document.fileType);
-            let coEditMode = (type && typeof type[1] === 'string') ? 'strict' :  // offline viewer for pdf|djvu|xps|oxps
-                !(this.editorConfig.coEditing && typeof this.editorConfig.coEditing == 'object') ? 'fast' : // fast by default
-                    this.editorConfig.mode === 'view' && this.editorConfig.coEditing.change!==false ? 'fast' : // if can change mode in viewer - set fast for using live viewer
-                        this.editorConfig.coEditing.mode || 'fast';
-            docInfo.put_CoEditingMode(coEditMode);
-            this.api.asc_refreshFile(docInfo);
+        if (!data || !data.document || !data.document.key) {
+            return;
         }
+        if (this._state) this._state.refreshFileLicense = null;
+
+        let docInfo = new Asc.asc_CDocInfo();
+        docInfo.put_Id(data.document.key);
+        docInfo.put_Url(data.document.url);
+        docInfo.put_Title(data.document.title);
+        if (data.document.title) {
+            const storeDocumentInfo = this.props.storeDocumentInfo;
+            storeDocumentInfo.changeTitle(data.document.title);
+            this.document.title = data.document.title;
+            Common.Notifications.trigger('setdoctitle', data.document.title);
+        }
+        data.document.referenceData && docInfo.put_ReferenceData(data.document.referenceData);
+        if (data.editorConfig) {
+            docInfo.put_CallbackUrl(data.editorConfig.callbackUrl);
+        }
+        if (data.token)
+            docInfo.put_Token(data.token);
+
+        const _userOptions = this.props.storeAppOptions.user;
+        const _user = new Asc.asc_CUserInfo();
+        _user.put_Id(_userOptions.id);
+        _user.put_FullName(_userOptions.fullname);
+        _user.put_IsAnonymousUser(_userOptions.anonymous);
+        docInfo.put_UserInfo(_user);
+
+        const _options = Object.assign({}, this.document.options, this.editorConfig.actionLink || {});
+        docInfo.put_Options(_options);
+
+        docInfo.put_Format(this.document.fileType);
+        docInfo.put_Lang(this.editorConfig.lang);
+        docInfo.put_Mode(this.editorConfig.mode);
+        docInfo.put_Permissions(this.document.permissions);
+        docInfo.put_DirectUrl(data.document.directUrl ? data.document.directUrl : this.document.directUrl);
+        docInfo.put_VKey(data.document.vkey ?  data.document.vkey : this.document.vkey);
+        docInfo.put_EncryptedInfo(data.editorConfig && data.editorConfig.encryptionKeys ? data.editorConfig.encryptionKeys : this.editorConfig.encryptionKeys);
+
+        let enable = !this.editorConfig.customization || (this.editorConfig.customization.macros!==false);
+        docInfo.asc_putIsEnabledMacroses(!!enable);
+        enable = !this.editorConfig.customization || (this.editorConfig.customization.plugins!==false);
+        docInfo.asc_putIsEnabledPlugins(!!enable);
+
+        let type = /^(?:(pdf|djvu|xps|oxps))$/.exec(this.document.fileType);
+        let coEditMode = (type && typeof type[1] === 'string') ? 'strict' :  // offline viewer for pdf|djvu|xps|oxps
+            !(this.editorConfig.coEditing && typeof this.editorConfig.coEditing == 'object') ? 'fast' : // fast by default
+                this.editorConfig.mode === 'view' && this.editorConfig.coEditing.change!==false ? 'fast' : // if can change mode in viewer - set fast for using live viewer
+                    this.editorConfig.coEditing.mode || 'fast';
+        docInfo.put_CoEditingMode(coEditMode);
+        Common.Gateway.beginRefreshFile();
+        try {
+            this.api.asc_refreshFile(docInfo);
+        } catch (e) {
+            Common.Gateway.cancelRefreshFile();
+        if (this._state) this._state.refreshFileLicense = null;
+            throw e;
+        }
+
+        if (this.document) this.document.key = data.document.key;
+        if (this.props && this.props.storeAppOptions) this.props.storeAppOptions.fileKey = data.document.key;
     }
 
     render() {

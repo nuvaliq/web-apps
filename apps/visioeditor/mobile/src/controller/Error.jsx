@@ -58,6 +58,9 @@ const ErrorController = inject('storeAppOptions','storeVisioInfo')(({storeAppOpt
     });
 
     const onError = (id, level, errData) => {
+        if (level === Asc.c_oAscError.Level.Critical) {
+            Common.Gateway.cancelRefreshFile();
+        }
         if (id === Asc.c_oAscError.ID.LoadingScriptError) {
             f7.notification.create({
                 title: _t.criticalErrorTitle,

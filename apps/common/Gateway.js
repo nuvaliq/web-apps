@@ -172,6 +172,7 @@ if (window.Common === undefined) {
         };
 
         var transportReconnecting = false;
+        var refreshFilePending = false;
 
         var _postMessage = function(msg, buffer) {
             // TODO: specify explicit origin
@@ -267,6 +268,7 @@ if (window.Common === undefined) {
             },
 
             reportError: function(code, description) {
+                refreshFilePending = false;
                 _postMessage({
                     event: 'onError',
                     data: {
@@ -325,6 +327,7 @@ if (window.Common === undefined) {
             },
 
             updateVersion: function() {
+                refreshFilePending = false;
                 _postMessage({ event: 'onOutdatedVersion' });
             },
 
@@ -361,7 +364,34 @@ if (window.Common === undefined) {
                 _postMessage({event: 'onMetaChange', data: meta});
             },
 
+            beginRefreshFile: function() {
+                refreshFilePending = true;
+            },
+
+            isRefreshFilePending: function() {
+                return refreshFilePending;
+            },
+
+            cancelRefreshFile: function() {
+                var wasPending = refreshFilePending;
+                refreshFilePending = false;
+                return wasPending;
+            },
+
+            completeRefreshFile: function(info) {
+                if (!refreshFilePending) {
+                    return false;
+                }
+                refreshFilePending = false;
+                if (info) {
+                    this.sendInfo(info);
+                }
+                this.documentReady();
+                return true;
+            },
+
             documentReady: function() {
+                refreshFilePending = false;
                 _postMessage({ event: 'onDocumentReady' });
             },
 
@@ -451,6 +481,7 @@ if (window.Common === undefined) {
             },
 
             requestRefreshFile: function() {
+                refreshFilePending = false;
                 _postMessage({ event: 'onRequestRefreshFile' });
             },
 

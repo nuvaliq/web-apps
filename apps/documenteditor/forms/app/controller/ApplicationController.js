@@ -220,6 +220,10 @@ define([
         },
 
         onError: function(id, level, errData) {
+            if (level === Asc.c_oAscError.Level.Critical) {
+                Common.Gateway.cancelRefreshFile();
+                if (this._state) this._state.refreshFileLicense = null;
+            }
             if (id == Asc.c_oAscError.ID.LoadingScriptError) {
                 this.showTips([this.scriptLoadError]);
                 this.tooltip && this.tooltip.getBSTip().$tip.css('z-index', 10000);
@@ -657,6 +661,8 @@ define([
             var licType = params.asc_getLicenseType();
             if (Asc.c_oLicenseResult.Expired === licType || Asc.c_oLicenseResult.Error === licType || Asc.c_oLicenseResult.ExpiredTrial === licType ||
                 Asc.c_oLicenseResult.NotBefore === licType || Asc.c_oLicenseResult.ExpiredLimited === licType) {
+                Common.Gateway.cancelRefreshFile();
+                if (this._state) this._state.refreshFileLicense = null;
                 Common.UI.warning({
                     title: Asc.c_oLicenseResult.NotBefore === licType ? this.titleLicenseNotActive : this.titleLicenseExp,
                     msg: Asc.c_oLicenseResult.NotBefore === licType ? this.warnLicenseBefore : this.warnLicenseExp,
@@ -822,9 +828,15 @@ define([
         },
 
         onServerVersion: function(buildVersion) {
-            if (this.changeServerVersion) return true;
+            if (this.changeServerVersion) {
+                Common.Gateway.cancelRefreshFile();
+                if (this._state) this._state.refreshFileLicense = null;
+                return true;
+            }
 
             if (DocsAPI.DocEditor.version() !== buildVersion && !window.compareVersions) {
+                Common.Gateway.cancelRefreshFile();
+                if (this._state) this._state.refreshFileLicense = null;
                 this.changeServerVersion = true;
                 Common.UI.warning({
                     title: this.titleServerVersion,
@@ -844,6 +856,8 @@ define([
         },
 
         onUpdateVersion: function(callback) {
+            Common.Gateway.cancelRefreshFile();
+                if (this._state) this._state.refreshFileLicense = null;
             this.editorConfig && this.editorConfig.canUpdateVersion && console.log("Obsolete: The 'onOutdatedVersion' event is deprecated. Please use 'onRequestRefreshFile' event and 'refreshFile' method instead.");
 
             var me = this;
@@ -863,14 +877,27 @@ define([
             Common.NotificationCenter.trigger('api:disconnect');
         },
 
-        onLicenseChanged: function(params) {
+        onLicenseChanged: function(params, ignoreRefreshPending) {
+            if (this._isDocReady && !ignoreRefreshPending &&
+                Common.Gateway && Common.Gateway.isRefreshFilePending && Common.Gateway.isRefreshFilePending()) {
+                this._state.refreshFileLicense = params;
+                return;
+            }
+            if (this._state && this._state.refreshFileLicense) {
+                this._state.refreshFileLicense = null;
+            }
             var licType = params.asc_getLicenseType();
-            if (licType !== undefined && this.appOptions.canFillForms &&
+            var prevLicenseType = this._state.licenseType;
+            var isLimit = false;
+            var isDisconnected = !!(this._state && (this._state.isDisconnected || this._state.isFormDisconnected));
+            if (licType !== undefined && !isDisconnected && this.appOptions.canFillForms &&
                 (licType===Asc.c_oLicenseResult.Connections || licType===Asc.c_oLicenseResult.UsersCount || licType===Asc.c_oLicenseResult.ConnectionsOS || licType===Asc.c_oLicenseResult.UsersCountOS
-                    || licType===Asc.c_oLicenseResult.SuccessLimit && (this.appOptions.trialMode & Asc.c_oLicenseMode.Limited) !== 0))
+                    || licType===Asc.c_oLicenseResult.SuccessLimit && (this.appOptions.trialMode & Asc.c_oLicenseMode.Limited) !== 0)) {
                 this._state.licenseType = licType;
+                isLimit = licType !== prevLicenseType;
+            }
 
-            if (this._isDocReady)
+            if (this._isDocReady && !isDisconnected && (isLimit || !prevLicenseType))
                 this.applyLicense();
         },
 
@@ -905,7 +932,8 @@ define([
                     modal = true;
                 }
 
-                if (this._state.licenseType!==Asc.c_oLicenseResult.SuccessLimit && this.appOptions.canFillForms) {
+                var isDisconnected = !!(this._state && (this._state.isDisconnected || this._state.isFormDisconnected));
+                if (this._state.licenseType!==Asc.c_oLicenseResult.SuccessLimit && !isDisconnected && this.appOptions.canFillForms) {
                     this.api.asc_coAuthoringDisconnect();
                     Common.NotificationCenter.trigger('api:disconnect');
                 }
@@ -1642,8 +1670,17 @@ define([
         },
 
         onDocumentContentReady: function() {
-            if (this._isDocReady)
+            if (this._isDocReady) {
+                if (this._state && this._state.refreshFileLicense) {
+                    var license = this._state.refreshFileLicense;
+                    this._state.refreshFileLicense = null;
+                    if (Common.Gateway && Common.Gateway.isRefreshFilePending && Common.Gateway.isRefreshFilePending()) {
+                        this.onLicenseChanged(license, true);
+                    }
+                }
+                Common.Gateway.completeRefreshFile({mode: 'view'});
                 return;
+            }
 
             var me = this;
             me._isDocReady = true;
@@ -2275,6 +2312,7 @@ define([
 
         onApiServerDisconnect: function(enableDownload) {
             this._state.isDisconnected = true;
+            this._state.refreshFileLicense = null;
             this._isDisabled = true;
             this.view && this.view.btnClear && this.view.btnClear.setDisabled(true);
             this.view && this.view.btnUndo && this.view.btnUndo.setDisabled(true);
@@ -2309,62 +2347,75 @@ define([
 
         onRequestRefreshFile: function() {
             Common.Gateway.requestRefreshFile();
+            if (this._state) this._state.refreshFileLicense = null;
             console.log('Trying to refresh file');
         },
 
         onRefreshFile: function(data) {
-            if (data) {
-                var docInfo = new Asc.asc_CDocInfo();
-                if (data.document) {
-                    docInfo.put_Id(data.document.key);
-                    docInfo.put_Url(data.document.url);
-                    docInfo.put_Title(data.document.title);
-                    if (labelDocName && data.document.title) {
-                        this.updateWindowTitle(true);
-                        labelDocName.text(data.document.title || '');
-                        this.embedConfig.docTitle = data.document.title;
-                    }
-                    data.document.referenceData && docInfo.put_ReferenceData(data.document.referenceData);
-                }
-                if (data.editorConfig) {
-                    docInfo.put_CallbackUrl(data.editorConfig.callbackUrl);
-                }
-                if (data.token)
-                    docInfo.put_Token(data.token);
-
-                var _user = new Asc.asc_CUserInfo(); // change for guest!!
-                _user.put_Id(this.appOptions.user.id);
-                _user.put_FullName(this.appOptions.user.fullname);
-                _user.put_IsAnonymousUser(!!this.appOptions.user.anonymous);
-                docInfo.put_UserInfo(_user);
-
-                var _options = $.extend({}, this.document.options, this.editorConfig.actionLink || {});
-                docInfo.put_Options(_options);
-
-                docInfo.put_Format(this.document.fileType);
-                docInfo.put_Lang(this.editorConfig.lang);
-                docInfo.put_Mode(this.editorConfig.mode);
-                docInfo.put_Permissions(this.document.permissions);
-                docInfo.put_DirectUrl(data.document && data.document.directUrl ? data.document.directUrl : this.document.directUrl);
-                docInfo.put_VKey(data.document && data.document.vkey ?  data.document.vkey : this.document.vkey);
-                docInfo.put_EncryptedInfo(data.editorConfig && data.editorConfig.encryptionKeys ? data.editorConfig.encryptionKeys : this.editorConfig.encryptionKeys);
-
-                var enable = !this.editorConfig.customization || (this.editorConfig.customization.macros!==false);
-                docInfo.asc_putIsEnabledMacroses(!!enable);
-                enable = !this.editorConfig.customization || (this.editorConfig.customization.plugins!==false);
-                docInfo.asc_putIsEnabledPlugins(!!enable);
-                
-
-                var type = /^(?:(djvu|xps|oxps))$/.exec(this.document.fileType);
-                if (type && typeof type[1] === 'string') {
-                    this.permissions.edit = this.permissions.review = false;
-                }
-                this.api.asc_refreshFile(docInfo);
+            if (!data || !data.document || !data.document.key) {
+                return;
             }
+            if (this._state) this._state.refreshFileLicense = null;
+
+            var docInfo = new Asc.asc_CDocInfo();
+            docInfo.put_Id(data.document.key);
+            docInfo.put_Url(data.document.url);
+            docInfo.put_Title(data.document.title);
+            if (labelDocName && data.document.title) {
+                this.updateWindowTitle(true);
+                labelDocName.text(data.document.title || '');
+                this.embedConfig.docTitle = data.document.title;
+            }
+            data.document.referenceData && docInfo.put_ReferenceData(data.document.referenceData);
+            if (data.editorConfig) {
+                docInfo.put_CallbackUrl(data.editorConfig.callbackUrl);
+            }
+            if (data.token)
+                docInfo.put_Token(data.token);
+
+            var _user = new Asc.asc_CUserInfo(); // change for guest!!
+            _user.put_Id(this.appOptions.user.id);
+            _user.put_FullName(this.appOptions.user.fullname);
+            _user.put_IsAnonymousUser(!!this.appOptions.user.anonymous);
+            docInfo.put_UserInfo(_user);
+
+            var _options = $.extend({}, this.document.options, this.editorConfig.actionLink || {});
+            docInfo.put_Options(_options);
+
+            docInfo.put_Format(this.document.fileType);
+            docInfo.put_Lang(this.editorConfig.lang);
+            docInfo.put_Mode(this.editorConfig.mode);
+            docInfo.put_Permissions(this.document.permissions);
+            docInfo.put_DirectUrl(data.document.directUrl ? data.document.directUrl : this.document.directUrl);
+            docInfo.put_VKey(data.document.vkey ?  data.document.vkey : this.document.vkey);
+            docInfo.put_EncryptedInfo(data.editorConfig && data.editorConfig.encryptionKeys ? data.editorConfig.encryptionKeys : this.editorConfig.encryptionKeys);
+
+            var enable = !this.editorConfig.customization || (this.editorConfig.customization.macros!==false);
+            docInfo.asc_putIsEnabledMacroses(!!enable);
+            enable = !this.editorConfig.customization || (this.editorConfig.customization.plugins!==false);
+            docInfo.asc_putIsEnabledPlugins(!!enable);
+
+
+            var type = /^(?:(djvu|xps|oxps))$/.exec(this.document.fileType);
+            if (type && typeof type[1] === 'string') {
+                this.permissions.edit = this.permissions.review = false;
+            }
+            Common.Gateway.beginRefreshFile();
+            try {
+                this.api.asc_refreshFile(docInfo);
+            } catch (e) {
+                Common.Gateway.cancelRefreshFile();
+                if (this._state) this._state.refreshFileLicense = null;
+                throw e;
+            }
+
+            if (this.document) this.document.key = data.document.key;
+            if (this.appOptions) this.appOptions.fileKey = data.document.key;
         },
 
         onDisconnectEveryone: function() {
             this._state.isFormDisconnected = true;
+            this._state.refreshFileLicense = null;
             if (this.appOptions) this.appOptions.canFillForms = false;
             this.showFillingForms(false); // hide filling forms
             Common.UI.warning({

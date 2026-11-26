@@ -58,6 +58,9 @@ const ErrorController = inject('storeAppOptions','storeSpreadsheetInfo')(({store
     });
 
     const onError = (id, level, errData) => {
+        if (level === Asc.c_oAscError.Level.Critical) {
+            Common.Gateway.cancelRefreshFile();
+        }
         const api = Common.EditorApi.get();
         
         if (id === Asc.c_oAscError.ID.LoadingScriptError) {
